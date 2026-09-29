@@ -6,11 +6,15 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.PathfinderMob;
@@ -19,6 +23,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
+import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.RandomStrollGoal;
 import net.minecraft.world.entity.player.Player;
@@ -26,8 +31,15 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 
 import javax.annotation.Nullable;
+import java.util.List;
 
 public class CyberNpcEntity extends PathfinderMob {
+    private static final double WILD_HELP_RADIUS = 20.0D;
+    private static final double WILD_DISENGAGE_DISTANCE = 40.0D;
+    private static final int WILD_DISENGAGE_TICKS = 100;
+    private static final int WILD_MIN_AGGRESSION = 10;
+    private static final int WILD_MAX_AGGRESSION = 80;
+
     private static final EntityDataAccessor<String> DATA_ROLE =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
 
@@ -37,6 +49,13 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> DATA_NPC_TYPE =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
 
+    private static final EntityDataAccessor<Boolean> DATA_COMBAT_ACTIVE =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.BOOLEAN);
+
+    private int aggressionLevel = -1;
+    private int provocation;
+    private int outOfRangeTicks;
+
     public CyberNpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
     }
@@ -45,7 +64,8 @@ public class CyberNpcEntity extends PathfinderMob {
         return Mob.createMobAttributes()
                 .add(Attributes.MAX_HEALTH, 20.0D)
                 .add(Attributes.MOVEMENT_SPEED, 0.25D)
-                .add(Attributes.FOLLOW_RANGE, 24.0D)
+                .add(Attributes.FOLLOW_RANGE, 32.0D)
+                .add(Attributes.ATTACK_DAMAGE, 1.0D)
                 .add(Attributes.ARMOR, 0.0D);
     }
 
@@ -66,11 +86,13 @@ public class CyberNpcEntity extends PathfinderMob {
         entityData.define(DATA_ROLE, "Citizen");
         entityData.define(DATA_CAN_WANDER, true);
         entityData.define(DATA_NPC_TYPE, NpcType.MAIN.serializedName());
+        entityData.define(DATA_COMBAT_ACTIVE, false);
     }
 
     @Override
     protected void registerGoals() {
         goalSelector.addGoal(0, new FloatGoal(this));
+        goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.15D, true));
         goalSelector.addGoal(5, new ConditionalRandomStrollGoal(this, 0.6D, 120));
         goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
         goalSelector.addGoal(7, new RandomLookAroundGoal(this));
@@ -95,6 +117,8 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (safeType != NpcType.WILD) {
             setPersistenceRequired();
+            setCombatActive(false);
+            setTarget(null);
         }
     }
 
@@ -108,6 +132,19 @@ public class CyberNpcEntity extends PathfinderMob {
         if (!canWander) {
             getNavigation().stop();
         }
+    }
+
+    public boolean isCombatActive() {
+        return entityData.get(DATA_COMBAT_ACTIVE);
+    }
+
+    private void setCombatActive(boolean active) {
+        entityData.set(DATA_COMBAT_ACTIVE, active);
+        setAggressive(active);
+    }
+
+    public int getAggressionLevel() {
+        return aggressionLevel;
     }
 
     public void ensureDefaultName() {
@@ -126,6 +163,21 @@ public class CyberNpcEntity extends PathfinderMob {
         setCustomNameVisible(true);
     }
 
+    private void ensureWildCombatProfile() {
+        if (getNpcType() != NpcType.WILD) {
+            return;
+        }
+
+        if (aggressionLevel < 0) {
+            aggressionLevel = WILD_MIN_AGGRESSION
+                    + getRandom().nextInt(WILD_MAX_AGGRESSION - WILD_MIN_AGGRESSION + 1);
+        }
+
+        if (getMainHandItem().isEmpty()) {
+            setItemSlot(EquipmentSlot.MAINHAND, CyberNpcWeaponPool.randomWildWeapon(getRandom()));
+        }
+    }
+
     @Nullable
     @Override
     public SpawnGroupData finalizeSpawn(
@@ -142,7 +194,111 @@ public class CyberNpcEntity extends PathfinderMob {
             ensureDefaultName();
         }
 
+        if (getNpcType() == NpcType.WILD) {
+            ensureWildCombatProfile();
+        }
+
         return result;
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+
+        if (level().isClientSide || getNpcType() != NpcType.WILD) {
+            return;
+        }
+
+        ensureWildCombatProfile();
+        tickWildCombat();
+    }
+
+    private void tickWildCombat() {
+        if (!isCombatActive()) {
+            if (provocation > 0 && tickCount % 100 == 0) {
+                provocation = Math.max(0, provocation - 10);
+            }
+            return;
+        }
+
+        LivingEntity target = getTarget();
+        if (!(target instanceof Player player)
+                || !player.isAlive()
+                || player.isCreative()
+                || player.isSpectator()) {
+            calmWildNpc();
+            return;
+        }
+
+        if (distanceToSqr(player) > WILD_DISENGAGE_DISTANCE * WILD_DISENGAGE_DISTANCE) {
+            outOfRangeTicks++;
+            if (outOfRangeTicks >= WILD_DISENGAGE_TICKS) {
+                calmWildNpc();
+            }
+        } else {
+            outOfRangeTicks = 0;
+        }
+    }
+
+    @Override
+    public boolean hurt(DamageSource source, float amount) {
+        boolean damaged = super.hurt(source, amount);
+
+        if (!damaged || level().isClientSide || getNpcType() != NpcType.WILD) {
+            return damaged;
+        }
+
+        if (source.getEntity() instanceof Player player
+                && !player.isCreative()
+                && !player.isSpectator()) {
+            ensureWildCombatProfile();
+
+            if (!isCombatActive()) {
+                int addedProvocation = Math.max(8, Mth.ceil(amount * 6.0F));
+                provocation = Mth.clamp(provocation + addedProvocation, 0, 100);
+
+                int hostilityThreshold = 100 - aggressionLevel;
+                if (provocation >= hostilityThreshold) {
+                    beginWildCombat(player, true);
+                }
+            }
+        }
+
+        return damaged;
+    }
+
+    private void beginWildCombat(Player player, boolean callForHelp) {
+        setTarget(player);
+        setCombatActive(true);
+        provocation = 100;
+        outOfRangeTicks = 0;
+
+        if (callForHelp) {
+            alertNearbyWildNpcs(player);
+        }
+    }
+
+    private void alertNearbyWildNpcs(Player player) {
+        List<CyberNpcEntity> nearbyWildNpcs = level().getEntitiesOfClass(
+                CyberNpcEntity.class,
+                getBoundingBox().inflate(WILD_HELP_RADIUS),
+                npc -> npc != this
+                        && npc.isAlive()
+                        && npc.getNpcType() == NpcType.WILD
+        );
+
+        for (CyberNpcEntity npc : nearbyWildNpcs) {
+            npc.ensureWildCombatProfile();
+            npc.beginWildCombat(player, false);
+        }
+    }
+
+    private void calmWildNpc() {
+        setTarget(null);
+        setCombatActive(false);
+        getNavigation().stop();
+        provocation = 0;
+        outOfRangeTicks = 0;
     }
 
     @Override
@@ -161,6 +317,10 @@ public class CyberNpcEntity extends PathfinderMob {
         tag.putString("CyberNpcRole", getRole());
         tag.putBoolean("CyberNpcCanWander", canWander());
         tag.putString("CyberNpcType", getNpcType().serializedName());
+
+        if (aggressionLevel >= 0) {
+            tag.putInt("CyberNpcAggression", aggressionLevel);
+        }
     }
 
     @Override
@@ -181,6 +341,19 @@ public class CyberNpcEntity extends PathfinderMob {
             setNpcType(NpcType.MAIN);
         }
 
+        if (tag.contains("CyberNpcAggression")) {
+            aggressionLevel = Mth.clamp(
+                    tag.getInt("CyberNpcAggression"),
+                    WILD_MIN_AGGRESSION,
+                    WILD_MAX_AGGRESSION
+            );
+        } else {
+            aggressionLevel = -1;
+        }
+
+        setCombatActive(false);
+        provocation = 0;
+        outOfRangeTicks = 0;
         ensureDefaultName();
     }
 
@@ -194,12 +367,12 @@ public class CyberNpcEntity extends PathfinderMob {
 
         @Override
         public boolean canUse() {
-            return npc.canWander() && super.canUse();
+            return !npc.isCombatActive() && npc.canWander() && super.canUse();
         }
 
         @Override
         public boolean canContinueToUse() {
-            return npc.canWander() && super.canContinueToUse();
+            return !npc.isCombatActive() && npc.canWander() && super.canContinueToUse();
         }
     }
 }

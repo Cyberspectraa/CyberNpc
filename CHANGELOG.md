@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0
+
+- Added persistent Wild NPC aggression levels.
+- Added damage-based provocation: higher-aggression Wild NPCs become hostile after less player damage.
+- Added nearby Wild NPC assistance within a 20-block radius without recursive alert chains.
+- Added combat disengagement when the player remains more than 40 blocks away for 5 seconds.
+- Added melee combat and weapon use for Wild NPCs.
+- Added the data-driven `cybernpc:wild_npc_weapons` item tag for Wild NPC weapon selection.
+- Added optional YDM's Weapon Master detection using its `weaponmaster_ydm` mod ID.
+- Added a YDM-style stowed weapon layer for passive CyberNpc entities when YDM's Weapon Master is installed.
+- Wild NPC weapons move from the body display to the hand during combat.
+
 ## 0.2.0
 
 - Added persistent Main, Quest, and Wild NPC types while keeping one shared CyberNpc entity.
