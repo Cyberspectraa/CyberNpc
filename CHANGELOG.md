@@ -1,9 +1,18 @@
 # Changelog
 
+## 0.3.2
+
+- Restored visible passive Wild NPC weapons without actually equipping them.
+- Synced the internally stored weapon to clients so renderers can display it while passive.
+- Added a persistent stow-position value per Wild NPC.
+- Added several player-style body, back, hip, and leg attachment positions based on YDM's default attachment layout.
+- Combat still moves the weapon into the NPC's hand and removes the passive stored render.
+- Disengaging stores the weapon again and restores its body attachment position.
+
 ## 0.3.1
 
-- Removed CyberNpc's YDM-style passive back/body weapon render layer.
-- Wild NPC weapons are now stored internally while the NPC is passive.
+- Removed CyberNpc's broken YDM-style passive back/body weapon render layer.
+- Wild NPC weapons are stored internally while the NPC is passive.
 - Weapons are equipped in the main hand only while the NPC has an active living target.
 - Weapons are automatically stored again when the NPC disengages.
 - Added automatic migration for v0.3.0 Wild NPCs that already have passive weapons equipped.

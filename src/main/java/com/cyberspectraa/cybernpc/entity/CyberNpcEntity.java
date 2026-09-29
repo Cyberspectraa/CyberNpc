@@ -40,6 +40,7 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final int WILD_DISENGAGE_TICKS = 100;
     private static final int WILD_MIN_AGGRESSION = 10;
     private static final int WILD_MAX_AGGRESSION = 80;
+    private static final int WILD_STOW_STYLE_COUNT = 6;
 
     private static final EntityDataAccessor<String> DATA_ROLE =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
@@ -53,10 +54,15 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<Boolean> DATA_COMBAT_ACTIVE =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.BOOLEAN);
 
+    private static final EntityDataAccessor<ItemStack> DATA_STORED_WEAPON =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.ITEM_STACK);
+
+    private static final EntityDataAccessor<Integer> DATA_STOW_STYLE =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.INT);
+
     private int aggressionLevel = -1;
     private int provocation;
     private int outOfRangeTicks;
-    private ItemStack storedWeapon = ItemStack.EMPTY;
 
     public CyberNpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -89,6 +95,8 @@ public class CyberNpcEntity extends PathfinderMob {
         entityData.define(DATA_CAN_WANDER, true);
         entityData.define(DATA_NPC_TYPE, NpcType.MAIN.serializedName());
         entityData.define(DATA_COMBAT_ACTIVE, false);
+        entityData.define(DATA_STORED_WEAPON, ItemStack.EMPTY);
+        entityData.define(DATA_STOW_STYLE, -1);
     }
 
     @Override
@@ -148,6 +156,22 @@ public class CyberNpcEntity extends PathfinderMob {
         return aggressionLevel;
     }
 
+    public ItemStack getStoredWeapon() {
+        return entityData.get(DATA_STORED_WEAPON);
+    }
+
+    private void setStoredWeapon(ItemStack stack) {
+        entityData.set(DATA_STORED_WEAPON, stack.isEmpty() ? ItemStack.EMPTY : stack.copy());
+    }
+
+    public int getStowStyle() {
+        return entityData.get(DATA_STOW_STYLE);
+    }
+
+    private void setStowStyle(int style) {
+        entityData.set(DATA_STOW_STYLE, Mth.clamp(style, 0, WILD_STOW_STYLE_COUNT - 1));
+    }
+
     public void ensureDefaultName() {
         if (getCustomName() != null) {
             setCustomNameVisible(true);
@@ -174,13 +198,17 @@ public class CyberNpcEntity extends PathfinderMob {
                     + getRandom().nextInt(WILD_MAX_AGGRESSION - WILD_MIN_AGGRESSION + 1);
         }
 
-        // Migrates v0.3.0 Wild NPCs that may already have their passive weapon equipped.
+        if (getStowStyle() < 0) {
+            setStowStyle(getRandom().nextInt(WILD_STOW_STYLE_COUNT));
+        }
+
+        // Migrates older Wild NPCs that may still have their passive weapon equipped.
         if (!isCombatActive() && !getMainHandItem().isEmpty()) {
             storeCurrentWeapon();
         }
 
-        if (storedWeapon.isEmpty() && getMainHandItem().isEmpty()) {
-            storedWeapon = CyberNpcWeaponPool.randomWildWeapon(getRandom());
+        if (getStoredWeapon().isEmpty() && getMainHandItem().isEmpty()) {
+            setStoredWeapon(CyberNpcWeaponPool.randomWildWeapon(getRandom()));
         }
     }
 
@@ -189,19 +217,21 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
-        if (storedWeapon.isEmpty()) {
-            storedWeapon = CyberNpcWeaponPool.randomWildWeapon(getRandom());
+        ItemStack stored = getStoredWeapon();
+
+        if (stored.isEmpty()) {
+            stored = CyberNpcWeaponPool.randomWildWeapon(getRandom());
         }
 
-        setItemSlot(EquipmentSlot.MAINHAND, storedWeapon.copy());
-        storedWeapon = ItemStack.EMPTY;
+        setItemSlot(EquipmentSlot.MAINHAND, stored.copy());
+        setStoredWeapon(ItemStack.EMPTY);
     }
 
     private void storeCurrentWeapon() {
         ItemStack equipped = getMainHandItem();
 
         if (!equipped.isEmpty()) {
-            storedWeapon = equipped.copy();
+            setStoredWeapon(equipped);
             setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
         }
     }
@@ -385,8 +415,13 @@ public class CyberNpcEntity extends PathfinderMob {
             tag.putInt("CyberNpcAggression", aggressionLevel);
         }
 
+        ItemStack storedWeapon = getStoredWeapon();
         if (!storedWeapon.isEmpty()) {
             tag.put("CyberNpcStoredWeapon", storedWeapon.save(new CompoundTag()));
+        }
+
+        if (getStowStyle() >= 0) {
+            tag.putInt("CyberNpcStowStyle", getStowStyle());
         }
     }
 
@@ -418,9 +453,15 @@ public class CyberNpcEntity extends PathfinderMob {
             aggressionLevel = -1;
         }
 
-        storedWeapon = tag.contains("CyberNpcStoredWeapon")
+        setStoredWeapon(tag.contains("CyberNpcStoredWeapon")
                 ? ItemStack.of(tag.getCompound("CyberNpcStoredWeapon"))
-                : ItemStack.EMPTY;
+                : ItemStack.EMPTY);
+
+        if (tag.contains("CyberNpcStowStyle")) {
+            setStowStyle(tag.getInt("CyberNpcStowStyle"));
+        } else if (getNpcType() == NpcType.WILD) {
+            setStowStyle(getRandom().nextInt(WILD_STOW_STYLE_COUNT));
+        }
 
         setCombatActive(false);
         provocation = 0;

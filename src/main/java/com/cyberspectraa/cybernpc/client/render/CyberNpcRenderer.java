@@ -1,6 +1,7 @@
 package com.cyberspectraa.cybernpc.client.render;
 
 import com.cyberspectraa.cybernpc.client.render.layer.CyberNpcCombatHeldItemLayer;
+import com.cyberspectraa.cybernpc.client.render.layer.CyberNpcStowedWeaponLayer;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.model.geom.ModelLayers;
@@ -14,6 +15,7 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, PlayerMo
 
     public CyberNpcRenderer(EntityRendererProvider.Context context) {
         super(context, new PlayerModel<>(context.bakeLayer(ModelLayers.PLAYER), false), 0.5F);
+        addLayer(new CyberNpcStowedWeaponLayer(this, context.getItemRenderer()));
         addLayer(new CyberNpcCombatHeldItemLayer(this, context.getItemInHandRenderer()));
     }
 
