@@ -2,35 +2,50 @@
 
 CyberNpc is a custom NPC framework for **Minecraft 1.20.1 Forge**, built for the CyberSpectra modpack.
 
-## Current release: 0.5.0
+## Current release: 0.6.0
 
-### Wild NPC AI
+### Wild NPC survival AI
 
-Wild NPCs now have a more player-like combat and movement layer:
+Wild NPCs keep the combat and player-like movement systems from 0.5.0:
 
-- Exactly two owned weapons: one sword plus one bow or crossbow.
-- Weapons remain hidden while the NPC is passive.
-- Bow users visibly draw the bow before firing.
-- Crossbow users visibly charge, hold a charged crossbow, then fire.
-- Crossbow state is synchronized to clients so the player model uses the correct charge/hold pose.
-- Ranged aim predicts target movement and compensates for projectile drop based on distance.
-- Bow draw strength changes with target distance.
-- Ranged accuracy changes with target distance.
-- NPCs close distance if a target is too far away or line of sight is blocked.
-- NPCs switch to their sword at close range.
-- Hostile NPCs sprint while closing for melee.
-- Hunting NPCs crouch/sneak while stalking prey and approach more slowly before attacking.
-- Wild NPC navigation can swim, open/pass wooden doors, jump normal terrain, and climb climbable blocks when their path reaches them.
-- The existing aggression, nearby-help, hunger, hunting, food collection, cooking, eating, and starvation systems remain active.
-- The experimental YDM/body-mounted weapon renderer remains removed.
+- One sword plus one bow or crossbow.
+- Visible bow draw and crossbow charge/hold/fire states.
+- Adaptive ranged aiming and target-motion prediction.
+- Sword switching at close range.
+- Sneaking while stalking prey.
+- Swimming, jumping, door use, climbable-block movement, sprinting, food pickup, cooking, and eating.
+- Persistent hunger, aggression, hunting, nearby NPC assistance, and starvation.
 
-### Player-like capability rule
+### Real cooking interaction
 
-CyberNpc is intended to move and interact more like a player where an autonomous NPC can make a sensible decision. Building and mining are intentionally excluded.
+Cooking now uses the actual Minecraft block inventories/processes instead of a fake timer.
 
-This release establishes player-like locomotion and weapon use: walking, sprinting, sneaking, swimming, jumping, door use, climbable-block movement, combat weapon switching, ranged aiming, collecting hunted food, cooking, and eating.
+- After collecting raw meat, the NPC searches for a usable **furnace, smoker, campfire, or soul campfire**.
+- Furnaces/smokers are only used if they are already burning or have valid fuel available.
+- The NPC physically walks to the cooking block.
+- For a furnace/smoker, it inserts one raw food item into the real input slot and waits for the real output slot to produce cooked food.
+- For a lit campfire, it places one raw food item into the campfire's real cooking inventory and waits for the cooked item to pop out.
+- The NPC then retrieves the cooked food, holds it, performs an eating wait, and restores hunger.
+- Pending cooking/eating state is saved with the NPC where possible.
 
-Other player activities that require their own decisions or systems can be added to this same AI foundation without turning the NPC into a fake Player entity.
+### Corral and livestock system
+
+Wild NPCs do **not** build pens, because building/mining remains excluded.
+
+Instead they can use an existing enclosed pen made from fences/walls with a fence gate:
+
+- A hungry NPC can search for a nearby existing enclosed corral.
+- It detects the enclosed side of a fence gate rather than treating every gate as a pen.
+- It chooses a breedable prey species already in the pen, or a nearby species where at least two adults are available.
+- It holds the correct vanilla breeding/lure food for that animal type.
+- It opens the gate, leads missing animals through it, and closes the gate again.
+- It maintains at least **two adult breeders**.
+- When two suitable adults are present, it puts them into love mode so normal Minecraft breeding can create offspring.
+- Babies are protected from hunting.
+- If the pen later has at least three adults, a hungry NPC may hunt one surplus adult while preserving the breeding pair.
+- At critically low hunger, the NPC stops spending time establishing a herd and falls back to normal hunting so it does not knowingly starve while waiting for livestock.
+
+The initial corral detector is intended for ordinary, mostly level fenced pens. More complicated multi-level enclosures can be expanded later if needed.
 
 ### Commands
 

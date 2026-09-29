@@ -41,6 +41,9 @@ import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
+import net.minecraft.world.level.block.entity.CampfireBlockEntity;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -62,14 +65,18 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final int WILD_MAX_AGGRESSION = 80;
 
     private static final int MAX_HUNGER = 20;
-    private static final int HUNT_HUNGER_THRESHOLD = 12;
+    static final int HUNT_HUNGER_THRESHOLD = 12;
     private static final int STOP_EATING_HUNGER = 18;
     private static final int HUNGER_DECAY_TICKS = 1200;
     private static final int STARVATION_DAMAGE_TICKS = 80;
     private static final int HUNT_SEARCH_INTERVAL = 100;
     private static final int DROP_SEARCH_TIME = 120;
-    private static final int COOK_TIME_TICKS = 100;
-    private static final int COOK_STATION_SEARCH_INTERVAL = 200;
+    private static final int COOK_STATION_SEARCH_INTERVAL = 100;
+    private static final int COOK_WAIT_TIMEOUT = 1200;
+    private static final int EATING_TICKS = 32;
+    private static final int COOK_MODE_NONE = 0;
+    private static final int COOK_MODE_FURNACE = 1;
+    private static final int COOK_MODE_CAMPFIRE = 2;
     private static final double HUNT_RADIUS = 24.0D;
     private static final int COOK_SEARCH_RADIUS = 12;
 
@@ -106,11 +113,20 @@ public class CyberNpcEntity extends PathfinderMob {
     private BlockPos lastHuntKillPos;
 
     private BlockPos cookingTarget;
-    private int cookingTicks;
     private int cookingSearchCooldown;
+    private int cookingMode = COOK_MODE_NONE;
+    private int cookingWaitTicks;
+    private int cookingOutputBaseline;
+    private ItemStack expectedCookedFood = ItemStack.EMPTY;
+    private ItemStack foodToEat = ItemStack.EMPTY;
+    private int eatingTicks;
+    private boolean utilityItemActive;
+
+    private final WildNpcCorralBrain corralBrain;
 
     public CyberNpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
+        corralBrain = new WildNpcCorralBrain(this);
 
         getNavigation().setCanFloat(true);
         if (getNavigation() instanceof GroundPathNavigation groundNavigation) {
@@ -275,7 +291,7 @@ public class CyberNpcEntity extends PathfinderMob {
             storedRangedWeapon = CyberNpcWeaponPool.randomWildRangedWeapon(getRandom());
         }
 
-        if (!isCombatActive() && !getMainHandItem().isEmpty()) {
+        if (!isCombatActive() && !utilityItemActive && !getMainHandItem().isEmpty()) {
             stowWeapons();
         }
     }
@@ -293,6 +309,7 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
+        utilityItemActive = false;
         ItemStack held = getMainHandItem();
         if (!ItemStack.isSameItemSameTags(held, storedSword)) {
             stopUsingItem();
@@ -306,6 +323,7 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
+        utilityItemActive = false;
         ItemStack held = getMainHandItem();
         if (!ItemStack.isSameItemSameTags(held, storedRangedWeapon)) {
             stopUsingItem();
@@ -322,10 +340,42 @@ public class CyberNpcEntity extends PathfinderMob {
         if (getNpcType() == NpcType.WILD) {
             stopUsingItem();
             setRangedState(RANGED_STATE_NONE);
+            utilityItemActive = false;
             setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
             setShiftKeyDown(false);
             setSprinting(false);
         }
+    }
+
+    void equipUtilityItem(ItemStack stack) {
+        if (isCombatActive() || stack.isEmpty()) {
+            return;
+        }
+
+        stopUsingItem();
+        setRangedState(RANGED_STATE_NONE);
+        utilityItemActive = true;
+        ItemStack copy = stack.copy();
+        copy.setCount(1);
+        setItemSlot(EquipmentSlot.MAINHAND, copy);
+    }
+
+    void clearUtilityItem() {
+        if (!utilityItemActive) {
+            return;
+        }
+
+        stopUsingItem();
+        utilityItemActive = false;
+        setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+    }
+
+    boolean hasCollectedRawFood() {
+        return !carriedRawFood.isEmpty();
+    }
+
+    void beginCorralHunt(LivingEntity target) {
+        beginWildCombat(target, false, true);
     }
 
     @Nullable
@@ -450,11 +500,17 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
-        if (getHunger() > HUNT_HUNGER_THRESHOLD && carriedRawFood.isEmpty()) {
+        if (!foodToEat.isEmpty()) {
+            tickEating();
             return;
         }
 
-        if (!carriedRawFood.isEmpty()) {
+        if (cookingMode != COOK_MODE_NONE) {
+            tickCooking();
+            return;
+        }
+
+        if (!carriedRawFood.isEmpty() && getHunger() < STOP_EATING_HUNGER) {
             tickCooking();
             return;
         }
@@ -462,6 +518,12 @@ public class CyberNpcEntity extends PathfinderMob {
         if (dropSearchTicks > 0) {
             tickFoodPickup();
             return;
+        }
+
+        if (corralBrain.isBusy() || getHunger() <= 14) {
+            if (corralBrain.tick()) {
+                return;
+            }
         }
 
         if (getHunger() <= HUNT_HUNGER_THRESHOLD) {
@@ -552,8 +614,7 @@ public class CyberNpcEntity extends PathfinderMob {
             setSprinting(false);
             dropSearchTicks = 0;
             lastHuntKillPos = null;
-            cookingTarget = null;
-            cookingSearchCooldown = 0;
+            resetCookingSearch();
             getNavigation().stop();
         }
     }
@@ -562,14 +623,22 @@ public class CyberNpcEntity extends PathfinderMob {
         setShiftKeyDown(false);
         setSprinting(false);
 
-        if (getHunger() >= STOP_EATING_HUNGER) {
-            cookingTarget = null;
-            cookingTicks = 0;
-            getNavigation().stop();
+        if (cookingMode == COOK_MODE_FURNACE) {
+            tickFurnaceCooking();
             return;
         }
 
-        if (cookingTarget == null || !isCookingStation(cookingTarget)) {
+        if (cookingMode == COOK_MODE_CAMPFIRE) {
+            tickCampfireCooking();
+            return;
+        }
+
+        if (carriedRawFood.isEmpty() || getHunger() >= STOP_EATING_HUNGER) {
+            resetCookingSearch();
+            return;
+        }
+
+        if (cookingTarget == null || !isUsableCookingStation(cookingTarget)) {
             if (cookingSearchCooldown > 0) {
                 cookingSearchCooldown--;
                 return;
@@ -577,7 +646,6 @@ public class CyberNpcEntity extends PathfinderMob {
 
             cookingSearchCooldown = COOK_STATION_SEARCH_INTERVAL;
             cookingTarget = findCookingStation();
-            cookingTicks = 0;
 
             if (cookingTarget == null) {
                 return;
@@ -589,37 +657,233 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (distance > 4.0D) {
             getNavigation().moveTo(cookingSpot.x, cookingSpot.y, cookingSpot.z, 0.9D);
-            cookingTicks = 0;
             return;
         }
 
         getNavigation().stop();
-        cookingTicks++;
 
-        if (cookingTicks < COOK_TIME_TICKS) {
+        if (!depositFoodIntoCookingStation(cookingTarget)) {
+            cookingTarget = null;
+            cookingSearchCooldown = COOK_STATION_SEARCH_INTERVAL;
+        }
+    }
+
+    private boolean depositFoodIntoCookingStation(BlockPos pos) {
+        ItemStack expected = CyberNpcHuntingData.cookOne(carriedRawFood);
+        if (expected.isEmpty()) {
+            return false;
+        }
+
+        var blockEntity = level().getBlockEntity(pos);
+
+        if (blockEntity instanceof AbstractFurnaceBlockEntity furnace) {
+            ItemStack input = furnace.getItem(0);
+            ItemStack output = furnace.getItem(2);
+
+            if ((!input.isEmpty()
+                    && (!ItemStack.isSameItemSameTags(input, carriedRawFood)
+                    || input.getCount() >= input.getMaxStackSize()))
+                    || (!output.isEmpty() && !ItemStack.isSameItemSameTags(output, expected))) {
+                return false;
+            }
+
+            ItemStack fuel = furnace.getItem(1);
+            var state = level().getBlockState(pos);
+            boolean burning = state.hasProperty(BlockStateProperties.LIT)
+                    && state.getValue(BlockStateProperties.LIT);
+
+            if (!burning && (fuel.isEmpty() || !AbstractFurnaceBlockEntity.isFuel(fuel))) {
+                return false;
+            }
+
+            cookingOutputBaseline = output.isEmpty() ? 0 : output.getCount();
+
+            ItemStack oneRaw = carriedRawFood.copy();
+            oneRaw.setCount(1);
+
+            if (input.isEmpty()) {
+                furnace.setItem(0, oneRaw);
+            } else {
+                ItemStack updated = input.copy();
+                updated.grow(1);
+                furnace.setItem(0, updated);
+            }
+
+            carriedRawFood.shrink(1);
+            if (carriedRawFood.isEmpty()) {
+                carriedRawFood = ItemStack.EMPTY;
+            }
+
+            furnace.setChanged();
+            expectedCookedFood = expected.copy();
+            expectedCookedFood.setCount(1);
+            cookingMode = COOK_MODE_FURNACE;
+            cookingWaitTicks = 0;
+            return true;
+        }
+
+        if (blockEntity instanceof CampfireBlockEntity campfire) {
+            var state = level().getBlockState(pos);
+            if (!state.hasProperty(BlockStateProperties.LIT)
+                    || !state.getValue(BlockStateProperties.LIT)
+                    || campfire.getItems().stream().noneMatch(ItemStack::isEmpty)) {
+                return false;
+            }
+
+            var recipe = campfire.getCookableRecipe(carriedRawFood);
+            if (recipe.isEmpty()) {
+                return false;
+            }
+
+            ItemStack oneRaw = carriedRawFood.copy();
+            oneRaw.setCount(1);
+
+            if (!campfire.placeFood(this, oneRaw, recipe.get().getCookingTime())) {
+                return false;
+            }
+
+            carriedRawFood.shrink(1);
+            if (carriedRawFood.isEmpty()) {
+                carriedRawFood = ItemStack.EMPTY;
+            }
+
+            expectedCookedFood = expected.copy();
+            expectedCookedFood.setCount(1);
+            cookingMode = COOK_MODE_CAMPFIRE;
+            cookingWaitTicks = 0;
+            return true;
+        }
+
+        return false;
+    }
+
+    private void tickFurnaceCooking() {
+        cookingWaitTicks++;
+
+        if (cookingTarget == null
+                || !(level().getBlockEntity(cookingTarget) instanceof AbstractFurnaceBlockEntity furnace)) {
+            resetCookingState();
             return;
         }
 
-        cookingTicks = 0;
+        getNavigation().stop();
+        ItemStack output = furnace.getItem(2);
 
-        ItemStack cooked = CyberNpcHuntingData.cookOne(carriedRawFood);
-        if (cooked.isEmpty()) {
-            carriedRawFood = ItemStack.EMPTY;
-            cookingTarget = null;
+        if (!output.isEmpty()
+                && ItemStack.isSameItemSameTags(output, expectedCookedFood)
+                && output.getCount() > cookingOutputBaseline) {
+            ItemStack cooked = furnace.removeItem(2, 1);
+            furnace.setChanged();
+            beginEating(cooked);
             return;
         }
 
-        carriedRawFood.shrink(1);
-        if (carriedRawFood.isEmpty()) {
-            carriedRawFood = ItemStack.EMPTY;
+        if (!output.isEmpty()
+                && ItemStack.isSameItemSameTags(output, expectedCookedFood)
+                && output.getCount() < cookingOutputBaseline) {
+            cookingOutputBaseline = output.getCount();
         }
 
-        setHunger(getHunger() + CyberNpcHuntingData.hungerRestored(cooked));
-
-        if (getHunger() >= STOP_EATING_HUNGER || carriedRawFood.isEmpty()) {
-            cookingTarget = null;
-            getNavigation().stop();
+        if (cookingWaitTicks > COOK_WAIT_TIMEOUT) {
+            resetCookingState();
         }
+    }
+
+    private void tickCampfireCooking() {
+        cookingWaitTicks++;
+
+        if (cookingTarget == null) {
+            resetCookingState();
+            return;
+        }
+
+        getNavigation().stop();
+
+        AABB pickupBox = new AABB(cookingTarget).inflate(3.0D, 2.0D, 3.0D);
+        ItemEntity cookedDrop = level().getEntitiesOfClass(
+                        ItemEntity.class,
+                        pickupBox,
+                        item -> item.isAlive()
+                                && !item.getItem().isEmpty()
+                                && ItemStack.isSameItemSameTags(item.getItem(), expectedCookedFood)
+                ).stream()
+                .min(Comparator.comparingDouble(this::distanceToSqr))
+                .orElse(null);
+
+        if (cookedDrop != null) {
+            ItemStack stack = cookedDrop.getItem();
+            ItemStack one = stack.copy();
+            one.setCount(1);
+            stack.shrink(1);
+
+            if (stack.isEmpty()) {
+                cookedDrop.discard();
+            }
+
+            beginEating(one);
+            return;
+        }
+
+        if (cookingWaitTicks > COOK_WAIT_TIMEOUT) {
+            resetCookingState();
+        }
+    }
+
+    private void beginEating(ItemStack cookedFood) {
+        if (cookedFood.isEmpty()) {
+            resetCookingState();
+            return;
+        }
+
+        expectedCookedFood = ItemStack.EMPTY;
+        cookingMode = COOK_MODE_NONE;
+        cookingWaitTicks = 0;
+        cookingOutputBaseline = 0;
+
+        foodToEat = cookedFood.copy();
+        foodToEat.setCount(1);
+        eatingTicks = 0;
+
+        equipUtilityItem(foodToEat);
+        startUsingItem(InteractionHand.MAIN_HAND);
+    }
+
+    private void tickEating() {
+        setShiftKeyDown(false);
+        setSprinting(false);
+        getNavigation().stop();
+
+        if (foodToEat.isEmpty()) {
+            clearUtilityItem();
+            return;
+        }
+
+        if (!utilityItemActive) {
+            equipUtilityItem(foodToEat);
+            startUsingItem(InteractionHand.MAIN_HAND);
+        }
+
+        eatingTicks++;
+
+        if (eatingTicks < EATING_TICKS) {
+            return;
+        }
+
+        stopUsingItem();
+        level().playSound(
+                null,
+                blockPosition(),
+                SoundEvents.GENERIC_EAT,
+                SoundSource.NEUTRAL,
+                0.8F,
+                0.95F + getRandom().nextFloat() * 0.1F
+        );
+
+        setHunger(getHunger() + CyberNpcHuntingData.hungerRestored(foodToEat));
+        foodToEat = ItemStack.EMPTY;
+        eatingTicks = 0;
+        clearUtilityItem();
+        resetCookingSearch();
     }
 
     @Nullable
@@ -632,7 +896,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 origin.offset(-COOK_SEARCH_RADIUS, -4, -COOK_SEARCH_RADIUS),
                 origin.offset(COOK_SEARCH_RADIUS, 4, COOK_SEARCH_RADIUS)
         )) {
-            if (!isCookingStation(pos)) {
+            if (!isUsableCookingStation(pos)) {
                 continue;
             }
 
@@ -646,19 +910,78 @@ public class CyberNpcEntity extends PathfinderMob {
         return best;
     }
 
-    private boolean isCookingStation(BlockPos pos) {
-        var state = level().getBlockState(pos);
-        return state.is(Blocks.CAMPFIRE)
-                || state.is(Blocks.SOUL_CAMPFIRE)
-                || state.is(Blocks.FURNACE)
-                || state.is(Blocks.SMOKER);
+    private boolean isUsableCookingStation(BlockPos pos) {
+        if (carriedRawFood.isEmpty()) {
+            return false;
+        }
+
+        ItemStack expected = CyberNpcHuntingData.cookOne(carriedRawFood);
+        if (expected.isEmpty()) {
+            return false;
+        }
+
+        var blockEntity = level().getBlockEntity(pos);
+
+        if (blockEntity instanceof CampfireBlockEntity campfire) {
+            var state = level().getBlockState(pos);
+            return state.hasProperty(BlockStateProperties.LIT)
+                    && state.getValue(BlockStateProperties.LIT)
+                    && campfire.getItems().stream().anyMatch(ItemStack::isEmpty)
+                    && campfire.getCookableRecipe(carriedRawFood).isPresent();
+        }
+
+        if (blockEntity instanceof AbstractFurnaceBlockEntity furnace) {
+            ItemStack input = furnace.getItem(0);
+            ItemStack fuel = furnace.getItem(1);
+            ItemStack output = furnace.getItem(2);
+            var state = level().getBlockState(pos);
+
+            boolean burning = state.hasProperty(BlockStateProperties.LIT)
+                    && state.getValue(BlockStateProperties.LIT);
+
+            boolean inputAccepts = input.isEmpty()
+                    || (ItemStack.isSameItemSameTags(input, carriedRawFood)
+                    && input.getCount() < input.getMaxStackSize());
+
+            boolean outputAccepts = output.isEmpty()
+                    || ItemStack.isSameItemSameTags(output, expected);
+
+            return inputAccepts
+                    && outputAccepts
+                    && furnace.canPlaceItem(0, carriedRawFood)
+                    && (burning || (!fuel.isEmpty() && AbstractFurnaceBlockEntity.isFuel(fuel)));
+        }
+
+        return false;
+    }
+
+    private void resetCookingSearch() {
+        cookingTarget = null;
+        cookingSearchCooldown = 0;
+        if (cookingMode == COOK_MODE_NONE) {
+            cookingWaitTicks = 0;
+            cookingOutputBaseline = 0;
+            expectedCookedFood = ItemStack.EMPTY;
+        }
+    }
+
+    private void resetCookingState() {
+        cookingMode = COOK_MODE_NONE;
+        cookingWaitTicks = 0;
+        cookingOutputBaseline = 0;
+        expectedCookedFood = ItemStack.EMPTY;
+        cookingTarget = null;
+        cookingSearchCooldown = COOK_STATION_SEARCH_INTERVAL;
     }
 
     private boolean isBusyWithNeeds() {
         return getHunger() <= HUNT_HUNGER_THRESHOLD
-                || !carriedRawFood.isEmpty()
+                || (!carriedRawFood.isEmpty() && getHunger() < STOP_EATING_HUNGER)
+                || !foodToEat.isEmpty()
+                || cookingMode != COOK_MODE_NONE
                 || dropSearchTicks > 0
-                || cookingTarget != null;
+                || cookingTarget != null
+                || corralBrain.isBusy();
     }
 
     @Override
@@ -693,13 +1016,13 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void beginWildCombat(LivingEntity target, boolean callForHelp, boolean isHunt) {
+        corralBrain.interrupt();
+        clearUtilityItem();
         setTarget(target);
         setCombatActive(true);
         huntingTarget = isHunt;
         provocation = isHunt ? provocation : 100;
         outOfRangeTicks = 0;
-        cookingTarget = null;
-        cookingTicks = 0;
         getNavigation().stop();
 
         if (callForHelp) {
@@ -799,6 +1122,21 @@ public class CyberNpcEntity extends PathfinderMob {
         if (!carriedRawFood.isEmpty()) {
             tag.put("CyberNpcRawFood", carriedRawFood.save(new CompoundTag()));
         }
+
+        if (!foodToEat.isEmpty()) {
+            tag.put("CyberNpcCookedFood", foodToEat.save(new CompoundTag()));
+        }
+
+        if (cookingTarget != null && cookingMode != COOK_MODE_NONE) {
+            tag.putLong("CyberNpcCookingTarget", cookingTarget.asLong());
+            tag.putInt("CyberNpcCookingMode", cookingMode);
+            tag.putInt("CyberNpcCookingWait", cookingWaitTicks);
+            tag.putInt("CyberNpcCookingOutputBaseline", cookingOutputBaseline);
+
+            if (!expectedCookedFood.isEmpty()) {
+                tag.put("CyberNpcExpectedCookedFood", expectedCookedFood.save(new CompoundTag()));
+            }
+        }
     }
 
     @Override
@@ -843,6 +1181,26 @@ public class CyberNpcEntity extends PathfinderMob {
                 ? ItemStack.of(tag.getCompound("CyberNpcRawFood"))
                 : ItemStack.EMPTY;
 
+        foodToEat = tag.contains("CyberNpcCookedFood")
+                ? ItemStack.of(tag.getCompound("CyberNpcCookedFood"))
+                : ItemStack.EMPTY;
+
+        if (tag.contains("CyberNpcCookingTarget") && tag.contains("CyberNpcCookingMode")) {
+            cookingTarget = BlockPos.of(tag.getLong("CyberNpcCookingTarget"));
+            cookingMode = tag.getInt("CyberNpcCookingMode");
+            cookingWaitTicks = tag.getInt("CyberNpcCookingWait");
+            cookingOutputBaseline = tag.getInt("CyberNpcCookingOutputBaseline");
+            expectedCookedFood = tag.contains("CyberNpcExpectedCookedFood")
+                    ? ItemStack.of(tag.getCompound("CyberNpcExpectedCookedFood"))
+                    : ItemStack.EMPTY;
+        } else {
+            cookingTarget = null;
+            cookingMode = COOK_MODE_NONE;
+            cookingWaitTicks = 0;
+            cookingOutputBaseline = 0;
+            expectedCookedFood = ItemStack.EMPTY;
+        }
+
         if (storedSword.isEmpty() && tag.contains("CyberNpcStoredWeapon")) {
             ItemStack oldWeapon = ItemStack.of(tag.getCompound("CyberNpcStoredWeapon"));
             if (oldWeapon.getItem() instanceof SwordItem) {
@@ -858,9 +1216,9 @@ public class CyberNpcEntity extends PathfinderMob {
         huntSearchCooldown = 0;
         dropSearchTicks = 0;
         lastHuntKillPos = null;
-        cookingTarget = null;
-        cookingTicks = 0;
         cookingSearchCooldown = 0;
+        eatingTicks = 0;
+        utilityItemActive = false;
 
         if (getNpcType() == NpcType.WILD) {
             ensureWildProfile();
