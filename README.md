@@ -1,20 +1,20 @@
 # CyberNpc
 
-CyberNpc is a custom NPC framework for **Minecraft 1.20.1 Forge**, built specifically to grow with the CyberSpectra modpack without becoming a fragile collection of one-off NPC scripts.
+CyberNpc is a custom NPC framework for **Minecraft 1.20.1 Forge**, built for the CyberSpectra modpack.
 
-## Current release: 0.1.0 Foundation
+## Current release: 0.1.1
 
-The first release deliberately focuses on a stable core:
+Current functionality:
 
-- Custom persistent humanoid NPC entity.
-- Custom CyberNpc skin/renderer.
+- Persistent humanoid NPC entity.
+- Minecraft's built-in Steve appearance as the default NPC skin.
 - Spawn egg.
 - Lightweight idle AI.
 - NPC name and role data that save with the world.
 - Per-NPC wandering toggle.
 - Right-click NPC information.
 - Admin commands for spawning, roles, wandering, and removal.
-- Automatic GitHub Actions build on every pushed version.
+- Automatic GitHub Actions build validation.
 
 ### Commands
 
@@ -27,11 +27,11 @@ Targets can use normal Minecraft entity selectors, for example:
 
 `@e[type=cybernpc:cyber_npc,sort=nearest,limit=1]`
 
-## Design direction
+## Development rule
 
-CyberNpc will be expanded in layers rather than trying to ship everything at once. Planned systems include an in-game NPC editor, homes and town locations, schedules, Sims-style needs, jobs, dialogue, shops, relationships, quest/event hooks, custom appearances, animations, and modpack integration APIs.
+New gameplay systems and NPC features are added only when explicitly requested by the modpack owner. The codebase should remain modular so requested features can be added without unnecessary rewrites.
 
-The important rule is that those systems build on persistent NPC data and modular components instead of hard-coding special behavior into individual NPCs.
+Technical fixes, compatibility work, build tooling, and maintainability changes may be made when required to keep requested functionality working correctly.
 
 ## Development target
 
