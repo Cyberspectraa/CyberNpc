@@ -27,6 +27,7 @@ import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.RandomStrollGoal;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 
@@ -55,6 +56,7 @@ public class CyberNpcEntity extends PathfinderMob {
     private int aggressionLevel = -1;
     private int provocation;
     private int outOfRangeTicks;
+    private ItemStack storedWeapon = ItemStack.EMPTY;
 
     public CyberNpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -117,8 +119,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (safeType != NpcType.WILD) {
             setPersistenceRequired();
-            setCombatActive(false);
-            setTarget(null);
+            calmWildNpc();
         }
     }
 
@@ -173,8 +174,51 @@ public class CyberNpcEntity extends PathfinderMob {
                     + getRandom().nextInt(WILD_MAX_AGGRESSION - WILD_MIN_AGGRESSION + 1);
         }
 
-        if (getMainHandItem().isEmpty()) {
-            setItemSlot(EquipmentSlot.MAINHAND, CyberNpcWeaponPool.randomWildWeapon(getRandom()));
+        // Migrates v0.3.0 Wild NPCs that may already have their passive weapon equipped.
+        if (!isCombatActive() && !getMainHandItem().isEmpty()) {
+            storeCurrentWeapon();
+        }
+
+        if (storedWeapon.isEmpty() && getMainHandItem().isEmpty()) {
+            storedWeapon = CyberNpcWeaponPool.randomWildWeapon(getRandom());
+        }
+    }
+
+    private void drawStoredWeapon() {
+        if (getNpcType() != NpcType.WILD || !getMainHandItem().isEmpty()) {
+            return;
+        }
+
+        if (storedWeapon.isEmpty()) {
+            storedWeapon = CyberNpcWeaponPool.randomWildWeapon(getRandom());
+        }
+
+        setItemSlot(EquipmentSlot.MAINHAND, storedWeapon.copy());
+        storedWeapon = ItemStack.EMPTY;
+    }
+
+    private void storeCurrentWeapon() {
+        ItemStack equipped = getMainHandItem();
+
+        if (!equipped.isEmpty()) {
+            storedWeapon = equipped.copy();
+            setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+        }
+    }
+
+    /**
+     * Shared weapon visibility hook for Wild NPC activities.
+     * Combat uses this now; a future hunting system can use the same draw/stow behavior.
+     */
+    public void setWeaponDrawn(boolean drawn) {
+        if (getNpcType() != NpcType.WILD) {
+            return;
+        }
+
+        if (drawn) {
+            drawStoredWeapon();
+        } else {
+            storeCurrentWeapon();
         }
     }
 
@@ -196,6 +240,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (getNpcType() == NpcType.WILD) {
             ensureWildCombatProfile();
+            setWeaponDrawn(false);
         }
 
         return result;
@@ -210,6 +255,13 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         ensureWildCombatProfile();
+
+        LivingEntity target = getTarget();
+        if (target != null && target.isAlive() && !isCombatActive()) {
+            setCombatActive(true);
+            setWeaponDrawn(true);
+        }
+
         tickWildCombat();
     }
 
@@ -218,20 +270,28 @@ public class CyberNpcEntity extends PathfinderMob {
             if (provocation > 0 && tickCount % 100 == 0) {
                 provocation = Math.max(0, provocation - 10);
             }
+
+            setWeaponDrawn(false);
             return;
         }
 
         LivingEntity target = getTarget();
-        if (!(target instanceof Player player)
-                || !player.isAlive()
-                || player.isCreative()
-                || player.isSpectator()) {
+
+        if (target == null || !target.isAlive()) {
             calmWildNpc();
             return;
         }
 
-        if (distanceToSqr(player) > WILD_DISENGAGE_DISTANCE * WILD_DISENGAGE_DISTANCE) {
+        if (target instanceof Player player && (player.isCreative() || player.isSpectator())) {
+            calmWildNpc();
+            return;
+        }
+
+        setWeaponDrawn(true);
+
+        if (distanceToSqr(target) > WILD_DISENGAGE_DISTANCE * WILD_DISENGAGE_DISTANCE) {
             outOfRangeTicks++;
+
             if (outOfRangeTicks >= WILD_DISENGAGE_TICKS) {
                 calmWildNpc();
             }
@@ -258,6 +318,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 provocation = Mth.clamp(provocation + addedProvocation, 0, 100);
 
                 int hostilityThreshold = 100 - aggressionLevel;
+
                 if (provocation >= hostilityThreshold) {
                     beginWildCombat(player, true);
                 }
@@ -267,18 +328,19 @@ public class CyberNpcEntity extends PathfinderMob {
         return damaged;
     }
 
-    private void beginWildCombat(Player player, boolean callForHelp) {
-        setTarget(player);
+    private void beginWildCombat(LivingEntity target, boolean callForHelp) {
+        setTarget(target);
         setCombatActive(true);
+        setWeaponDrawn(true);
         provocation = 100;
         outOfRangeTicks = 0;
 
         if (callForHelp) {
-            alertNearbyWildNpcs(player);
+            alertNearbyWildNpcs(target);
         }
     }
 
-    private void alertNearbyWildNpcs(Player player) {
+    private void alertNearbyWildNpcs(LivingEntity target) {
         List<CyberNpcEntity> nearbyWildNpcs = level().getEntitiesOfClass(
                 CyberNpcEntity.class,
                 getBoundingBox().inflate(WILD_HELP_RADIUS),
@@ -289,13 +351,14 @@ public class CyberNpcEntity extends PathfinderMob {
 
         for (CyberNpcEntity npc : nearbyWildNpcs) {
             npc.ensureWildCombatProfile();
-            npc.beginWildCombat(player, false);
+            npc.beginWildCombat(target, false);
         }
     }
 
     private void calmWildNpc() {
         setTarget(null);
         setCombatActive(false);
+        setWeaponDrawn(false);
         getNavigation().stop();
         provocation = 0;
         outOfRangeTicks = 0;
@@ -320,6 +383,10 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (aggressionLevel >= 0) {
             tag.putInt("CyberNpcAggression", aggressionLevel);
+        }
+
+        if (!storedWeapon.isEmpty()) {
+            tag.put("CyberNpcStoredWeapon", storedWeapon.save(new CompoundTag()));
         }
     }
 
@@ -351,9 +418,19 @@ public class CyberNpcEntity extends PathfinderMob {
             aggressionLevel = -1;
         }
 
+        storedWeapon = tag.contains("CyberNpcStoredWeapon")
+                ? ItemStack.of(tag.getCompound("CyberNpcStoredWeapon"))
+                : ItemStack.EMPTY;
+
         setCombatActive(false);
         provocation = 0;
         outOfRangeTicks = 0;
+
+        if (getNpcType() == NpcType.WILD) {
+            ensureWildCombatProfile();
+            setWeaponDrawn(false);
+        }
+
         ensureDefaultName();
     }
 

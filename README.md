@@ -2,7 +2,7 @@
 
 CyberNpc is a custom NPC framework for **Minecraft 1.20.1 Forge**, built for the CyberSpectra modpack.
 
-## Current release: 0.3.0
+## Current release: 0.3.1
 
 Current functionality:
 
@@ -19,9 +19,12 @@ Current functionality:
 - A Wild NPC that becomes hostile alerts nearby Wild NPCs within 20 blocks.
 - Alerted NPCs join the fight without recursively alerting more NPCs.
 - Wild NPCs disengage after their target stays more than 40 blocks away for 5 seconds.
-- Wild NPCs spawn with a melee weapon selected from the `cybernpc:wild_npc_weapons` item tag.
-- Wild NPCs can use their equipped weapon in melee combat.
-- Optional YDM's Weapon Master compatibility: when `weaponmaster_ydm` is installed, passive Wild NPC weapons are rendered stowed on the body; during combat they move into the NPC's hand.
+- Wild NPCs own a melee weapon selected from the `cybernpc:wild_npc_weapons` item tag.
+- Passive Wild NPCs keep their weapon stored internally instead of equipped.
+- Wild NPCs draw/equip their weapon only while actively targeting a living entity.
+- When combat ends, the weapon is stored again.
+- This avoids YDM's Weapon Master displaying passive CyberNpc weapons incorrectly on the body/back.
+- The weapon draw/stow hook is reusable by a future food-hunting system, but hunting behavior itself is not included yet.
 - NPC name and role data save with the world.
 - Per-NPC wandering toggle.
 - Right-click NPC information.
@@ -41,16 +44,6 @@ Targets can use normal Minecraft entity selectors, for example:
 
 `@e[type=cybernpc:cyber_npc,sort=nearest,limit=1]`
 
-## NPC types
-
-CyberNpc uses one entity with stored type data instead of separate mob implementations.
-
-- **Main**: manually placed important NPC.
-- **Quest**: manually placed NPC reserved for quest behaviour.
-- **Wild**: ordinary NPC intended for natural world spawning.
-
-No quest system or Main-NPC-specific combat behaviour is added in this release.
-
 ## Wild NPC weapon pool
 
 The default weapon pool is defined by the item tag:
@@ -61,7 +54,7 @@ The included defaults are wooden/stone/iron swords and wooden/stone axes. A modp
 
 ## YDM's Weapon Master compatibility
 
-CyberNpc does not require YDM's Weapon Master. When the Forge mod with ID `weaponmaster_ydm` is present, CyberNpc adds a body-mounted stowed-weapon render layer for its custom NPC entity so the NPC's weapon is visible on its person while passive. CyberNpc does not patch or replace YDM itself.
+CyberNpc no longer tries to imitate YDM's body-mounted weapon renderer. Passive Wild NPC weapons are removed from their equipment slot and stored internally, preventing YDM-style passive weapon placement from putting them on the NPC's back. When the NPC enters combat, its weapon is equipped in its main hand and CyberNpc renders it there.
 
 ## Development rule
 
