@@ -16,7 +16,8 @@ public final class CyberNpcWeaponPool {
 
     public static ItemStack randomWildWeapon(RandomSource random) {
         return BuiltInRegistries.ITEM
-                .getRandomElementOf(WILD_NPC_WEAPONS, random)
+                .getTag(WILD_NPC_WEAPONS)
+                .flatMap(tag -> tag.getRandomElement(random))
                 .map(holder -> new ItemStack(holder.value()))
                 .orElseGet(() -> new ItemStack(Items.WOODEN_SWORD));
     }
