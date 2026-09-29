@@ -49,12 +49,18 @@ public final class CyberNpcStowedWeaponLayer
         }
 
         poseStack.pushPose();
-        applyYdmStyleTransform(poseStack, entity.getStowStyle());
+        applyStowTransform(poseStack, entity.getStowStyle());
 
+        /*
+         * FIXED keeps the flat face of handheld items parallel to the body.
+         * The previous THIRD_PERSON_RIGHT_HAND transform added its own hand
+         * rotation before our stow rotation, which turned swords vertical and
+         * axes edge-on through the torso.
+         */
         itemRenderer.renderStatic(
                 entity,
                 weapon,
-                ItemDisplayContext.THIRD_PERSON_RIGHT_HAND,
+                ItemDisplayContext.FIXED,
                 false,
                 poseStack,
                 buffer,
@@ -67,45 +73,44 @@ public final class CyberNpcStowedWeaponLayer
         poseStack.popPose();
     }
 
-    private void applyYdmStyleTransform(PoseStack poseStack, int style) {
+    private void applyStowTransform(PoseStack poseStack, int style) {
         PlayerModel<CyberNpcEntity> model = getParentModel();
 
         switch (style) {
-            // YDM default hotbar slot 2: body
+            // Opposite diagonal across the body.
             case 1 -> {
                 attach(model.body, poseStack);
-                transform(poseStack, 0.35D, 0.35D, 0.00D, 0.0F, 0.0F, 90.0F, 1.00F);
+                transform(poseStack, 0.35D, 0.35D, 0.00D, 90.0F, 1.70F);
             }
 
-            // YDM default hotbar slot 3: right leg
+            // Right hip / upper leg.
             case 2 -> {
                 attach(model.rightLeg, poseStack);
-                transform(poseStack, 0.01D, -0.20D, 0.12D, 0.0F, -90.0F, 0.0F, 1.00F);
+                transform(poseStack, 0.01D, -0.20D, 0.12D, -10.0F, 1.70F);
             }
 
-            // YDM default hotbar slot 4: left leg
+            // Left hip / upper leg.
             case 3 -> {
                 attach(model.leftLeg, poseStack);
-                transform(poseStack, 0.32D, -0.20D, 0.12D, 0.0F, -90.0F, 0.0F, 1.00F);
+                transform(poseStack, 0.32D, -0.20D, 0.12D, 10.0F, 1.70F);
             }
 
-            // YDM default hotbar slot 5: right leg, angled
+            // Right lower angled leg position.
             case 4 -> {
                 attach(model.rightLeg, poseStack);
-                transform(poseStack, 0.01D, -0.24D, 0.00D, 0.0F, -90.0F, -30.0F, 1.00F);
+                transform(poseStack, 0.01D, -0.24D, 0.00D, -30.0F, 1.70F);
             }
 
-            // YDM default hotbar slot 6: left leg, angled
+            // Left lower angled leg position.
             case 5 -> {
                 attach(model.leftLeg, poseStack);
-                transform(poseStack, 0.31D, -0.24D, 0.00D, 0.0F, -90.0F, -30.0F, 1.00F);
+                transform(poseStack, 0.31D, -0.24D, 0.00D, 30.0F, 1.70F);
             }
 
-            // YDM default hotbar slot 1: body/back.
-            // Its configured scale is -20, which corresponds to 80% size.
+            // Main diagonal body/back position.
             default -> {
                 attach(model.body, poseStack);
-                transform(poseStack, 0.23D, 0.14D, 0.18D, 92.0F, -142.0F, -96.0F, 0.80F);
+                transform(poseStack, 0.23D, 0.14D, 0.18D, 0.0F, 1.36F);
             }
         }
     }
@@ -119,14 +124,12 @@ public final class CyberNpcStowedWeaponLayer
             double x,
             double y,
             double z,
-            float xRot,
-            float yRot,
             float zRot,
             float scale
     ) {
         poseStack.translate(x, y, z);
-        poseStack.mulPose(Axis.XP.rotationDegrees(xRot));
-        poseStack.mulPose(Axis.YP.rotationDegrees(yRot));
+
+        // Keep the item face flat against the model; only rotate within that plane.
         poseStack.mulPose(Axis.ZP.rotationDegrees(zRot));
         poseStack.scale(scale, scale, scale);
     }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.4
+
+- Fixed passive weapon rotations shown in the v0.3.3 test screenshots.
+- Removed the depth-axis rotations that turned swords vertical and axes edge-on through the NPC body.
+- Returned passive rendering to the flat FIXED item presentation while compensating its scale to retain approximately the previous visible weapon size.
+- Kept the existing body/hip/leg attachment positions.
+- Each attachment now only applies an in-plane diagonal rotation so the weapon lies flat against the character.
+
 ## 0.3.3
 
 - Corrected passive Wild NPC weapon orientation using the third-person hand item transform instead of the fixed-item transform.
