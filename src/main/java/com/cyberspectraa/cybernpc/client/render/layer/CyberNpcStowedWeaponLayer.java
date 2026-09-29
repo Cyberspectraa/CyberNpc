@@ -49,13 +49,12 @@ public final class CyberNpcStowedWeaponLayer
         }
 
         poseStack.pushPose();
-        applyStowTransform(poseStack, entity.getStowStyle());
-        poseStack.scale(0.8F, 0.8F, 0.8F);
+        applyYdmStyleTransform(poseStack, entity.getStowStyle());
 
         itemRenderer.renderStatic(
                 entity,
                 weapon,
-                ItemDisplayContext.FIXED,
+                ItemDisplayContext.THIRD_PERSON_RIGHT_HAND,
                 false,
                 poseStack,
                 buffer,
@@ -68,33 +67,45 @@ public final class CyberNpcStowedWeaponLayer
         poseStack.popPose();
     }
 
-    private void applyStowTransform(PoseStack poseStack, int style) {
+    private void applyYdmStyleTransform(PoseStack poseStack, int style) {
         PlayerModel<CyberNpcEntity> model = getParentModel();
 
         switch (style) {
+            // YDM default hotbar slot 2: body
             case 1 -> {
                 attach(model.body, poseStack);
-                transform(poseStack, 0.35D, 0.35D, 0.00D, 0.0F, 0.0F, 90.0F);
+                transform(poseStack, 0.35D, 0.35D, 0.00D, 0.0F, 0.0F, 90.0F, 1.00F);
             }
+
+            // YDM default hotbar slot 3: right leg
             case 2 -> {
                 attach(model.rightLeg, poseStack);
-                transform(poseStack, 0.01D, -0.20D, 0.12D, 0.0F, -90.0F, 0.0F);
+                transform(poseStack, 0.01D, -0.20D, 0.12D, 0.0F, -90.0F, 0.0F, 1.00F);
             }
+
+            // YDM default hotbar slot 4: left leg
             case 3 -> {
                 attach(model.leftLeg, poseStack);
-                transform(poseStack, -0.01D, -0.20D, 0.12D, 0.0F, 90.0F, 0.0F);
+                transform(poseStack, 0.32D, -0.20D, 0.12D, 0.0F, -90.0F, 0.0F, 1.00F);
             }
+
+            // YDM default hotbar slot 5: right leg, angled
             case 4 -> {
-                attach(model.body, poseStack);
-                transform(poseStack, -0.13D, 0.34D, -0.01D, 0.0F, 0.0F, -35.0F);
+                attach(model.rightLeg, poseStack);
+                transform(poseStack, 0.01D, -0.24D, 0.00D, 0.0F, -90.0F, -30.0F, 1.00F);
             }
+
+            // YDM default hotbar slot 6: left leg, angled
             case 5 -> {
-                attach(model.body, poseStack);
-                transform(poseStack, 0.25D, 0.20D, 0.12D, 0.0F, 0.0F, 45.0F);
+                attach(model.leftLeg, poseStack);
+                transform(poseStack, 0.31D, -0.24D, 0.00D, 0.0F, -90.0F, -30.0F, 1.00F);
             }
+
+            // YDM default hotbar slot 1: body/back.
+            // Its configured scale is -20, which corresponds to 80% size.
             default -> {
                 attach(model.body, poseStack);
-                transform(poseStack, 0.23D, 0.14D, 0.18D, 92.0F, -142.0F, -96.0F);
+                transform(poseStack, 0.23D, 0.14D, 0.18D, 92.0F, -142.0F, -96.0F, 0.80F);
             }
         }
     }
@@ -110,11 +121,13 @@ public final class CyberNpcStowedWeaponLayer
             double z,
             float xRot,
             float yRot,
-            float zRot
+            float zRot,
+            float scale
     ) {
         poseStack.translate(x, y, z);
         poseStack.mulPose(Axis.XP.rotationDegrees(xRot));
         poseStack.mulPose(Axis.YP.rotationDegrees(yRot));
         poseStack.mulPose(Axis.ZP.rotationDegrees(zRot));
+        poseStack.scale(scale, scale, scale);
     }
 }

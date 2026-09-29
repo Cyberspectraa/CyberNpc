@@ -2,7 +2,7 @@
 
 CyberNpc is a custom NPC framework for **Minecraft 1.20.1 Forge**, built for the CyberSpectra modpack.
 
-## Current release: 0.3.2
+## Current release: 0.3.3
 
 Current functionality:
 
@@ -22,7 +22,8 @@ Current functionality:
 - Wild NPCs own a melee weapon selected from the `cybernpc:wild_npc_weapons` item tag.
 - Passive Wild NPCs visibly carry their stored weapon on a player-style body attachment point.
 - The stored weapon and its attachment position are synchronized to clients and persist with the NPC.
-- Wild NPCs can use several persistent stow positions across the back/body/hips/legs instead of every NPC using one identical placement.
+- Passive weapon rendering now uses the item's third-person hand transform, matching how a player-held weapon model is oriented before it is positioned on the body.
+- The six passive positions use YDM's first six default attachment layouts: two body positions and four leg positions.
 - When combat starts, the stored weapon disappears from the body and is equipped in the NPC's main hand.
 - When combat ends, it returns to the NPC's stored body position.
 - The draw/stow hook is reusable by a future food-hunting system; hunting behavior itself is not included yet.
@@ -55,7 +56,9 @@ The included defaults are wooden/stone/iron swords and wooden/stone axes. A modp
 
 ## YDM's Weapon Master compatibility
 
-YDM's Weapon Master makes player hotbar items visible on the character and supports multiple attachment locations. CyberNpc entities are custom mobs rather than Player entities, so YDM does not automatically render their inventory. CyberNpc therefore synchronizes its stored weapon and renders it on player-model attachment points while passive, using attachment styles based on YDM's default player configuration. When the NPC enters combat, the stored-body render is removed and the weapon is rendered in the hand instead.
+YDM's Weapon Master makes player hotbar items visible on the character and uses multiple body attachment locations. CyberNpc entities are custom mobs rather than Player entities, so YDM does not automatically render their inventory.
+
+CyberNpc synchronizes the Wild NPC's stored weapon and renders it using player-model body parts. Version 0.3.3 corrects the item transform pipeline so the weapon first uses Minecraft's third-person hand transform and is then placed with YDM-style attachment values. This is intended to match the positioning seen on a normal player much more closely than the earlier fixed-item rendering.
 
 ## Development rule
 

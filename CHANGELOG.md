@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3
+
+- Corrected passive Wild NPC weapon orientation using the third-person hand item transform instead of the fixed-item transform.
+- Replaced the improvised passive attachment transforms with YDM's first six default attachment layouts.
+- Preserved YDM's per-slot scale difference for the first body/back slot.
+- Kept the existing synced stored-weapon system and combat draw/stow behavior.
+
 ## 0.3.2
 
 - Restored visible passive Wild NPC weapons without actually equipping them.
