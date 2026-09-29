@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Replaced the generated CyberNpc texture with Minecraft's built-in Steve skin.
+- Removed the bundled custom NPC texture.
+- Documented that new gameplay features are only added when explicitly requested.
+
 ## 0.1.0
 
 - Initial Forge 1.20.1 CyberNpc foundation.
