@@ -2,7 +2,7 @@
 
 CyberNpc is a custom NPC framework for **Minecraft 1.20.1 Forge**, built for the CyberSpectra modpack.
 
-## Current release: 0.3.4
+## Current release: 0.4.0
 
 Current functionality:
 
@@ -14,29 +14,31 @@ Current functionality:
 - Wild NPCs receive generated names when they do not already have a custom name.
 - Wild NPCs can spawn naturally in the Overworld at a deliberately low spawn weight.
 - Main and Quest NPCs do not naturally spawn.
-- Wild NPCs have a persistent aggression level.
-- Repeatedly hurting a Wild NPC builds provocation; higher-aggression NPCs become hostile sooner.
-- A Wild NPC that becomes hostile alerts nearby Wild NPCs within 20 blocks.
-- Alerted NPCs join the fight without recursively alerting more NPCs.
-- Wild NPCs disengage after their target stays more than 40 blocks away for 5 seconds.
-- Wild NPCs own a melee weapon selected from the `cybernpc:wild_npc_weapons` item tag.
-- Passive Wild NPCs visibly carry their stored weapon on player-style body/hip/leg attachment points.
-- Stored weapons and attachment positions are synchronized to clients and persist with the NPC.
-- Passive weapons are kept flat against the model and use only an in-plane diagonal rotation at each storage point.
-- When combat starts, the stored weapon disappears from the body and is equipped in the NPC's main hand.
-- When combat ends, it returns to the NPC's stored body position.
-- The draw/stow hook is reusable by a future food-hunting system; hunting behavior itself is not included yet.
-- NPC name and role data save with the world.
-- Per-NPC wandering toggle.
-- Right-click NPC information.
-- Admin commands for spawning, roles, wandering, and removal.
-- Automatic GitHub Actions build validation.
+- Wild NPCs have a persistent aggression level and can call nearby Wild NPCs for help against players.
+- Wild NPCs disengage after a distant target remains out of range.
+- Wild NPCs now own exactly two combat weapons: one sword plus one bow or crossbow.
+- Weapons stay hidden while passive and are only equipped while fighting or hunting.
+- Wild NPC combat switches between the ranged weapon at distance and the sword at close range.
+- Wild NPCs have a persistent hunger value from 0 to 20.
+- Hunger slowly decreases over time. At 0 hunger, the NPC takes starvation damage and can die.
+- Right-clicking a Wild NPC shows its hunger as a 10-segment bar.
+- Hungry Wild NPCs search for adult prey from the `cybernpc:wild_npc_prey` entity tag.
+- Before hunting, the NPC compares the prey's current/max health with its own health and only attacks prey it considers manageable.
+- The default prey list is cow, pig, chicken, sheep, and rabbit.
+- After a successful hunt, the NPC searches the kill area for dropped raw food and physically walks over to collect it.
+- Raw food comes from the `cybernpc:wild_npc_raw_food` item tag.
+- NPCs carrying raw food search for a campfire, soul campfire, furnace, or smoker within 12 blocks.
+- At a cooking point, the NPC spends 5 seconds cooking one food item and immediately eats it to restore hunger.
+- If no prey, dropped food, or cooking point can be found, hunger continues dropping and the NPC can eventually starve.
+- Added `/cybernpc hunger <target> <0-20>` for testing and administration.
+- The earlier YDM/body-mounted weapon rendering experiment has been removed.
 
 ### Commands
 
 - `/cybernpc spawn <name>`
 - `/cybernpc role <target> <role>`
 - `/cybernpc wander <target> <true|false>`
+- `/cybernpc hunger <target> <0-20>`
 - `/cybernpc remove <target>`
 
 NPCs made with `/cybernpc spawn` are Main NPCs.
@@ -45,19 +47,22 @@ Targets can use normal Minecraft entity selectors, for example:
 
 `@e[type=cybernpc:cyber_npc,sort=nearest,limit=1]`
 
-## Wild NPC weapon pool
+## Wild NPC weapon pools
 
-The default weapon pool is defined by the item tag:
+Wild NPCs have exactly two weapon slots:
 
-`cybernpc:wild_npc_weapons`
+- `cybernpc:wild_npc_swords`: wooden, stone, and iron swords by default.
+- `cybernpc:wild_npc_ranged_weapons`: bow and crossbow by default.
 
-The included defaults are wooden/stone/iron swords and wooden/stone axes. A modpack datapack can add compatible modded melee weapons to this tag without changing CyberNpc code.
+A modpack datapack can extend those tags later without changing the NPC AI.
 
-## YDM's Weapon Master compatibility
+## Wild NPC hunger and hunting
 
-CyberNpc entities are custom mobs rather than Player entities, so YDM does not automatically render their stored inventory.
+The hunger system uses a 0-20 scale. Wild NPCs begin hunting at 12 hunger or below. Hunger decreases by one point every 60 seconds. At zero hunger they take starvation damage every four seconds.
 
-CyberNpc therefore renders the synchronized stored weapon itself. Version 0.3.4 keeps the weapon model flat against the body surface and applies only the final diagonal rotation for the chosen body/hip/leg storage point. This avoids the extra depth-axis hand rotations that caused swords to hang vertically and axes to turn through the torso in 0.3.3.
+Hunting is limited to the `cybernpc:wild_npc_prey` tag. A Wild NPC will not hunt babies and will refuse prey whose health looks too dangerous relative to its own.
+
+After killing prey, it searches nearby dropped items tagged `cybernpc:wild_npc_raw_food`. Once food is collected, the NPC searches locally for a campfire, soul campfire, furnace, or smoker, walks there, cooks food, and eats until its hunger reaches at least 18 or it runs out of food.
 
 ## Development rule
 

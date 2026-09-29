@@ -4,6 +4,7 @@ import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -40,6 +41,14 @@ public final class CyberNpcCommands {
                                                         context.getSource(),
                                                         EntityArgument.getEntity(context, "target"),
                                                         BoolArgumentType.getBool(context, "enabled")
+                                                )))))
+                        .then(Commands.literal("hunger")
+                                .then(Commands.argument("target", EntityArgument.entity())
+                                        .then(Commands.argument("value", IntegerArgumentType.integer(0, 20))
+                                                .executes(context -> setHunger(
+                                                        context.getSource(),
+                                                        EntityArgument.getEntity(context, "target"),
+                                                        IntegerArgumentType.getInteger(context, "value")
                                                 )))))
                         .then(Commands.literal("remove")
                                 .then(Commands.argument("target", EntityArgument.entity())
@@ -107,6 +116,26 @@ public final class CyberNpcCommands {
         npc.setCanWander(enabled);
         source.sendSuccess(
                 () -> Component.literal(npc.getName().getString() + " wandering: " + enabled),
+                true
+        );
+        return 1;
+    }
+
+    private static int setHunger(CommandSourceStack source, Entity target, int value) {
+        CyberNpcEntity npc = getNpcOrFail(source, target);
+
+        if (npc == null) {
+            return 0;
+        }
+
+        if (npc.getNpcType() != NpcType.WILD) {
+            source.sendFailure(Component.literal("Only Wild NPCs use hunger."));
+            return 0;
+        }
+
+        npc.setHunger(value);
+        source.sendSuccess(
+                () -> Component.literal(npc.getName().getString() + " hunger: " + npc.getHungerBar()),
                 true
         );
         return 1;

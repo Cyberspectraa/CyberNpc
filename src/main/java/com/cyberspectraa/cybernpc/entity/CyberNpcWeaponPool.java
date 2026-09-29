@@ -11,15 +11,30 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 public final class CyberNpcWeaponPool {
-    public static final TagKey<Item> WILD_NPC_WEAPONS =
-            TagKey.create(Registries.ITEM, new ResourceLocation(CyberNpc.MOD_ID, "wild_npc_weapons"));
+    public static final TagKey<Item> WILD_NPC_SWORDS =
+            TagKey.create(Registries.ITEM, new ResourceLocation(CyberNpc.MOD_ID, "wild_npc_swords"));
 
-    public static ItemStack randomWildWeapon(RandomSource random) {
+    public static final TagKey<Item> WILD_NPC_RANGED_WEAPONS =
+            TagKey.create(Registries.ITEM, new ResourceLocation(CyberNpc.MOD_ID, "wild_npc_ranged_weapons"));
+
+    public static ItemStack randomWildSword(RandomSource random) {
+        return randomFromTag(WILD_NPC_SWORDS, random, Items.WOODEN_SWORD);
+    }
+
+    public static ItemStack randomWildRangedWeapon(RandomSource random) {
+        return randomFromTag(WILD_NPC_RANGED_WEAPONS, random, Items.BOW);
+    }
+
+    private static ItemStack randomFromTag(
+            TagKey<Item> tagKey,
+            RandomSource random,
+            Item fallback
+    ) {
         return BuiltInRegistries.ITEM
-                .getTag(WILD_NPC_WEAPONS)
+                .getTag(tagKey)
                 .flatMap(tag -> tag.getRandomElement(random))
                 .map(holder -> new ItemStack(holder.value()))
-                .orElseGet(() -> new ItemStack(Items.WOODEN_SWORD));
+                .orElseGet(() -> new ItemStack(fallback));
     }
 
     private CyberNpcWeaponPool() {

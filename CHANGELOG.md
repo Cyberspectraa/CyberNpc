@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0
+
+- Removed the experimental YDM/body-mounted passive weapon rendering.
+- Wild NPCs now own exactly two weapons: one sword and one bow or crossbow.
+- Added automatic melee/ranged weapon switching during player combat and hunting.
+- Added persistent Wild NPC hunger on a 0-20 scale and starvation damage at zero hunger.
+- Added a visible text hunger bar when interacting with Wild NPCs.
+- Added `/cybernpc hunger <target> <0-20>` for testing.
+- Added health-based prey assessment and food-hunting behavior.
+- Added configurable prey, raw-food, sword, and ranged-weapon data tags.
+- Wild NPCs collect raw food dropped after a successful hunt.
+- Wild NPCs search for nearby campfires, furnaces, or smokers, cook their collected food, and eat it.
+- Added migration from the old single stored weapon when it was a sword.
+
 ## 0.3.4
 
 - Fixed passive weapon rotations shown in the v0.3.3 test screenshots.
