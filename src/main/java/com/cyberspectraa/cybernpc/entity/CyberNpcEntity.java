@@ -6,6 +6,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.DifficultyInstance;
@@ -25,11 +27,14 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
+import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.RandomStrollGoal;
+import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Arrow;
+import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.SwordItem;
@@ -45,6 +50,11 @@ import java.util.EnumSet;
 import java.util.List;
 
 public class CyberNpcEntity extends PathfinderMob {
+    public static final int RANGED_STATE_NONE = 0;
+    public static final int RANGED_STATE_BOW_DRAW = 1;
+    public static final int RANGED_STATE_CROSSBOW_CHARGE = 2;
+    public static final int RANGED_STATE_CROSSBOW_HOLD = 3;
+
     private static final double WILD_HELP_RADIUS = 20.0D;
     private static final double WILD_DISENGAGE_DISTANCE = 40.0D;
     private static final int WILD_DISENGAGE_TICKS = 100;
@@ -78,6 +88,9 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<Integer> DATA_HUNGER =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.INT);
 
+    private static final EntityDataAccessor<Integer> DATA_RANGED_STATE =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.INT);
+
     private int aggressionLevel = -1;
     private int provocation;
     private int outOfRangeTicks;
@@ -98,13 +111,19 @@ public class CyberNpcEntity extends PathfinderMob {
 
     public CyberNpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
+
+        getNavigation().setCanFloat(true);
+        if (getNavigation() instanceof GroundPathNavigation groundNavigation) {
+            groundNavigation.setCanOpenDoors(true);
+            groundNavigation.setCanPassDoors(true);
+        }
     }
 
     public static AttributeSupplier.Builder createAttributes() {
         return Mob.createMobAttributes()
                 .add(Attributes.MAX_HEALTH, 20.0D)
-                .add(Attributes.MOVEMENT_SPEED, 0.25D)
-                .add(Attributes.FOLLOW_RANGE, 32.0D)
+                .add(Attributes.MOVEMENT_SPEED, 0.27D)
+                .add(Attributes.FOLLOW_RANGE, 40.0D)
                 .add(Attributes.ATTACK_DAMAGE, 2.0D)
                 .add(Attributes.ARMOR, 0.0D);
     }
@@ -128,11 +147,13 @@ public class CyberNpcEntity extends PathfinderMob {
         entityData.define(DATA_NPC_TYPE, NpcType.MAIN.serializedName());
         entityData.define(DATA_COMBAT_ACTIVE, false);
         entityData.define(DATA_HUNGER, MAX_HUNGER);
+        entityData.define(DATA_RANGED_STATE, RANGED_STATE_NONE);
     }
 
     @Override
     protected void registerGoals() {
         goalSelector.addGoal(0, new FloatGoal(this));
+        goalSelector.addGoal(1, new OpenDoorGoal(this, true));
         goalSelector.addGoal(2, new WildNpcCombatGoal(this));
         goalSelector.addGoal(5, new ConditionalRandomStrollGoal(this, 0.6D, 120));
         goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
@@ -181,6 +202,26 @@ public class CyberNpcEntity extends PathfinderMob {
     private void setCombatActive(boolean active) {
         entityData.set(DATA_COMBAT_ACTIVE, active);
         setAggressive(active);
+    }
+
+    public int getRangedState() {
+        return entityData.get(DATA_RANGED_STATE);
+    }
+
+    private void setRangedState(int state) {
+        entityData.set(DATA_RANGED_STATE, state);
+    }
+
+    public boolean isChargingCrossbow() {
+        return getRangedState() == RANGED_STATE_CROSSBOW_CHARGE;
+    }
+
+    public boolean isAimingBow() {
+        return getRangedState() == RANGED_STATE_BOW_DRAW;
+    }
+
+    public boolean isHoldingChargedCrossbow() {
+        return getRangedState() == RANGED_STATE_CROSSBOW_HOLD;
     }
 
     public int getAggressionLevel() {
@@ -235,7 +276,7 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         if (!isCombatActive() && !getMainHandItem().isEmpty()) {
-            setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+            stowWeapons();
         }
     }
 
@@ -248,20 +289,42 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void equipSword() {
-        if (getNpcType() == NpcType.WILD && !storedSword.isEmpty()) {
+        if (getNpcType() != NpcType.WILD || storedSword.isEmpty()) {
+            return;
+        }
+
+        ItemStack held = getMainHandItem();
+        if (!ItemStack.isSameItemSameTags(held, storedSword)) {
+            stopUsingItem();
+            setRangedState(RANGED_STATE_NONE);
             setItemSlot(EquipmentSlot.MAINHAND, storedSword.copy());
         }
     }
 
     private void equipRangedWeapon() {
-        if (getNpcType() == NpcType.WILD && !storedRangedWeapon.isEmpty()) {
-            setItemSlot(EquipmentSlot.MAINHAND, storedRangedWeapon.copy());
+        if (getNpcType() != NpcType.WILD || storedRangedWeapon.isEmpty()) {
+            return;
+        }
+
+        ItemStack held = getMainHandItem();
+        if (!ItemStack.isSameItemSameTags(held, storedRangedWeapon)) {
+            stopUsingItem();
+            setRangedState(RANGED_STATE_NONE);
+            ItemStack copy = storedRangedWeapon.copy();
+            if (copy.is(Items.CROSSBOW)) {
+                CrossbowItem.setCharged(copy, false);
+            }
+            setItemSlot(EquipmentSlot.MAINHAND, copy);
         }
     }
 
     private void stowWeapons() {
         if (getNpcType() == NpcType.WILD) {
+            stopUsingItem();
+            setRangedState(RANGED_STATE_NONE);
             setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+            setShiftKeyDown(false);
+            setSprinting(false);
         }
     }
 
@@ -299,6 +362,12 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         ensureWildProfile();
+
+        if (onClimbable() && horizontalCollision) {
+            Vec3 movement = getDeltaMovement();
+            setDeltaMovement(movement.x, Math.max(movement.y, 0.20D), movement.z);
+        }
+
         tickHunger();
         tickWildCombat();
         tickHuntingAndFood();
@@ -464,7 +533,8 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
-        getNavigation().moveTo(food, 1.0D);
+        setSprinting(true);
+        getNavigation().moveTo(food, 1.05D);
 
         if (distanceToSqr(food) <= 2.25D) {
             ItemStack found = food.getItem();
@@ -472,24 +542,26 @@ public class CyberNpcEntity extends PathfinderMob {
             if (carriedRawFood.isEmpty()) {
                 carriedRawFood = found.copy();
                 food.discard();
-                dropSearchTicks = 0;
-                lastHuntKillPos = null;
-                cookingTarget = null;
-                cookingSearchCooldown = 0;
-                getNavigation().stop();
             } else if (ItemStack.isSameItemSameTags(carriedRawFood, found)) {
                 carriedRawFood.grow(found.getCount());
                 food.discard();
-                dropSearchTicks = 0;
-                lastHuntKillPos = null;
-                cookingTarget = null;
-                cookingSearchCooldown = 0;
-                getNavigation().stop();
+            } else {
+                return;
             }
+
+            setSprinting(false);
+            dropSearchTicks = 0;
+            lastHuntKillPos = null;
+            cookingTarget = null;
+            cookingSearchCooldown = 0;
+            getNavigation().stop();
         }
     }
 
     private void tickCooking() {
+        setShiftKeyDown(false);
+        setSprinting(false);
+
         if (getHunger() >= STOP_EATING_HUNGER) {
             cookingTarget = null;
             cookingTicks = 0;
@@ -663,23 +735,26 @@ public class CyberNpcEntity extends PathfinderMob {
         outOfRangeTicks = 0;
     }
 
-    private void fireRangedWeapon(LivingEntity target) {
-        boolean crossbow = storedRangedWeapon.is(Items.CROSSBOW);
-
+    private void fireAdaptiveArrow(LivingEntity target, float speed, float inaccuracy, double baseDamage) {
         Arrow arrow = new Arrow(level(), this);
-        double dx = target.getX() - getX();
-        double dz = target.getZ() - getZ();
-        double dy = target.getY(0.4D) - arrow.getY();
+
+        Vec3 targetVelocity = target.getDeltaMovement();
+        double directDistance = position().distanceTo(target.position());
+        double flightTicks = Mth.clamp(directDistance / Math.max(speed, 0.1F), 1.0D, 30.0D);
+
+        Vec3 predictedTarget = target.position()
+                .add(targetVelocity.scale(flightTicks * 0.85D));
+
+        double dx = predictedTarget.x - getX();
+        double dz = predictedTarget.z - getZ();
         double horizontal = Math.sqrt(dx * dx + dz * dz);
+        double targetY = predictedTarget.y + target.getBbHeight() * 0.45D;
 
-        arrow.shoot(
-                dx,
-                dy + horizontal * 0.18D,
-                dz,
-                crossbow ? 2.2F : 1.6F,
-                crossbow ? 4.0F : 7.0F
-        );
+        double gravityCompensation = 0.5D * 0.05D * flightTicks * flightTicks;
+        double dy = targetY - arrow.getY() + gravityCompensation;
 
+        arrow.setBaseDamage(baseDamage);
+        arrow.shoot(dx, dy, dz, speed, inaccuracy);
         level().addFreshEntity(arrow);
     }
 
@@ -768,7 +843,6 @@ public class CyberNpcEntity extends PathfinderMob {
                 ? ItemStack.of(tag.getCompound("CyberNpcRawFood"))
                 : ItemStack.EMPTY;
 
-        // Migrate the old single stored weapon only if it was actually a sword.
         if (storedSword.isEmpty() && tag.contains("CyberNpcStoredWeapon")) {
             ItemStack oldWeapon = ItemStack.of(tag.getCompound("CyberNpcStoredWeapon"));
             if (oldWeapon.getItem() instanceof SwordItem) {
@@ -777,6 +851,7 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         setCombatActive(false);
+        setRangedState(RANGED_STATE_NONE);
         huntingTarget = false;
         provocation = 0;
         outOfRangeTicks = 0;
@@ -821,12 +896,18 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private static final class WildNpcCombatGoal extends Goal {
-        private static final double MELEE_DISTANCE_SQR = 16.0D;
-        private static final double MAX_RANGED_DISTANCE_SQR = 225.0D;
+        private static final double MELEE_DISTANCE_SQR = 20.25D;
+        private static final double HUNT_STALK_MIN_SQR = 25.0D;
+        private static final double HUNT_STALK_MAX_SQR = 196.0D;
+        private static final double RANGED_STOP_DISTANCE_SQR = 100.0D;
+        private static final double MAX_RANGED_DISTANCE_SQR = 576.0D;
 
         private final CyberNpcEntity npc;
         private int meleeCooldown;
         private int rangedCooldown;
+        private int bowDrawTicks;
+        private int crossbowChargeTicks;
+        private int crossbowHoldTicks;
 
         private WildNpcCombatGoal(CyberNpcEntity npc) {
             this.npc = npc;
@@ -848,11 +929,15 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         @Override
+        public void start() {
+            resetRangedUse();
+        }
+
+        @Override
         public void stop() {
             npc.getNavigation().stop();
             npc.stowWeapons();
-            meleeCooldown = 0;
-            rangedCooldown = 0;
+            resetTimers();
         }
 
         @Override
@@ -862,7 +947,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 return;
             }
 
-            npc.getLookControl().setLookAt(target, 30.0F, 30.0F);
+            npc.getLookControl().setLookAt(target, 45.0F, 45.0F);
 
             if (meleeCooldown > 0) {
                 meleeCooldown--;
@@ -872,33 +957,203 @@ public class CyberNpcEntity extends PathfinderMob {
             }
 
             double distanceSqr = npc.distanceToSqr(target);
+            boolean lineOfSight = npc.getSensing().hasLineOfSight(target);
 
-            if (distanceSqr > MELEE_DISTANCE_SQR && !npc.storedRangedWeapon.isEmpty()) {
-                npc.equipRangedWeapon();
+            if (npc.huntingTarget
+                    && distanceSqr >= HUNT_STALK_MIN_SQR
+                    && distanceSqr <= HUNT_STALK_MAX_SQR) {
+                npc.setShiftKeyDown(true);
+                npc.setSprinting(false);
+                npc.getNavigation().moveTo(target, 0.58D);
+            } else {
+                npc.setShiftKeyDown(false);
+            }
 
-                if (distanceSqr > 100.0D || !npc.getSensing().hasLineOfSight(target)) {
-                    npc.getNavigation().moveTo(target, 1.0D);
-                } else {
-                    npc.getNavigation().stop();
-                }
-
-                if (distanceSqr <= MAX_RANGED_DISTANCE_SQR
-                        && npc.getSensing().hasLineOfSight(target)
-                        && rangedCooldown <= 0) {
-                    npc.fireRangedWeapon(target);
-                    rangedCooldown = npc.storedRangedWeapon.is(Items.CROSSBOW) ? 50 : 35;
-                }
-
+            if (distanceSqr <= MELEE_DISTANCE_SQR) {
+                tickMelee(target, distanceSqr);
                 return;
             }
 
+            tickRanged(target, distanceSqr, lineOfSight);
+        }
+
+        private void tickMelee(LivingEntity target, double distanceSqr) {
+            resetRangedUse();
+            npc.setShiftKeyDown(false);
+            npc.setSprinting(true);
             npc.equipSword();
-            npc.getNavigation().moveTo(target, 1.15D);
+            npc.getNavigation().moveTo(target, 1.20D);
 
             if (distanceSqr <= MELEE_DISTANCE_SQR && meleeCooldown <= 0) {
                 npc.doHurtTarget(target);
-                meleeCooldown = 20;
+                meleeCooldown = 16;
             }
+        }
+
+        private void tickRanged(LivingEntity target, double distanceSqr, boolean lineOfSight) {
+            npc.equipRangedWeapon();
+
+            if (distanceSqr > MAX_RANGED_DISTANCE_SQR || !lineOfSight) {
+                resetRangedUse();
+                npc.setSprinting(!npc.huntingTarget);
+                npc.getNavigation().moveTo(target, npc.huntingTarget ? 0.62D : 1.12D);
+                return;
+            }
+
+            npc.setSprinting(false);
+
+            if (distanceSqr > RANGED_STOP_DISTANCE_SQR) {
+                npc.getNavigation().moveTo(target, npc.huntingTarget ? 0.62D : 0.92D);
+            } else {
+                npc.getNavigation().stop();
+            }
+
+            ItemStack ranged = npc.getMainHandItem();
+
+            if (ranged.is(Items.CROSSBOW)) {
+                tickCrossbow(target, ranged, distanceSqr);
+            } else {
+                tickBow(target, distanceSqr);
+            }
+        }
+
+        private void tickBow(LivingEntity target, double distanceSqr) {
+            if (rangedCooldown > 0) {
+                resetRangedUse();
+                return;
+            }
+
+            if (npc.getRangedState() != RANGED_STATE_BOW_DRAW) {
+                resetRangedUse();
+                npc.setRangedState(RANGED_STATE_BOW_DRAW);
+                npc.startUsingItem(InteractionHand.MAIN_HAND);
+                bowDrawTicks = 0;
+            }
+
+            bowDrawTicks++;
+
+            double distance = Math.sqrt(distanceSqr);
+            int desiredDrawTicks = Mth.clamp((int) Math.round(11.0D + distance * 0.35D), 12, 20);
+
+            if (bowDrawTicks < desiredDrawTicks) {
+                return;
+            }
+
+            float drawPower = Mth.clamp(bowDrawTicks / 20.0F, 0.65F, 1.0F);
+            float speed = 1.65F + drawPower * 1.25F;
+            float inaccuracy = Mth.clamp(5.0F - (float) distance * 0.08F, 1.5F, 4.5F);
+
+            npc.stopUsingItem();
+            npc.setRangedState(RANGED_STATE_NONE);
+            npc.fireAdaptiveArrow(target, speed, inaccuracy, 3.0D + drawPower);
+            npc.level().playSound(
+                    null,
+                    npc.blockPosition(),
+                    SoundEvents.ARROW_SHOOT,
+                    SoundSource.NEUTRAL,
+                    1.0F,
+                    1.0F / (npc.getRandom().nextFloat() * 0.4F + 0.8F)
+            );
+
+            bowDrawTicks = 0;
+            rangedCooldown = 12;
+        }
+
+        private void tickCrossbow(LivingEntity target, ItemStack crossbow, double distanceSqr) {
+            if (rangedCooldown > 0) {
+                return;
+            }
+
+            int state = npc.getRangedState();
+
+            if (state == RANGED_STATE_NONE) {
+                CrossbowItem.setCharged(crossbow, false);
+                npc.setRangedState(RANGED_STATE_CROSSBOW_CHARGE);
+                npc.startUsingItem(InteractionHand.MAIN_HAND);
+                crossbowChargeTicks = 0;
+                crossbowHoldTicks = 0;
+
+                npc.level().playSound(
+                        null,
+                        npc.blockPosition(),
+                        SoundEvents.CROSSBOW_LOADING_START,
+                        SoundSource.NEUTRAL,
+                        0.8F,
+                        1.0F
+                );
+                return;
+            }
+
+            if (state == RANGED_STATE_CROSSBOW_CHARGE) {
+                crossbowChargeTicks++;
+                int chargeDuration = CrossbowItem.getChargeDuration(crossbow);
+
+                if (crossbowChargeTicks < chargeDuration) {
+                    return;
+                }
+
+                npc.stopUsingItem();
+                CrossbowItem.setCharged(crossbow, true);
+                npc.setRangedState(RANGED_STATE_CROSSBOW_HOLD);
+                crossbowHoldTicks = 6;
+
+                npc.level().playSound(
+                        null,
+                        npc.blockPosition(),
+                        SoundEvents.CROSSBOW_LOADING_END,
+                        SoundSource.NEUTRAL,
+                        0.9F,
+                        1.0F
+                );
+                return;
+            }
+
+            if (state == RANGED_STATE_CROSSBOW_HOLD) {
+                if (crossbowHoldTicks > 0) {
+                    crossbowHoldTicks--;
+                    return;
+                }
+
+                double distance = Math.sqrt(distanceSqr);
+                float speed = 3.15F;
+                float inaccuracy = Mth.clamp(3.0F - (float) distance * 0.04F, 0.8F, 2.5F);
+
+                npc.fireAdaptiveArrow(target, speed, inaccuracy, 4.5D);
+                npc.level().playSound(
+                        null,
+                        npc.blockPosition(),
+                        SoundEvents.CROSSBOW_SHOOT,
+                        SoundSource.NEUTRAL,
+                        1.0F,
+                        1.0F
+                );
+
+                CrossbowItem.setCharged(crossbow, false);
+                npc.setRangedState(RANGED_STATE_NONE);
+                crossbowChargeTicks = 0;
+                crossbowHoldTicks = 0;
+                rangedCooldown = 28;
+            }
+        }
+
+        private void resetRangedUse() {
+            npc.stopUsingItem();
+
+            ItemStack held = npc.getMainHandItem();
+            if (held.is(Items.CROSSBOW)) {
+                CrossbowItem.setCharged(held, false);
+            }
+
+            npc.setRangedState(RANGED_STATE_NONE);
+            bowDrawTicks = 0;
+            crossbowChargeTicks = 0;
+            crossbowHoldTicks = 0;
+        }
+
+        private void resetTimers() {
+            resetRangedUse();
+            meleeCooldown = 0;
+            rangedCooldown = 0;
         }
     }
 }
