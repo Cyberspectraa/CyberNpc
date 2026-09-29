@@ -1,6 +1,7 @@
 package com.cyberspectraa.cybernpc.command;
 
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
+import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -67,6 +68,7 @@ public final class CyberNpcCommands {
 
         Vec3 position = source.getPosition();
         npc.moveTo(position.x, position.y, position.z, source.getRotation().y, 0.0F);
+        npc.setNpcType(NpcType.MAIN);
         npc.setCustomName(Component.literal(name));
         npc.setCustomNameVisible(true);
         npc.setRole("Citizen");

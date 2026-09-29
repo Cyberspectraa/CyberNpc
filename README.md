@@ -2,15 +2,19 @@
 
 CyberNpc is a custom NPC framework for **Minecraft 1.20.1 Forge**, built for the CyberSpectra modpack.
 
-## Current release: 0.1.1
+## Current release: 0.2.0
 
 Current functionality:
 
-- Persistent humanoid NPC entity.
+- One persistent humanoid CyberNpc entity shared by all NPC types.
 - Minecraft's built-in Steve appearance as the default NPC skin.
-- Spawn egg.
-- Lightweight idle AI.
-- NPC name and role data that save with the world.
+- Persistent NPC types: Main, Quest, and Wild.
+- Separate Main, Quest, and Wild preset spawn eggs.
+- Main and Quest eggs can be renamed in an anvil before use to give the spawned NPC that custom name.
+- Wild NPCs receive generated names when they do not already have a custom name.
+- Wild NPCs can spawn naturally in the Overworld at a deliberately low spawn weight.
+- Main and Quest NPCs do not naturally spawn.
+- NPC name and role data save with the world.
 - Per-NPC wandering toggle.
 - Right-click NPC information.
 - Admin commands for spawning, roles, wandering, and removal.
@@ -23,9 +27,21 @@ Current functionality:
 - `/cybernpc wander <target> <true|false>`
 - `/cybernpc remove <target>`
 
+NPCs made with `/cybernpc spawn` are Main NPCs.
+
 Targets can use normal Minecraft entity selectors, for example:
 
 `@e[type=cybernpc:cyber_npc,sort=nearest,limit=1]`
+
+## NPC types
+
+CyberNpc uses one entity with stored type data instead of separate mob implementations.
+
+- **Main**: manually placed important NPC.
+- **Quest**: manually placed NPC reserved for quest behaviour.
+- **Wild**: ordinary NPC intended for natural world spawning.
+
+The type is a foundation only. No quest system or Main-NPC-specific behaviour is added yet.
 
 ## Development rule
 

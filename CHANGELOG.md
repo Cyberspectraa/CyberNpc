@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0
+
+- Added persistent Main, Quest, and Wild NPC types while keeping one shared CyberNpc entity.
+- Replaced the generic spawn egg with Main, Quest, and Wild preset spawn eggs.
+- Added anvil-name support for deliberately naming Main and Quest NPCs through their spawn eggs.
+- Added generated names for unnamed Wild NPCs.
+- Added low-weight natural Wild NPC spawning in Overworld biomes.
+- Main and Quest NPCs remain manually spawned only.
+- Command-created NPCs are treated as Main NPCs.
+
 ## 0.1.1
 
 - Replaced the generated CyberNpc texture with Minecraft's built-in Steve skin.
