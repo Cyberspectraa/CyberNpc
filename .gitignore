@@ -1,0 +1,20 @@
+# Gradle / Forge
+.gradle/
+build/
+out/
+run/
+run-data/
+src/generated/
+*.class
+
+# IDE
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
