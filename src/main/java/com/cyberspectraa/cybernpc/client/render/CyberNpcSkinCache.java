@@ -13,6 +13,7 @@ import net.minecraft.server.packs.resources.Resource;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -20,7 +21,7 @@ import java.util.zip.ZipInputStream;
 
 public final class CyberNpcSkinCache {
     private static final ResourceLocation APPEARANCE_PACK =
-            new ResourceLocation(CyberNpc.MOD_ID, "appearance/lunarskins.zip");
+            new ResourceLocation(CyberNpc.MOD_ID, "appearance/lunarskins.b64");
 
     private static final ResourceLocation FALLBACK_STEVE =
             new ResourceLocation("minecraft", "textures/entity/player/wide/steve.png");
@@ -148,8 +149,16 @@ public final class CyberNpcSkinCache {
 
         Map<String, byte[]> loaded = new HashMap<>();
 
-        try (InputStream raw = resource.open();
-             ZipInputStream zip = new ZipInputStream(raw)) {
+        byte[] encoded;
+        try (InputStream raw = resource.open()) {
+            encoded = raw.readAllBytes();
+        }
+
+        byte[] archive = Base64.getMimeDecoder().decode(encoded);
+
+        try (ZipInputStream zip = new ZipInputStream(
+                new ByteArrayInputStream(archive)
+        )) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
                 if (!entry.isDirectory()) {
