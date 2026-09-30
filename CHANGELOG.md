@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.27.1
+
+### Beast Tamer wolf follow fix
+- Beast Tamer wolves now actively path back to their owner instead of relying only on vanilla wolf follow AI.
+- Following is the default companion state during ordinary travel, socialising, idling and other normal activities.
+- Wolves only receive the normal sit command while their Beast Tamer is actually sleeping.
+- Wolves immediately receive an unsit/follow command after the Beast Tamer wakes.
+- Combat and hunting still override following and send the pack after the Beast Tamer's current target.
+- Fleeing recalls the pack to the Beast Tamer instead of allowing wolves to stay behind.
+- A wolf with a live self-defence target is allowed to finish defending itself before resuming active follow.
+
 ## 0.27.0
 
 ### Horse Tamer class
