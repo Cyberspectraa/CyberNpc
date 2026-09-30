@@ -745,10 +745,17 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
+        // Appearance is persistent and must be chosen before the name so new
+        // Wild NPCs always receive a name from the matching gender pool.
+        ensureAppearance();
+
         String name = switch (getNpcType()) {
             case MAIN -> "Main NPC";
             case QUEST -> "Quest NPC";
-            case WILD -> CyberNpcNameGenerator.randomWildName(getRandom());
+            case WILD -> CyberNpcNameGenerator.randomWildName(
+                    getRandom(),
+                    getAppearanceGender()
+            );
         };
 
         setCustomName(Component.literal(name));
@@ -5437,6 +5444,7 @@ public class CyberNpcEntity extends PathfinderMob {
         private int bowDrawTicks;
         private int crossbowChargeTicks;
         private int crossbowHoldTicks;
+        private int crossbowLostSightTicks;
 
         @Nullable
         private CyberNpcEntity clericSupportTarget;
@@ -5755,20 +5763,65 @@ public class CyberNpcEntity extends PathfinderMob {
             );
         }
 
-        private void tickRanged(LivingEntity target, double distanceSqr, boolean lineOfSight) {
+        private void tickRanged(
+                LivingEntity target,
+                double distanceSqr,
+                boolean lineOfSight
+        ) {
             npc.equipRangedWeapon();
+            ItemStack ranged = npc.getMainHandItem();
 
-            if (distanceSqr > MAX_RANGED_DISTANCE_SQR || !lineOfSight) {
+            if (distanceSqr > MAX_RANGED_DISTANCE_SQR) {
                 resetRangedUse();
                 npc.setSprinting(!npc.huntingTarget);
-                npc.getNavigation().moveTo(target, npc.huntingTarget ? 0.62D : 1.12D);
+                npc.getNavigation().moveTo(
+                        target,
+                        npc.huntingTarget ? 0.62D : 1.12D
+                );
                 return;
             }
 
+            if (!lineOfSight) {
+                npc.setSprinting(!npc.huntingTarget);
+                npc.getNavigation().moveTo(
+                        target,
+                        npc.huntingTarget ? 0.62D : 1.05D
+                );
+
+                boolean crossbowAlreadyActive = ranged.is(Items.CROSSBOW)
+                        && (npc.getRangedState()
+                        == RANGED_STATE_CROSSBOW_CHARGE
+                        || npc.getRangedState()
+                        == RANGED_STATE_CROSSBOW_HOLD);
+
+                if (crossbowAlreadyActive) {
+                    crossbowLostSightTicks++;
+
+                    // Do not repeatedly cancel/restart a crossbow because LOS
+                    // flickered for a few ticks. That restart was causing the
+                    // vanilla loading sound sequence to retrigger repeatedly.
+                    if (crossbowLostSightTicks <= 12) {
+                        tickCrossbow(
+                                target,
+                                ranged,
+                                distanceSqr,
+                                false
+                        );
+                        return;
+                    }
+                }
+
+                resetRangedUse();
+                return;
+            }
+
+            crossbowLostSightTicks = 0;
             npc.setSprinting(false);
 
             boolean archer = npc.getWildClass() == WildNpcClass.ARCHER;
-            double preferredStopSqr = archer ? 144.0D : RANGED_STOP_DISTANCE_SQR;
+            double preferredStopSqr = archer
+                    ? 144.0D
+                    : RANGED_STOP_DISTANCE_SQR;
             double tooCloseSqr = archer ? 64.0D : 0.0D;
 
             if (archer && distanceSqr < tooCloseSqr) {
@@ -5776,16 +5829,21 @@ public class CyberNpcEntity extends PathfinderMob {
             } else if (distanceSqr > preferredStopSqr) {
                 npc.getNavigation().moveTo(
                         target,
-                        npc.huntingTarget ? 0.62D : (archer ? 1.00D : 0.92D)
+                        npc.huntingTarget
+                                ? 0.62D
+                                : (archer ? 1.00D : 0.92D)
                 );
             } else {
                 npc.getNavigation().stop();
             }
 
-            ItemStack ranged = npc.getMainHandItem();
-
             if (ranged.is(Items.CROSSBOW)) {
-                tickCrossbow(target, ranged, distanceSqr);
+                tickCrossbow(
+                        target,
+                        ranged,
+                        distanceSqr,
+                        true
+                );
             } else {
                 tickBow(target, distanceSqr);
             }
@@ -6167,7 +6225,12 @@ public class CyberNpcEntity extends PathfinderMob {
             );
         }
 
-        private void tickCrossbow(LivingEntity target, ItemStack crossbow, double distanceSqr) {
+        private void tickCrossbow(
+                LivingEntity target,
+                ItemStack crossbow,
+                double distanceSqr,
+                boolean lineOfSight
+        ) {
             if (rangedCooldown > 0) {
                 return;
             }
@@ -6180,15 +6243,6 @@ public class CyberNpcEntity extends PathfinderMob {
                 npc.startUsingItem(InteractionHand.MAIN_HAND);
                 crossbowChargeTicks = 0;
                 crossbowHoldTicks = 0;
-
-                npc.level().playSound(
-                        null,
-                        npc.blockPosition(),
-                        SoundEvents.CROSSBOW_LOADING_START,
-                        SoundSource.NEUTRAL,
-                        0.8F,
-                        1.0F
-                );
                 return;
             }
 
@@ -6204,21 +6258,17 @@ public class CyberNpcEntity extends PathfinderMob {
                 CrossbowItem.setCharged(crossbow, true);
                 npc.setRangedState(RANGED_STATE_CROSSBOW_HOLD);
                 crossbowHoldTicks = 6;
-
-                npc.level().playSound(
-                        null,
-                        npc.blockPosition(),
-                        SoundEvents.CROSSBOW_LOADING_END,
-                        SoundSource.NEUTRAL,
-                        0.9F,
-                        1.0F
-                );
                 return;
             }
 
             if (state == RANGED_STATE_CROSSBOW_HOLD) {
                 if (crossbowHoldTicks > 0) {
                     crossbowHoldTicks--;
+                    return;
+                }
+
+                if (!lineOfSight) {
+                    crossbowHoldTicks = 2;
                     return;
                 }
 
@@ -6270,6 +6320,7 @@ public class CyberNpcEntity extends PathfinderMob {
             bowDrawTicks = 0;
             crossbowChargeTicks = 0;
             crossbowHoldTicks = 0;
+            crossbowLostSightTicks = 0;
         }
 
         private void resetTimers() {
