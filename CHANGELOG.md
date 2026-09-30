@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.16.0
+
+- Added combat confidence scoring for Wild NPCs using mob aggression class, current health, estimated damage, NPC health/damage and nearby backup.
+- Passive, neutral and aggressive mobs contribute different threat weight; actively targeting mobs become more dangerous.
+- NPCs now ask nearby Wild NPCs for help when confidence is uncertain and only flee when the odds are genuinely poor or health is critically low.
+- Fleeing NPCs can re-evaluate the fight and re-engage if backup arrives or the threat becomes manageable.
+- Added player-scale gap jumping: up to 2-block walking gaps and up to 4-block sprint gaps, with clear-body/landing checks; unsafe or oversized gaps remain normal pathfinding detours.
+- Mage spell cooldowns are now tracked per spell instead of one global spell cooldown.
+- A Mage can rotate to another ready spell while one cools down; if no useful spell is ready it sprints/kites away until a spell becomes available.
+- Every newly generated Mage spellbook now requires at least 2 usable spells and guarantees at least 1 direct attack spell.
+- Existing invalid Mage books with fewer than 2 useful spells or no attack spell are automatically rerolled by the existing repair path.
+- Developer Glasses now show combat confidence and add a dedicated Spells tab with the Mage's actual spells, levels, tactical roles and live cooldowns.
+
 ## 0.15.0
 
 - Added tactical spell awareness to Wild Mage NPCs.

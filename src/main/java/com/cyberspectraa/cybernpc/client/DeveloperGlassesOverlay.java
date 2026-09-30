@@ -188,11 +188,30 @@ public final class DeveloperGlassesOverlay {
                 ));
                 lines.add(new DebugLine("Aggression: " + npc.getAggressionLevel() + " / 80", 0xE8E8E8));
                 lines.add(new DebugLine("Target: " + npc.getDebugTarget(), 0xFFB866));
+                lines.add(new DebugLine("Confidence: " + npc.getDebugConfidence(), 0x9FE3FF));
                 lines.add(new DebugLine("State: " + npc.getDebugActivity(), 0xFFFF77));
                 lines.add(new DebugLine(
                         String.format("Health: %.1f / %.1f", npc.getHealth(), npc.getMaxHealth()),
                         healthColor(npc)
                 ));
+            }
+            case SPELLS -> {
+                if (npc.getWildClass() != WildNpcClass.MAGE) {
+                    lines.add(new DebugLine("This NPC is not a Mage.", 0x8F8F8F));
+                } else {
+                    lines.add(new DebugLine(
+                            "School: " + npc.getMageSchoolDisplayName(),
+                            0xFF8EF3
+                    ));
+                    String spellDebug = npc.getDebugSpells();
+                    if (spellDebug == null || spellDebug.isBlank()) {
+                        lines.add(new DebugLine("No spell data.", 0x8F8F8F));
+                    } else {
+                        for (String spell : spellDebug.split("\\|")) {
+                            lines.add(new DebugLine(spell, 0xD7E8FF));
+                        }
+                    }
+                }
             }
             case SURVIVAL -> {
                 lines.add(new DebugLine("Hunger: " + npc.getHunger() + " / 20", 0xE8E8E8));
@@ -314,6 +333,7 @@ public final class DeveloperGlassesOverlay {
     private enum Tab {
         OVERVIEW("Overview"),
         COMBAT("Combat"),
+        SPELLS("Spells"),
         SURVIVAL("Survival"),
         DEBUG("Debug");
 

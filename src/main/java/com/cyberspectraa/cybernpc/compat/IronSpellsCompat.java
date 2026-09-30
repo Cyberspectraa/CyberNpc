@@ -31,6 +31,7 @@ public final class IronSpellsCompat {
     private static final String SPELL_CONTAINER = "ISB_Spells";
     private static final String SPELL_DATA = "data";
     private static final Map<UUID, ActiveCast> ACTIVE_CASTS = new HashMap<>();
+    private static final Map<UUID, Map<String, Long>> SPELL_COOLDOWNS = new HashMap<>();
 
     // Some Iron's spells are valid player spells but are not safe for a foreign
     // LivingEntity caster. Spectral Hammer later fires Forge's BreakEvent with
@@ -180,7 +181,16 @@ public final class IronSpellsCompat {
             }
         }
 
-        if (available.isEmpty()) {
+        // Every Mage must have a useful book: at least two usable spells and
+        // at least one direct damage spell.
+        List<String> attackSpells = new ArrayList<>();
+        for (String id : available) {
+            if (isAttackSpellId(id)) {
+                attackSpells.add(id);
+            }
+        }
+
+        if (available.size() < 2 || attackSpells.isEmpty()) {
             return ItemStack.EMPTY;
         }
 
@@ -191,14 +201,17 @@ public final class IronSpellsCompat {
             available.set(swap, temp);
         }
 
-        int spellCount = Math.min(
-                available.size(),
-                switch (gearTier) {
-                    case STANDARD -> 2;
-                    case FINE -> 3;
-                    case RARE -> 3;
-                    case ELITE -> 4;
-                }
+        int spellCount = Math.max(
+                2,
+                Math.min(
+                        available.size(),
+                        switch (gearTier) {
+                            case STANDARD -> 2;
+                            case FINE -> 3;
+                            case RARE -> 3;
+                            case ELITE -> 4;
+                        }
+                )
         );
 
         int maxSlots = switch (gearTier) {
@@ -219,6 +232,19 @@ public final class IronSpellsCompat {
             return ItemStack.EMPTY;
         }
 
+        List<String> selected = new ArrayList<>();
+        String guaranteedAttack = attackSpells.get(random.nextInt(attackSpells.size()));
+        selected.add(guaranteedAttack);
+
+        for (String id : available) {
+            if (selected.size() >= spellCount) {
+                break;
+            }
+            if (!selected.contains(id)) {
+                selected.add(id);
+            }
+        }
+
         try {
             Object immutableContainer = spellContainerCreate.invoke(
                     null,
@@ -231,8 +257,8 @@ public final class IronSpellsCompat {
             );
 
             int added = 0;
-            for (int i = 0; i < spellCount; i++) {
-                Object spell = getSpell.invoke(null, available.get(i));
+            for (String spellId : selected) {
+                Object spell = getSpell.invoke(null, spellId);
                 if (!isSupportedSpellObject(spell)) {
                     continue;
                 }
@@ -253,7 +279,7 @@ public final class IronSpellsCompat {
                 }
             }
 
-            if (added <= 0) {
+            if (added < 2) {
                 return ItemStack.EMPTY;
             }
 
@@ -354,13 +380,22 @@ public final class IronSpellsCompat {
     }
 
     public static boolean hasUsableCombatSpells(ItemStack spellBook) {
+        int usable = 0;
+        boolean hasAttack = false;
+
         for (SpellEntry entry : getBookSpells(spellBook)) {
-            if (!isExplicitlyUnsafeMobSpell(entry.spellId())
-                    && isSupportedCombatSpell(entry.spellId())) {
-                return true;
+            if (isExplicitlyUnsafeMobSpell(entry.spellId())
+                    || !isSupportedCombatSpell(entry.spellId())) {
+                continue;
+            }
+
+            usable++;
+            if (isAttackSpellId(entry.spellId())) {
+                hasAttack = true;
             }
         }
-        return false;
+
+        return usable >= 2 && hasAttack;
     }
 
     public static CombatPlan getCombatPlan(
@@ -376,20 +411,27 @@ public final class IronSpellsCompat {
             return CombatPlan.none();
         }
 
+        List<SpellEntry> spells = getBookSpells(spellBook);
         SpellEntry selected = selectBestTacticalSpell(
                 caster,
                 target,
-                getBookSpells(spellBook),
+                spells,
                 false
         );
+
         if (selected == null) {
-            return CombatPlan.none();
+            int nextReady = getNextRelevantCooldownTicks(caster, target, spells);
+            return nextReady > 0
+                    ? CombatPlan.coolingDown(nextReady)
+                    : CombatPlan.none();
         }
 
         SpellTactics tactics = tacticsFor(selected.spellId());
         double distance = caster.distanceTo(target);
         return new CombatPlan(
                 true,
+                false,
+                0,
                 canUseAtCurrentDistance(caster, tactics, distance),
                 tactics.minRange,
                 tactics.preferredRange,
@@ -466,6 +508,7 @@ public final class IronSpellsCompat {
                     );
 
                     ACTIVE_CASTS.remove(caster.getUUID());
+                    startSpellCooldown(caster, active.spellId, active.cooldownTicks);
                     return new CastResult(
                             true,
                             false,
@@ -506,7 +549,8 @@ public final class IronSpellsCompat {
         for (SpellEntry entry : candidates) {
             // Saved 0.14.x Mage books may already contain a spell that was later
             // classified as unsafe, so guard again at cast time as well as book creation.
-            if (isExplicitlyUnsafeMobSpell(entry.spellId())) {
+            if (isExplicitlyUnsafeMobSpell(entry.spellId())
+                    || !isSpellReady(caster, entry.spellId())) {
                 continue;
             }
 
@@ -563,8 +607,8 @@ public final class IronSpellsCompat {
 
                 int cooldown = Mth.clamp(
                         ((Number) getSpellCooldown.invoke(spell)).intValue(),
-                        16,
-                        120
+                        10,
+                        3600
                 );
 
                 if ("INSTANT".equals(castTypeName) || effectiveCastTime <= 0) {
@@ -585,6 +629,7 @@ public final class IronSpellsCompat {
                             false
                     );
 
+                    startSpellCooldown(caster, entry.spellId(), cooldown);
                     return new CastResult(
                             true,
                             false,
@@ -671,11 +716,16 @@ public final class IronSpellsCompat {
 
         for (SpellEntry entry : spells) {
             if (isExplicitlyUnsafeMobSpell(entry.spellId())
-                    || !isSupportedCombatSpell(entry.spellId())) {
+                    || !isSupportedCombatSpell(entry.spellId())
+                    || !isSpellReady(caster, entry.spellId())) {
                 continue;
             }
 
             SpellTactics tactics = tacticsFor(entry.spellId());
+            if (!isRoleUseful(caster, tactics, distance)) {
+                continue;
+            }
+
             if (requireUsableNow
                     && !canUseAtCurrentDistance(caster, tactics, distance)) {
                 continue;
@@ -746,21 +796,172 @@ public final class IronSpellsCompat {
             SpellTactics tactics,
             double distance
     ) {
+        if (!isRoleUseful(caster, tactics, distance)) {
+            return false;
+        }
+
+        if (tactics.role == SpellRole.HEAL
+                || tactics.role == SpellRole.DEFENSE) {
+            return true;
+        }
+
+        return distance >= tactics.minRange && distance <= tactics.maxRange;
+    }
+
+    private static boolean isRoleUseful(
+            CyberNpcEntity caster,
+            SpellTactics tactics,
+            double distance
+    ) {
+        double healthFraction = caster.getMaxHealth() <= 0.0F
+                ? 1.0D
+                : caster.getHealth() / caster.getMaxHealth();
+
         if (tactics.role == SpellRole.HEAL) {
-            double healthFraction = caster.getMaxHealth() <= 0.0F
-                    ? 1.0D
-                    : caster.getHealth() / caster.getMaxHealth();
             return healthFraction < 0.78D;
         }
 
         if (tactics.role == SpellRole.DEFENSE) {
-            double healthFraction = caster.getMaxHealth() <= 0.0F
-                    ? 1.0D
-                    : caster.getHealth() / caster.getMaxHealth();
             return healthFraction < 0.62D || distance < 7.0D;
         }
 
-        return distance >= tactics.minRange && distance <= tactics.maxRange;
+        return true;
+    }
+
+    private static boolean isAttackSpellId(String spellId) {
+        SpellRole role = tacticsFor(spellId).role;
+        return role == SpellRole.CLOSE || role == SpellRole.RANGED;
+    }
+
+    public static String getSpellRoleName(String spellId) {
+        return switch (tacticsFor(spellId).role) {
+            case CLOSE -> "Close attack";
+            case RANGED -> "Ranged attack";
+            case CONTROL -> "Control";
+            case HEAL -> "Heal";
+            case DEFENSE -> "Defense";
+        };
+    }
+
+    public static double estimatePotentialDamage(
+            CyberNpcEntity caster,
+            ItemStack spellBook
+    ) {
+        double best = 0.0D;
+
+        for (SpellEntry entry : getBookSpells(spellBook)) {
+            if (!isSupportedCombatSpell(entry.spellId())) {
+                continue;
+            }
+
+            SpellRole role = tacticsFor(entry.spellId()).role;
+            double estimate = switch (role) {
+                case CLOSE, RANGED -> 5.0D + entry.level() * 2.5D;
+                case CONTROL -> 2.0D + entry.level() * 1.25D;
+                default -> 0.0D;
+            };
+            best = Math.max(best, estimate);
+        }
+
+        return best;
+    }
+
+    public static int getRemainingCooldownTicks(
+            CyberNpcEntity caster,
+            String spellId
+    ) {
+        if (caster == null || spellId == null || spellId.isBlank()) {
+            return 0;
+        }
+
+        Map<String, Long> cooldowns = SPELL_COOLDOWNS.get(caster.getUUID());
+        if (cooldowns == null) {
+            return 0;
+        }
+
+        String normalized = normalizeSpellId(spellId);
+        Long until = cooldowns.get(normalized);
+        if (until == null) {
+            return 0;
+        }
+
+        long remaining = until - caster.level().getGameTime();
+        if (remaining <= 0L) {
+            cooldowns.remove(normalized);
+            if (cooldowns.isEmpty()) {
+                SPELL_COOLDOWNS.remove(caster.getUUID());
+            }
+            return 0;
+        }
+
+        return (int) Math.min(Integer.MAX_VALUE, remaining);
+    }
+
+    private static boolean isSpellReady(
+            CyberNpcEntity caster,
+            String spellId
+    ) {
+        return getRemainingCooldownTicks(caster, spellId) <= 0;
+    }
+
+    private static void startSpellCooldown(
+            CyberNpcEntity caster,
+            String spellId,
+            int cooldownTicks
+    ) {
+        if (caster == null || spellId == null || spellId.isBlank()) {
+            return;
+        }
+
+        String normalized = normalizeSpellId(spellId);
+        SPELL_COOLDOWNS
+                .computeIfAbsent(caster.getUUID(), ignored -> new HashMap<>())
+                .put(
+                        normalized,
+                        caster.level().getGameTime() + Math.max(1, cooldownTicks)
+                );
+    }
+
+    private static int getNextRelevantCooldownTicks(
+            CyberNpcEntity caster,
+            LivingEntity target,
+            List<SpellEntry> spells
+    ) {
+        int best = Integer.MAX_VALUE;
+        double distance = caster.distanceTo(target);
+
+        for (SpellEntry entry : spells) {
+            if (isExplicitlyUnsafeMobSpell(entry.spellId())
+                    || !isSupportedCombatSpell(entry.spellId())) {
+                continue;
+            }
+
+            SpellTactics tactics = tacticsFor(entry.spellId());
+            if (!isRoleUseful(caster, tactics, distance)) {
+                continue;
+            }
+
+            int remaining = getRemainingCooldownTicks(caster, entry.spellId());
+            if (remaining > 0) {
+                best = Math.min(best, remaining);
+            }
+        }
+
+        return best == Integer.MAX_VALUE ? 0 : best;
+    }
+
+    public static void clearCasterState(CyberNpcEntity caster) {
+        if (caster == null) {
+            return;
+        }
+
+        ACTIVE_CASTS.remove(caster.getUUID());
+        SPELL_COOLDOWNS.remove(caster.getUUID());
+    }
+
+    private static String normalizeSpellId(String spellId) {
+        String trimmed = spellId == null ? "" : spellId.trim();
+        return trimmed.contains(":") ? trimmed : MOD_ID + ":" + trimmed;
     }
 
     private static SpellTactics tacticsFor(String spellId) {
@@ -775,10 +976,7 @@ public final class IronSpellsCompat {
             return true;
         }
 
-        String normalized = spellId.contains(":")
-                ? spellId.trim()
-                : MOD_ID + ":" + spellId.trim();
-        return MOB_UNSAFE_SPELLS.contains(normalized);
+        return MOB_UNSAFE_SPELLS.contains(normalizeSpellId(spellId));
     }
 
     private static boolean isSupportedSpellObject(Object spell)
@@ -1023,6 +1221,8 @@ public final class IronSpellsCompat {
 
     public record CombatPlan(
             boolean available,
+            boolean coolingDown,
+            int nextReadyTicks,
             boolean readyToCast,
             double minRange,
             double preferredRange,
@@ -1035,12 +1235,29 @@ public final class IronSpellsCompat {
             return new CombatPlan(
                     false,
                     false,
+                    0,
+                    false,
                     0.0D,
                     10.0D,
                     18.0D,
                     true,
                     "",
                     ""
+            );
+        }
+
+        public static CombatPlan coolingDown(int nextReadyTicks) {
+            return new CombatPlan(
+                    false,
+                    true,
+                    Math.max(1, nextReadyTicks),
+                    false,
+                    0.0D,
+                    14.0D,
+                    24.0D,
+                    true,
+                    "",
+                    "COOLDOWN"
             );
         }
     }

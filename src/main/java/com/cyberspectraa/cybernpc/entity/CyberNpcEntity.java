@@ -29,6 +29,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -109,6 +110,16 @@ public class CyberNpcEntity extends PathfinderMob {
 
     private static final int COMBAT_HELP_COOLDOWN_TICKS = 100;
     private static final int MAX_COMBAT_HELPERS = 3;
+    private static final double FIGHT_CONFIDENCE = 55.0D;
+    private static final double HELP_CONFIDENCE = 35.0D;
+    private static final double FLEE_CONFIDENCE = 22.0D;
+
+    // Vanilla player-scale gap limits: ordinary movement can clear a 2-block
+    // gap, while sprint jumping can reach 4. We never attempt beyond these.
+    private static final int WALK_GAP_JUMP_BLOCKS = 2;
+    private static final int SPRINT_GAP_JUMP_BLOCKS = 4;
+    private static final int GAP_JUMP_COOLDOWN_TICKS = 10;
+
     private static final int SPRINT_STALL_TICKS = 8;
     private static final double SPRINT_MOVEMENT_EPSILON_SQR = 0.0025D;
 
@@ -185,6 +196,12 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> DATA_DEBUG_INVENTORY =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
 
+    private static final EntityDataAccessor<String> DATA_DEBUG_CONFIDENCE =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
+    private static final EntityDataAccessor<String> DATA_DEBUG_SPELLS =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
     private int aggressionLevel = -1;
     private boolean classLoadoutInitialized;
     private int provocation;
@@ -232,6 +249,7 @@ public class CyberNpcEntity extends PathfinderMob {
     private int fleeRepathCooldown;
     private int combatHelpCooldown;
     private int sprintStallTicks;
+    private int gapJumpCooldown;
 
     @Nullable
     private BlockPos foodChestTarget;
@@ -295,6 +313,8 @@ public class CyberNpcEntity extends PathfinderMob {
         entityData.define(DATA_DEBUG_PATH, "none");
         entityData.define(DATA_DEBUG_CLAIMS, "none");
         entityData.define(DATA_DEBUG_INVENTORY, "empty");
+        entityData.define(DATA_DEBUG_CONFIDENCE, "none");
+        entityData.define(DATA_DEBUG_SPELLS, "Not a Mage");
     }
 
     @Override
@@ -499,6 +519,14 @@ public class CyberNpcEntity extends PathfinderMob {
 
     public String getDebugInventory() {
         return entityData.get(DATA_DEBUG_INVENTORY);
+    }
+
+    public String getDebugConfidence() {
+        return entityData.get(DATA_DEBUG_CONFIDENCE);
+    }
+
+    public String getDebugSpells() {
+        return entityData.get(DATA_DEBUG_SPELLS);
     }
 
     public int getHunger() {
@@ -1273,6 +1301,13 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     void beginCorralHunt(LivingEntity target) {
+        if (target instanceof Mob mob) {
+            CombatConfidence confidence = evaluateCombatConfidence(mob, true);
+            if (confidence.groupScore < FLEE_CONFIDENCE) {
+                return;
+            }
+        }
+
         beginWildCombat(target, false, true);
     }
 
@@ -1356,6 +1391,12 @@ public class CyberNpcEntity extends PathfinderMob {
 
         tickMeleeSwingAnimation();
         tickSpellCastingVisual();
+
+        if (gapJumpCooldown > 0) {
+            gapJumpCooldown--;
+        } else {
+            tickPlayerLikeGapJumping();
+        }
 
         if (onClimbable() && horizontalCollision) {
             Vec3 movement = getDeltaMovement();
@@ -1623,6 +1664,137 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         return Math.max(1.0F, food.getNutrition() * 0.5F);
+    }
+
+    private void tickPlayerLikeGapJumping() {
+        if (!onGround()
+                || isInWaterOrBubble()
+                || isPassenger()
+                || isSleeping()
+                || isSpellCastingVisual()
+                || getNavigation().isDone()) {
+            return;
+        }
+
+        Path path = getNavigation().getPath();
+        if (path == null || path.isDone() || path.getTarget() == null) {
+            return;
+        }
+
+        Vec3 destination = Vec3.atCenterOf(path.getTarget());
+        Vec3 direction = new Vec3(
+                destination.x - getX(),
+                0.0D,
+                destination.z - getZ()
+        );
+
+        if (direction.lengthSqr() < 2.25D) {
+            return;
+        }
+
+        direction = direction.normalize();
+        int maxGap = isSprinting()
+                ? SPRINT_GAP_JUMP_BLOCKS
+                : WALK_GAP_JUMP_BLOCKS;
+
+        GapJumpPlan plan = findJumpableGap(direction, maxGap);
+        if (plan == null) {
+            return;
+        }
+
+        boolean sprintJump = isSprinting();
+        double horizontalSpeed = sprintJump ? 0.36D : 0.23D;
+        Vec3 existing = getDeltaMovement();
+        double existingHorizontal = Math.sqrt(
+                existing.x * existing.x + existing.z * existing.z
+        );
+        horizontalSpeed = Math.max(horizontalSpeed, existingHorizontal);
+
+        jumpFromGround();
+        Vec3 jumped = getDeltaMovement();
+        setDeltaMovement(
+                plan.direction.x * horizontalSpeed,
+                jumped.y,
+                plan.direction.z * horizontalSpeed
+        );
+
+        setYRot((float) (Math.atan2(plan.direction.z, plan.direction.x)
+                * (180.0D / Math.PI)) - 90.0F);
+        setYHeadRot(getYRot());
+        gapJumpCooldown = GAP_JUMP_COOLDOWN_TICKS;
+    }
+
+    @Nullable
+    private GapJumpPlan findJumpableGap(Vec3 direction, int maxGapBlocks) {
+        BlockPos origin = blockPosition();
+        BlockPos previous = origin;
+        boolean enteredGap = false;
+        int gapBlocks = 0;
+
+        for (double travel = 0.75D;
+             travel <= maxGapBlocks + 1.75D;
+             travel += 0.35D) {
+            BlockPos sample = BlockPos.containing(
+                    getX() + direction.x * travel,
+                    getY() + 0.05D,
+                    getZ() + direction.z * travel
+            );
+
+            if (sample.equals(previous)) {
+                continue;
+            }
+            previous = sample;
+
+            // Only jump level gaps. Height changes remain normal pathfinding's
+            // job so this never becomes an unintended super-jump.
+            if (sample.getY() != origin.getY()
+                    || !isGapJumpBodyClear(sample)) {
+                return null;
+            }
+
+            boolean supported = hasGapJumpSupport(sample);
+            if (!enteredGap) {
+                if (supported) {
+                    return null;
+                }
+                enteredGap = true;
+                gapBlocks = 1;
+                continue;
+            }
+
+            if (!supported) {
+                gapBlocks++;
+                if (gapBlocks > maxGapBlocks) {
+                    return null;
+                }
+                continue;
+            }
+
+            return gapBlocks >= 1
+                    ? new GapJumpPlan(direction, sample.immutable(), gapBlocks)
+                    : null;
+        }
+
+        return null;
+    }
+
+    private boolean isGapJumpBodyClear(BlockPos feet) {
+        return level().getFluidState(feet).isEmpty()
+                && level().getFluidState(feet.above()).isEmpty()
+                && level().getBlockState(feet)
+                        .getCollisionShape(level(), feet)
+                        .isEmpty()
+                && level().getBlockState(feet.above())
+                        .getCollisionShape(level(), feet.above())
+                        .isEmpty();
+    }
+
+    private boolean hasGapJumpSupport(BlockPos feet) {
+        BlockPos support = feet.below();
+        return level().getFluidState(support).isEmpty()
+                && !level().getBlockState(support)
+                        .getCollisionShape(level(), support)
+                        .isEmpty();
     }
 
     private void tickHunger() {
@@ -2716,6 +2888,25 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         if (fleeingThreat != null) {
+            if (fleeingThreat instanceof Mob mob
+                    && tickCount % THREAT_SCAN_INTERVAL == 0
+                    && mob.isAlive()) {
+                CombatConfidence recovered =
+                        evaluateCombatConfidence(mob, true);
+
+                // Fleeing is a last resort. If the fight becomes clearly
+                // manageable again (for example backup arrived or the mob was
+                // badly hurt), re-engage instead of running forever.
+                if (recovered.groupScore >= FIGHT_CONFIDENCE
+                        && getHealth() > getMaxHealth() * 0.20F) {
+                    fleeingThreat = null;
+                    fleeSafeTicks = 0;
+                    fleeRepathCooldown = 0;
+                    beginWildCombat(mob, false, false);
+                    return false;
+                }
+            }
+
             if (getHealth() <= getEmergencyHealthThreshold()
                     && hasReadyFood()
                     && (!fleeingThreat.isAlive()
@@ -2768,59 +2959,207 @@ public class CyberNpcEntity extends PathfinderMob {
             return false;
         }
 
-        if (getHealth() <= getEmergencyHealthThreshold()) {
-            startFleeingFrom(threat);
+        CombatConfidence solo = evaluateCombatConfidence(threat, false);
+        CombatConfidence group = evaluateCombatConfidence(threat, true);
+        float healthFraction = getMaxHealth() <= 0.0F
+                ? 0.0F
+                : getHealth() / getMaxHealth();
+        boolean criticalHealth = healthFraction <= 0.18F;
 
-            if (hasReadyFood()
-                    && distanceToSqr(threat) >= EMERGENCY_EAT_SAFE_DISTANCE_SQR) {
-                beginEmergencyEating();
-                if (emergencyEating) {
-                    tickEating();
-                }
-            } else {
-                tickFleeing();
-            }
-
-            return true;
-        }
-
-        if (shouldFightHostile(threat)) {
+        if (solo.groupScore >= FIGHT_CONFIDENCE && !criticalHealth) {
             if (!isCombatActive() || huntingTarget || getTarget() != threat) {
                 beginWildCombat(threat, false, false);
             }
             return false;
         }
 
-        if (!(threat instanceof Creeper)
-                && getHealth() > 4.0F
+        // Uncertain NPCs look for nearby backup before considering escape.
+        if (group.helpers > 0
+                && solo.groupScore < FIGHT_CONFIDENCE
                 && combatHelpCooldown <= 0) {
             int helpers = alertNearbyWildNpcs(threat, MAX_COMBAT_HELPERS);
             combatHelpCooldown = COMBAT_HELP_COOLDOWN_TICKS;
 
-            if (helpers > 0) {
+            if (helpers > 0
+                    && group.groupScore >= HELP_CONFIDENCE
+                    && !(criticalHealth && group.groupScore < FIGHT_CONFIDENCE)) {
                 beginWildCombat(threat, false, false);
                 return false;
             }
         }
 
+        // Running is deliberately the final option. A merely unfavorable fight
+        // is still taken; fleeing is reserved for genuinely bad odds or
+        // critically low health without enough support.
+        if (!criticalHealth && group.groupScore >= FLEE_CONFIDENCE) {
+            if (!isCombatActive() || huntingTarget || getTarget() != threat) {
+                beginWildCombat(threat, false, false);
+            }
+            return false;
+        }
+
         startFleeingFrom(threat);
+
+        if (hasReadyFood()
+                && distanceToSqr(threat) >= EMERGENCY_EAT_SAFE_DISTANCE_SQR) {
+            beginEmergencyEating();
+            if (emergencyEating) {
+                tickEating();
+                return true;
+            }
+        }
+
         tickFleeing();
         return true;
     }
 
-    private boolean shouldFightHostile(Mob threat) {
-        if (threat instanceof Creeper || getHealth() < getEmergencyHealthThreshold()) {
-            return false;
+    private CombatConfidence evaluateCombatConfidence(
+            Mob threat,
+            boolean includeNearbyBackup
+    ) {
+        MobAggroClass aggroClass = classifyMobAggro(threat);
+        double npcPower = estimateOwnCombatPower();
+        double threatPower = estimateThreatPower(threat, aggroClass);
+
+        int helpers = 0;
+        double backupPower = 0.0D;
+
+        if (includeNearbyBackup) {
+            List<CyberNpcEntity> nearby = getPotentialCombatHelpers(threat);
+            helpers = nearby.size();
+
+            for (CyberNpcEntity helper : nearby) {
+                // Nearby allies help, but they do not count as a perfect second
+                // copy of the NPC because they may need time to arrive.
+                backupPower += helper.estimateOwnCombatPower() * 0.55D;
+            }
         }
 
-        var attackAttribute = threat.getAttribute(Attributes.ATTACK_DAMAGE);
-        double attackDamage = attackAttribute == null ? 4.0D : attackAttribute.getValue();
-        double threatPower = threat.getHealth() + attackDamage * 2.5D;
-        double npcPower = getHealth()
-                + (getStoredSword().isEmpty() ? 0.0D : 8.0D)
-                + (getStoredRangedWeapon().isEmpty() ? 0.0D : 8.0D);
+        double totalPower = npcPower + backupPower;
+        double ratio = totalPower / Math.max(1.0D, threatPower);
+        double score = 50.0D + (ratio - 1.0D) * 38.0D;
 
-        return npcPower >= threatPower * getThreatRequiredRatio();
+        float healthFraction = getMaxHealth() <= 0.0F
+                ? 0.0F
+                : getHealth() / getMaxHealth();
+        score += (healthFraction - 0.50D) * 18.0D;
+
+        score += switch (getPersonality()) {
+            case AGGRESSIVE -> 9.0D;
+            case BRAVE -> 6.0D;
+            case CAUTIOUS -> -9.0D;
+            case TACTICAL -> 1.0D;
+            default -> 0.0D;
+        };
+
+        if (getWildClass() == WildNpcClass.KNIGHT) {
+            score += 5.0D;
+        } else if (getWildClass() == WildNpcClass.MAGE
+                && IronSpellsCompat.hasActiveCast(this)) {
+            score += 3.0D;
+        }
+
+        score = Mth.clamp(score, 0.0D, 100.0D);
+        return new CombatConfidence(
+                score,
+                helpers,
+                aggroClass,
+                estimatePotentialDamage(),
+                estimateMobAttackDamage(threat)
+        );
+    }
+
+    private List<CyberNpcEntity> getPotentialCombatHelpers(LivingEntity threat) {
+        return level().getEntitiesOfClass(
+                        CyberNpcEntity.class,
+                        getBoundingBox().inflate(WILD_HELP_RADIUS),
+                        npc -> npc != this
+                                && npc.isAlive()
+                                && npc.getNpcType() == NpcType.WILD
+                                && !npc.isSleeping()
+                                && npc.fleeingThreat == null
+                                && npc.getHealth() >= Math.max(6.0F, npc.getMaxHealth() * 0.30F)
+                                && npc.getTarget() != threat
+                ).stream()
+                .sorted(Comparator.comparingDouble(this::distanceToSqr))
+                .limit(MAX_COMBAT_HELPERS)
+                .toList();
+    }
+
+    private MobAggroClass classifyMobAggro(Mob mob) {
+        if (mob instanceof Enemy) {
+            return MobAggroClass.AGGRESSIVE;
+        }
+        if (mob instanceof NeutralMob) {
+            return MobAggroClass.NEUTRAL;
+        }
+        return MobAggroClass.PASSIVE;
+    }
+
+    private double estimateThreatPower(
+            Mob threat,
+            MobAggroClass aggroClass
+    ) {
+        double attackDamage = estimateMobAttackDamage(threat);
+        double power = Math.max(1.0D, threat.getHealth())
+                + attackDamage * 3.0D;
+
+        power *= switch (aggroClass) {
+            case PASSIVE -> 0.65D;
+            case NEUTRAL -> 0.90D;
+            case AGGRESSIVE -> 1.15D;
+        };
+
+        if (threat.getTarget() == this) {
+            power *= 1.10D;
+        }
+
+        return power;
+    }
+
+    private double estimateMobAttackDamage(Mob threat) {
+        var attackAttribute = threat.getAttribute(Attributes.ATTACK_DAMAGE);
+        double attackDamage = attackAttribute == null
+                ? 0.0D
+                : attackAttribute.getValue();
+
+        if (threat instanceof Creeper) {
+            return Math.max(18.0D, attackDamage);
+        }
+        if (threat instanceof Enemy) {
+            return Math.max(4.0D, attackDamage);
+        }
+        if (threat instanceof NeutralMob) {
+            return Math.max(3.0D, attackDamage);
+        }
+        return Math.max(1.0D, attackDamage);
+    }
+
+    private double estimateOwnCombatPower() {
+        return Math.max(1.0D, getHealth())
+                + estimatePotentialDamage() * 3.0D;
+    }
+
+    private double estimatePotentialDamage() {
+        double base = Math.max(2.0D, getAttributeValue(Attributes.ATTACK_DAMAGE));
+        double tierBonus = getGearTier().attackBonus();
+
+        return switch (getWildClass()) {
+            case KNIGHT -> Math.max(base, 8.0D + tierBonus);
+            case ROGUE -> Math.max(base, 7.0D + tierBonus);
+            case ARCHER -> Math.max(base, 6.5D + tierBonus);
+            case MAGE -> Math.max(
+                    base,
+                    IronSpellsCompat.estimatePotentialDamage(
+                            this,
+                            getMageSpellBook()
+                    )
+            );
+            default -> Math.max(
+                    base,
+                    (getStoredSword().isEmpty() ? 3.5D : 6.0D) + tierBonus
+            );
+        };
     }
 
     private void startFleeingFrom(LivingEntity threat) {
@@ -2981,6 +3320,31 @@ public class CyberNpcEntity extends PathfinderMob {
                 bed + " | " + station + " | pen:" + corralBrain.getClaimDebug()
         );
 
+        LivingEntity debugThreat = getTarget() != null
+                ? getTarget()
+                : fleeingThreat;
+
+        if (debugThreat instanceof Mob mob) {
+            CombatConfidence solo = evaluateCombatConfidence(mob, false);
+            CombatConfidence group = evaluateCombatConfidence(mob, true);
+            entityData.set(
+                    DATA_DEBUG_CONFIDENCE,
+                    String.format(
+                            "%.0f%% group / %.0f%% solo | %s | backup:%d | dmg %.1f vs %.1f",
+                            group.groupScore,
+                            solo.groupScore,
+                            group.aggroClass.displayName,
+                            group.helpers,
+                            group.npcDamage,
+                            group.mobDamage
+                    )
+            );
+        } else {
+            entityData.set(DATA_DEBUG_CONFIDENCE, "none");
+        }
+
+        entityData.set(DATA_DEBUG_SPELLS, buildMageSpellDebug());
+
         entityData.set(
                 DATA_DEBUG_INVENTORY,
                 inventory.debugSummary()
@@ -3046,6 +3410,65 @@ public class CyberNpcEntity extends PathfinderMob {
             return "Travelling";
         }
         return canWander() ? "Wandering/idle" : "Idle";
+    }
+
+    private String buildMageSpellDebug() {
+        if (getWildClass() != WildNpcClass.MAGE) {
+            return "Not a Mage";
+        }
+
+        ItemStack book = getMageSpellBook();
+        if (book.isEmpty()) {
+            return "No spellbook";
+        }
+
+        List<IronSpellsCompat.SpellEntry> spells =
+                IronSpellsCompat.getBookSpells(book);
+        if (spells.isEmpty()) {
+            return "Spellbook empty";
+        }
+
+        return spells.stream()
+                .map(entry -> {
+                    String id = entry.spellId();
+                    String path = id.contains(":")
+                            ? id.substring(id.indexOf(':') + 1)
+                            : id;
+                    String name = humanizeSpellName(path);
+                    int cooldown = IronSpellsCompat.getRemainingCooldownTicks(
+                            this,
+                            id
+                    );
+                    String state = cooldown <= 0
+                            ? "ready"
+                            : String.format("cd %.1fs", cooldown / 20.0D);
+
+                    return name
+                            + " L" + entry.level()
+                            + " [" + IronSpellsCompat.getSpellRoleName(id) + "] "
+                            + state;
+                })
+                .collect(java.util.stream.Collectors.joining("|"));
+    }
+
+    private static String humanizeSpellName(String path) {
+        String[] parts = path.split("_");
+        StringBuilder builder = new StringBuilder();
+
+        for (String part : parts) {
+            if (part.isEmpty()) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append(' ');
+            }
+            builder.append(Character.toUpperCase(part.charAt(0)));
+            if (part.length() > 1) {
+                builder.append(part.substring(1));
+            }
+        }
+
+        return builder.toString();
     }
 
     private static String stackDebug(ItemStack stack) {
@@ -3150,16 +3573,8 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private int alertNearbyWildNpcs(LivingEntity target, int maxHelpers) {
-        List<CyberNpcEntity> nearbyWildNpcs = level().getEntitiesOfClass(
-                        CyberNpcEntity.class,
-                        getBoundingBox().inflate(WILD_HELP_RADIUS),
-                        npc -> npc != this
-                                && npc.isAlive()
-                                && npc.getNpcType() == NpcType.WILD
-                                && npc.getHealth() >= 6.0F
-                                && npc.getTarget() != target
-                ).stream()
-                .sorted(Comparator.comparingDouble(this::distanceToSqr))
+        List<CyberNpcEntity> nearbyWildNpcs = getPotentialCombatHelpers(target)
+                .stream()
                 .limit(Math.max(0, maxHelpers))
                 .toList();
 
@@ -3350,6 +3765,7 @@ public class CyberNpcEntity extends PathfinderMob {
             releasePersistentClaims();
         }
 
+        IronSpellsCompat.clearCasterState(this);
         super.die(source);
 
         if (convertFromZombieKill && !zombieConversionStarted) {
@@ -3592,6 +4008,34 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         ensureDefaultName();
+    }
+
+    private enum MobAggroClass {
+        PASSIVE("Passive"),
+        NEUTRAL("Neutral"),
+        AGGRESSIVE("Aggressive");
+
+        private final String displayName;
+
+        MobAggroClass(String displayName) {
+            this.displayName = displayName;
+        }
+    }
+
+    private record CombatConfidence(
+            double groupScore,
+            int helpers,
+            MobAggroClass aggroClass,
+            double npcDamage,
+            double mobDamage
+    ) {
+    }
+
+    private record GapJumpPlan(
+            Vec3 direction,
+            BlockPos landing,
+            int gapBlocks
+    ) {
     }
 
     private static final class ConditionalRandomStrollGoal extends RandomStrollGoal {
@@ -4042,7 +4486,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
                 if (!result.success()) {
                     npc.clearSpellCastingVisual();
-                    mageCooldown = 30;
+                    mageCooldown = 8;
                     return;
                 }
 
@@ -4055,15 +4499,15 @@ public class CyberNpcEntity extends PathfinderMob {
 
                 if (!result.casting()) {
                     int personalityAdjustment = switch (npc.getPersonality()) {
-                        case AGGRESSIVE -> -4;
-                        case CAUTIOUS -> 8;
-                        case TACTICAL -> -2;
+                        case AGGRESSIVE -> -2;
+                        case CAUTIOUS -> 2;
+                        case TACTICAL -> -1;
                         default -> 0;
                     };
 
                     mageCooldown = Math.max(
-                            12,
-                            result.cooldownTicks() + personalityAdjustment
+                            3,
+                            6 + personalityAdjustment
                     );
                 }
                 return;
@@ -4078,8 +4522,12 @@ public class CyberNpcEntity extends PathfinderMob {
                     IronSpellsCompat.getCombatPlan(npc, target, spellBook);
 
             if (!plan.available()) {
-                mageCooldown = 30;
-                npc.getNavigation().moveTo(target, 0.90D);
+                if (plan.coolingDown()) {
+                    retreatMageWhileCooling(target);
+                } else {
+                    mageCooldown = 8;
+                    npc.getNavigation().moveTo(target, 0.90D);
+                }
                 return;
             }
 
@@ -4120,12 +4568,13 @@ public class CyberNpcEntity extends PathfinderMob {
             }
 
             npc.getNavigation().stop();
+            npc.setSprinting(false);
 
             IronSpellsCompat.CastResult result =
                     IronSpellsCompat.tickAttackSpell(npc, target, spellBook);
 
             if (!result.success()) {
-                mageCooldown = 30;
+                mageCooldown = 8;
                 moveForRangedSpacing(target, 12.0D);
                 return;
             }
@@ -4143,16 +4592,40 @@ public class CyberNpcEntity extends PathfinderMob {
             }
 
             int personalityAdjustment = switch (npc.getPersonality()) {
-                case AGGRESSIVE -> -4;
-                case CAUTIOUS -> 8;
-                case TACTICAL -> -2;
+                case AGGRESSIVE -> -2;
+                case CAUTIOUS -> 2;
+                case TACTICAL -> -1;
                 default -> 0;
             };
 
             mageCooldown = Math.max(
-                    12,
-                    result.cooldownTicks() + personalityAdjustment
+                    3,
+                    6 + personalityAdjustment
             );
+        }
+
+        private void retreatMageWhileCooling(LivingEntity target) {
+            npc.clearSpellCastingVisual();
+            npc.setShiftKeyDown(false);
+            npc.setSprinting(true);
+
+            Vec3 away = DefaultRandomPos.getPosAway(
+                    npc,
+                    14,
+                    6,
+                    target.position()
+            );
+
+            if (away != null) {
+                npc.getNavigation().moveTo(
+                        away.x,
+                        away.y,
+                        away.z,
+                        1.18D
+                );
+            } else {
+                moveForRangedSpacing(target, 16.0D);
+            }
         }
 
         private void tickBow(LivingEntity target, double distanceSqr) {
