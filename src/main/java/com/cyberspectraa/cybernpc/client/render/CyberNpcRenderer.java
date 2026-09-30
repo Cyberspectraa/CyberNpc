@@ -79,6 +79,12 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
             return HumanoidModel.ArmPose.EMPTY;
         }
 
+        if (hand == InteractionHand.MAIN_HAND
+                && stack.is(Items.BOW)
+                && entity.isAimingBow()) {
+            return HumanoidModel.ArmPose.BOW_AND_ARROW;
+        }
+
         if (entity.getUsedItemHand() == hand && entity.getUseItemRemainingTicks() > 0) {
             UseAnim useAnim = stack.getUseAnimation();
 
@@ -111,6 +117,15 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         }
 
         return HumanoidModel.ArmPose.ITEM;
+    }
+
+    @Override
+    protected void scale(
+            CyberNpcEntity entity,
+            PoseStack poseStack,
+            float partialTick
+    ) {
+        poseStack.scale(0.9722F, 0.9722F, 0.9722F);
     }
 
     @Override
