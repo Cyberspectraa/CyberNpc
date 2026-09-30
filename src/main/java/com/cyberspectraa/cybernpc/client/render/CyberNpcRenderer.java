@@ -3,11 +3,16 @@ package com.cyberspectraa.cybernpc.client.render;
 import com.cyberspectraa.cybernpc.client.model.CyberNpcPlayerModel;
 import com.cyberspectraa.cybernpc.client.render.layer.CyberNpcHeldItemLayer;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
+import com.cyberspectraa.cybernpc.entity.NpcReactionIcon;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.MobRenderer;
 import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
@@ -20,10 +25,15 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
 
 public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpcPlayerModel> {
+    private static final double REACTION_RENDER_DISTANCE_SQR = 32.0D * 32.0D;
+
     private final CyberNpcPlayerModel wideModel;
     private final CyberNpcPlayerModel slimModel;
+    private final EntityRenderDispatcher renderDispatcher;
+    private final Font font;
 
     public CyberNpcRenderer(EntityRendererProvider.Context context) {
         super(context, new CyberNpcPlayerModel(context.bakeLayer(ModelLayers.PLAYER), false), 0.5F);
@@ -32,6 +42,8 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
                 context.bakeLayer(ModelLayers.PLAYER_SLIM),
                 true
         );
+        this.renderDispatcher = context.getEntityRenderDispatcher();
+        this.font = context.getFont();
         addLayer(new HumanoidArmorLayer<>(
                 this,
                 new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
@@ -53,6 +65,153 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         this.model = entity.isSlimModel() ? slimModel : wideModel;
         setPlayerModelProperties(entity);
         super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
+        renderReactionBubble(entity, poseStack, buffer, packedLight);
+    }
+
+    private void renderReactionBubble(
+            CyberNpcEntity entity,
+            PoseStack poseStack,
+            MultiBufferSource buffer,
+            int packedLight
+    ) {
+        NpcReactionIcon reaction = entity.getReactionIcon();
+
+        if (reaction == NpcReactionIcon.NONE
+                || reaction.glyph().isBlank()
+                || entity.isSleeping()
+                || renderDispatcher.distanceToSqr(entity)
+                > REACTION_RENDER_DISTANCE_SQR) {
+            return;
+        }
+
+        String glyph = reaction.glyph();
+        int glyphWidth = font.width(glyph);
+        float halfWidth = Math.max(8.0F, (glyphWidth + 8.0F) * 0.5F);
+
+        poseStack.pushPose();
+        poseStack.translate(
+                0.0D,
+                entity.getBbHeight() + 0.88D,
+                0.0D
+        );
+        poseStack.mulPose(renderDispatcher.cameraOrientation());
+        poseStack.scale(-0.025F, -0.025F, 0.025F);
+
+        Matrix4f matrix = poseStack.last().pose();
+        VertexConsumer background = buffer.getBuffer(
+                RenderType.textBackground()
+        );
+
+        int outline = 0xF0202020;
+        int fill = 0xEEF6F6F6;
+
+        // Blocky Minecraft-style bubble body.
+        drawBubbleRect(
+                background,
+                matrix,
+                -halfWidth,
+                -7.0F,
+                halfWidth,
+                7.0F,
+                0.0F,
+                outline,
+                packedLight
+        );
+        drawBubbleRect(
+                background,
+                matrix,
+                -halfWidth + 1.0F,
+                -6.0F,
+                halfWidth - 1.0F,
+                6.0F,
+                0.01F,
+                fill,
+                packedLight
+        );
+
+        // Two small stacked rectangles create a pixel speech-tail.
+        drawBubbleRect(
+                background,
+                matrix,
+                -3.0F,
+                6.0F,
+                2.0F,
+                11.0F,
+                0.0F,
+                outline,
+                packedLight
+        );
+        drawBubbleRect(
+                background,
+                matrix,
+                -2.0F,
+                6.0F,
+                1.0F,
+                9.0F,
+                0.01F,
+                fill,
+                packedLight
+        );
+
+        int iconColor = reactionColor(reaction);
+        font.drawInBatch(
+                glyph,
+                -glyphWidth / 2.0F,
+                -4.0F,
+                iconColor,
+                false,
+                matrix,
+                buffer,
+                Font.DisplayMode.POLYGON_OFFSET,
+                0,
+                packedLight
+        );
+
+        poseStack.popPose();
+    }
+
+    private static void drawBubbleRect(
+            VertexConsumer consumer,
+            Matrix4f matrix,
+            float left,
+            float top,
+            float right,
+            float bottom,
+            float z,
+            int color,
+            int packedLight
+    ) {
+        consumer.vertex(matrix, left, top, z)
+                .color(color)
+                .uv2(packedLight)
+                .endVertex();
+        consumer.vertex(matrix, left, bottom, z)
+                .color(color)
+                .uv2(packedLight)
+                .endVertex();
+        consumer.vertex(matrix, right, bottom, z)
+                .color(color)
+                .uv2(packedLight)
+                .endVertex();
+        consumer.vertex(matrix, right, top, z)
+                .color(color)
+                .uv2(packedLight)
+                .endVertex();
+    }
+
+    private static int reactionColor(NpcReactionIcon reaction) {
+        return switch (reaction) {
+            case HAPPY -> 0xFF3D8A3D;
+            case FRIENDLY -> 0xFFD24D78;
+            case ANNOYED -> 0xFF9A6A20;
+            case ANGRY -> 0xFFC73D3D;
+            case SAD -> 0xFF537AA3;
+            case SCARED -> 0xFF6D5AA6;
+            case SURPRISED -> 0xFFD18424;
+            case CONFUSED -> 0xFF5C6D7A;
+            case THINKING -> 0xFF555555;
+            default -> 0xFF202020;
+        };
     }
 
     private void setPlayerModelProperties(CyberNpcEntity entity) {
