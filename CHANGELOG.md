@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.22.1
+
+- Converted CyberNpc zombies are now permanently adult. Baby rolls and chicken-jockey conversion data are suppressed during spawn, setBaby(true) is ignored, and old saved custom zombies with baby NBT are corrected when loaded.
+- Converted zombies now reconsider targets every 5 ticks and prefer the closest valid visible target instead of staying locked onto a distant target.
+- Converted zombie target candidates include survival players, living non-zombifying CyberNpc NPCs, villagers, iron golems, and unusual mobs that are actively attacking the zombie; zombie-on-zombie infighting is excluded.
+- Wild NPCs now periodically reconsider active combat targets and switch to a closer hostile mob that is actually threatening them.
+- Hunting NPCs now search around themselves for the closest valid prey rather than staying anchored to prey near the old target position.
+- Generic hostile mobs may now switch from a farther living target to a substantially closer visible CyberNpc, preventing mobs from ignoring a newly arrived NPC beside them.
+- Added Just Expressions-aware facial character for converted zombie NPCs without moving them back to PlayerModel.
+- When Just Expressions' player_face resource is detected, converted zombies use cached native blink and focused-eye texture variants based on the NPC's existing Low/Middle/High eye placement.
+- Zombie facial variants are cached per appearance, so the expression feature does not regenerate textures every render frame.
+- Fresh Animations remains authoritative for the zombie body/limb model and animations; the Just Expressions compatibility layer only changes the custom zombie face texture state.
+
+
 ## 0.22.0
 
 - Added separate male and female Wild NPC name pools. New Wild NPCs now choose their persistent appearance gender before receiving a name, so names always come from the matching pool.
