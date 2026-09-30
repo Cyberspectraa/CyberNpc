@@ -63,11 +63,6 @@ public final class ChatSocialEvents {
             return;
         }
 
-        NpcChatIntent intent = classify(message);
-        if (intent == null) {
-            return;
-        }
-
         AABB search = player.getBoundingBox().inflate(
                 HEARING_RADIUS,
                 10.0D,
@@ -86,48 +81,138 @@ public final class ChatSocialEvents {
             return;
         }
 
-        List<CyberNpcEntity> namedTargets = new ArrayList<>();
-        for (CyberNpcEntity npc : nearby) {
-            String name = npc.getCustomName() == null
+        boolean handledNamedTarget = false;
+
+        for (CyberNpcEntity target : nearby) {
+            String name = target.getCustomName() == null
                     ? ""
-                    : normalize(npc.getCustomName().getString());
+                    : normalize(target.getCustomName().getString());
 
-            if (!name.isBlank() && containsPhrase(message, name)) {
-                namedTargets.add(npc);
-            }
-        }
-
-        if (namedTargets.isEmpty()) {
-            if (!containsPhrase(message, "you")) {
-                return;
+            if (name.isBlank() || !containsPhrase(message, name)) {
+                continue;
             }
 
-            CyberNpcEntity addressed = findAddressedNpc(
-                    player,
-                    nearby
+            NpcChatIntent intent = classifyNearTarget(
+                    message,
+                    name,
+                    5
             );
 
-            if (addressed == null) {
-                return;
+            if (intent == null) {
+                continue;
             }
 
-            namedTargets.add(addressed);
+            handledNamedTarget = true;
+            reactTargetAndFriends(
+                    player,
+                    target,
+                    nearby,
+                    intent
+            );
         }
 
-        for (CyberNpcEntity target : namedTargets) {
-            target.reactToPlayerChat(player, intent, target);
+        if (handledNamedTarget) {
+            return;
+        }
 
-            for (CyberNpcEntity witness : nearby) {
-                if (witness != target
-                        && witness.isFriendWith(target)) {
-                    witness.reactToPlayerChat(
-                            player,
-                            intent,
-                            target
-                    );
+        NpcChatIntent directIntent = classifyNearTarget(
+                message,
+                "you",
+                4
+        );
+
+        if (directIntent == null) {
+            return;
+        }
+
+        CyberNpcEntity addressed = findAddressedNpc(
+                player,
+                nearby
+        );
+
+        if (addressed == null) {
+            return;
+        }
+
+        reactTargetAndFriends(
+                player,
+                addressed,
+                nearby,
+                directIntent
+        );
+    }
+
+    private static void reactTargetAndFriends(
+            ServerPlayer player,
+            CyberNpcEntity target,
+            List<CyberNpcEntity> nearby,
+            NpcChatIntent intent
+    ) {
+        target.reactToPlayerChat(player, intent, target);
+
+        for (CyberNpcEntity witness : nearby) {
+            if (witness != target
+                    && witness.isFriendWith(target)) {
+                witness.reactToPlayerChat(
+                        player,
+                        intent,
+                        target
+                );
+            }
+        }
+    }
+
+    private static NpcChatIntent classifyNearTarget(
+            String message,
+            String target,
+            int radiusWords
+    ) {
+        String[] messageWords = message.split(" ");
+        String[] targetWords = target.split(" ");
+
+        if (targetWords.length == 0
+                || targetWords.length > messageWords.length) {
+            return null;
+        }
+
+        for (int i = 0;
+             i <= messageWords.length - targetWords.length;
+             i++) {
+            boolean matches = true;
+
+            for (int j = 0; j < targetWords.length; j++) {
+                if (!messageWords[i + j].equals(targetWords[j])) {
+                    matches = false;
+                    break;
                 }
             }
+
+            if (!matches) {
+                continue;
+            }
+
+            int from = Math.max(0, i - radiusWords);
+            int to = Math.min(
+                    messageWords.length,
+                    i + targetWords.length + radiusWords
+            );
+
+            String context = String.join(
+                    " ",
+                    java.util.Arrays.copyOfRange(
+                            messageWords,
+                            from,
+                            to
+                    )
+            );
+
+            NpcChatIntent intent = classify(context);
+            if (intent != null) {
+                return intent;
+            }
         }
+
+        return null;
     }
 
     private static CyberNpcEntity findAddressedNpc(
