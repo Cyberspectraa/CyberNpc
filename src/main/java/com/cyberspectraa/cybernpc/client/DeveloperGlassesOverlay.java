@@ -27,7 +27,7 @@ import java.util.List;
 @Mod.EventBusSubscriber(modid = CyberNpc.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public final class DeveloperGlassesOverlay {
     private static final double DEBUG_RANGE = 64.0D;
-    private static final int PANEL_WIDTH = 286;
+    private static final int PANEL_WIDTH = 360;
     private static final int TEXT_WIDTH = PANEL_WIDTH - 18;
 
     public static final KeyMapping CYCLE_TAB = new KeyMapping(
@@ -199,6 +199,29 @@ public final class DeveloperGlassesOverlay {
                                 + "-" + npc.getHairStyleIndex(),
                         0x8F8F8F
                 ));
+            }
+            case RELATIONSHIPS -> {
+                lines.add(new DebugLine(
+                        "Party: " + npc.getDebugParty(),
+                        0xB9E6FF
+                ));
+
+                String social = npc.getDebugRelationships();
+                if (social == null
+                        || social.isBlank()
+                        || "none".equals(social)) {
+                    lines.add(new DebugLine(
+                            "No meaningful relationships recorded yet.",
+                            0x8F8F8F
+                    ));
+                } else {
+                    for (String relation : social.split("\\|")) {
+                        int color = relation.startsWith("Player ")
+                                ? 0xFFD98A
+                                : 0xD8C5FF;
+                        lines.add(new DebugLine(relation, color));
+                    }
+                }
             }
             case COMBAT -> {
                 lines.add(new DebugLine(
@@ -372,6 +395,7 @@ public final class DeveloperGlassesOverlay {
     private enum Tab {
         OVERVIEW("Overview"),
         APPEARANCE("Appearance"),
+        RELATIONSHIPS("Relationships"),
         COMBAT("Combat"),
         SPELLS("Spells"),
         SURVIVAL("Survival"),
