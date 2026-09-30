@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.24.0
+
+- Reworked reaction-bubble rendering so the bubble body uses Minecraft's white texture with a normal translucent entity render path instead of the dark name-tag background shader.
+- Reaction bubbles now stay genuinely bright cream/white even in darker environments and use full-bright lighting for reliable readability.
+- Removed all remaining overlapping coplanar bubble rectangles. The outline, fill and speech tail are now built from non-overlapping pixel strips, fixing the angle-dependent flicker/depth glitches seen in 0.23.1.
+- Kept the stepped pixel corners, shadow, highlight, shaped tail, larger scale and subtle bobbing introduced in 0.23.1.
+- Added explicit persistent Friend status to NPC relationships. Friendship is saved in NBT and treated as a permanent social milestone rather than something that silently decays away.
+- Existing Friendship, Trust, Respect, Fear and Rivalry values continue to exist underneath the Friend milestone.
+- Friends keep minimum Friendship/Trust values, and being a friend gives a support-score bonus. Friends can still become annoyed or frightened without randomly ceasing to be friends.
+- Nearby NPCs no longer gain friendship merely by standing near one another. Relationship progress now happens through actual social interactions.
+- Social interactions are visible: NPCs pause, face one another and exchange icon-only reaction bubbles for a short period.
+- Added Group Invite (+?) and Group Accept (+!) reactions. These are symbols only; Wild NPCs remain completely non-verbal.
+- Party formation now requires mutual Friend status first.
+- A party invitation is a multi-step social interaction: a friend proposes grouping, the other NPC visibly thinks about it, then both show an accept reaction if the party is formed.
+- Party invitations have cooldowns so NPCs do not repeatedly spam group requests.
+- Existing parties remain persistent and do not dissolve because relationship values drift or time passes.
+- Party leaders can invite a friend into an existing party when there is space. Two ungrouped friends can also create a new party, with leadership decided by the existing class/personality/gear leadership scoring.
+- Added natural-spawn social seeding in preparation for full natural Wild NPC spawning. Natural/Chunk Generation NPCs can spawn with believable pre-existing friendships and, sometimes, pre-existing parties with nearby Wild NPCs.
+- Natural-spawn social history intentionally bypasses the visible introduction sequence because those relationships represent history from before the player encountered the NPCs.
+- Natural-spawned NPCs are not forced into groups: some remain solitary, some gain one or more prior friends, and only a portion of those friendships seed a party.
+- Developer Glasses relationship debug now marks explicit Friend relationships.
+- Socializing and considering a party invite are exposed through the NPC activity debug state.
+- Combat, fleeing, zombification and urgent behaviour interrupt face-to-face social interactions so conversation never overrides survival.
+
+
 ## 0.23.1
 
 - Completely redesigned Wild NPC reaction bubbles so they no longer look like plain rectangles.
