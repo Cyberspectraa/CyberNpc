@@ -119,6 +119,12 @@ public class CyberNpcEntity extends PathfinderMob {
 
     private static final int COMBAT_HELP_COOLDOWN_TICKS = 100;
     private static final int MAX_COMBAT_HELPERS = 3;
+    private static final int PARTY_MAX_SIZE = 4;
+    private static final int SOCIAL_SCAN_INTERVAL = 60;
+    private static final double SOCIAL_RADIUS = 10.0D;
+    private static final double PARTY_FOLLOW_DISTANCE = 8.0D;
+    private static final double PARTY_FOLLOW_LIMIT = 40.0D;
+    private static final int PARTY_FORM_SUPPORT_SCORE = 5;
     private static final double FIGHT_CONFIDENCE = 55.0D;
     private static final double HELP_CONFIDENCE = 35.0D;
     private static final double FLEE_CONFIDENCE = 22.0D;
@@ -232,6 +238,12 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> DATA_DEBUG_SPELLS =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
 
+    private static final EntityDataAccessor<String> DATA_DEBUG_PARTY =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
+    private static final EntityDataAccessor<String> DATA_DEBUG_RELATIONSHIPS =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
     private int aggressionLevel = -1;
     private boolean classLoadoutInitialized;
     private int provocation;
@@ -239,6 +251,10 @@ public class CyberNpcEntity extends PathfinderMob {
     private int hungerDecayTimer;
 
     private final WildNpcInventory inventory = new WildNpcInventory();
+    private final NpcSocialMemory socialMemory = new NpcSocialMemory();
+
+    private int socialTickCooldown;
+    private boolean regroupingWithParty;
 
     private boolean huntingTarget;
     private int huntSearchCooldown;
@@ -363,6 +379,8 @@ public class CyberNpcEntity extends PathfinderMob {
         entityData.define(DATA_DEBUG_INVENTORY, "empty");
         entityData.define(DATA_DEBUG_CONFIDENCE, "none");
         entityData.define(DATA_DEBUG_SPELLS, "Not a Mage");
+        entityData.define(DATA_DEBUG_PARTY, "none");
+        entityData.define(DATA_DEBUG_RELATIONSHIPS, "none");
     }
 
     @Override
@@ -552,6 +570,42 @@ public class CyberNpcEntity extends PathfinderMob {
 
     public String getCastingSpellId() {
         return entityData.get(DATA_CASTING_SPELL);
+    }
+
+    public String getDebugParty() {
+        return entityData.get(DATA_DEBUG_PARTY);
+    }
+
+    public String getDebugRelationships() {
+        return entityData.get(DATA_DEBUG_RELATIONSHIPS);
+    }
+
+    public int getPlayerReputation(UUID playerId) {
+        return socialMemory.getPlayerReputation(playerId);
+    }
+
+    public boolean isTrackingThreat(LivingEntity entity) {
+        return entity != null
+                && (getTarget() == entity || fleeingThreat == entity);
+    }
+
+    public void recordPlayerCombatHelp(
+            Player player,
+            LivingEntity threat,
+            boolean killed
+    ) {
+        if (level().isClientSide
+                || getNpcType() != NpcType.WILD
+                || player == null
+                || threat == null
+                || !isTrackingThreat(threat)) {
+            return;
+        }
+
+        socialMemory.adjustPlayerReputation(
+                player.getUUID(),
+                killed ? 6 : 1
+        );
     }
 
     public boolean canWander() {
@@ -1702,8 +1756,277 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
+        tickSocialLife();
         tickHuntingAndFood();
         finishAiTick();
+    }
+
+    private void tickSocialLife() {
+        regroupingWithParty = false;
+
+        if (isCombatActive()
+                || fleeingThreat != null
+                || isSleeping()
+                || isZombifying()) {
+            return;
+        }
+
+        if (socialTickCooldown > 0) {
+            socialTickCooldown--;
+        } else {
+            socialTickCooldown = SOCIAL_SCAN_INTERVAL;
+            updateNearbySocialBonds();
+        }
+
+        if (!isBusyWithNeeds()) {
+            tickPartyCohesion();
+        }
+    }
+
+    private void updateNearbySocialBonds() {
+        List<CyberNpcEntity> nearby = level().getEntitiesOfClass(
+                        CyberNpcEntity.class,
+                        getBoundingBox().inflate(SOCIAL_RADIUS, 4.0D, SOCIAL_RADIUS),
+                        npc -> npc != this
+                                && npc.isAlive()
+                                && npc.getNpcType() == NpcType.WILD
+                                && !npc.isSleeping()
+                                && !npc.isZombifying()
+                                && !npc.isCombatActive()
+                                && npc.fleeingThreat == null
+                ).stream()
+                .sorted(Comparator.comparingDouble(this::distanceToSqr))
+                .limit(3)
+                .toList();
+
+        for (CyberNpcEntity other : nearby) {
+            // Only one side performs the mutual update so two NPC ticks do not
+            // double the same social interaction.
+            if (getUUID().compareTo(other.getUUID()) >= 0) {
+                continue;
+            }
+
+            strengthenPeacefulBond(this, other);
+            strengthenPeacefulBond(other, this);
+            tryBuildPartyWith(other);
+        }
+    }
+
+    private static void strengthenPeacefulBond(
+            CyberNpcEntity source,
+            CyberNpcEntity target
+    ) {
+        int friendship = source.getPersonality() == WildNpcPersonality.SKITTISH
+                ? 0
+                : 1;
+        int trust = 1;
+        int respect = 0;
+
+        if (source.getPersonality() == WildNpcPersonality.LOYAL
+                || source.getPersonality() == WildNpcPersonality.PROTECTIVE) {
+            friendship++;
+            trust++;
+        }
+
+        if (source.getPersonality() == WildNpcPersonality.BRAVE
+                || source.getPersonality() == WildNpcPersonality.TACTICAL
+                || source.getPersonality() == WildNpcPersonality.STUBBORN) {
+            respect++;
+        }
+
+        source.socialMemory.adjustRelationship(
+                target.getUUID(),
+                friendship,
+                trust,
+                respect,
+                -1,
+                -1
+        );
+    }
+
+    private void tryBuildPartyWith(CyberNpcEntity other) {
+        if (other == null || other == this || isSameParty(other)) {
+            return;
+        }
+
+        int thisSupport = socialMemory.supportScore(other.getUUID());
+        int otherSupport = other.socialMemory.supportScore(getUUID());
+
+        if (thisSupport < PARTY_FORM_SUPPORT_SCORE
+                || otherSupport < PARTY_FORM_SUPPORT_SCORE) {
+            return;
+        }
+
+        boolean thisHasParty = socialMemory.hasParty();
+        boolean otherHasParty = other.socialMemory.hasParty();
+
+        if (!thisHasParty && !otherHasParty) {
+            UUID newPartyId = UUID.randomUUID();
+            CyberNpcEntity leader = partyLeadershipScore() >= other.partyLeadershipScore()
+                    ? this
+                    : other;
+
+            setParty(newPartyId, leader.getUUID());
+            other.setParty(newPartyId, leader.getUUID());
+            reinforcePartyBond(other);
+            return;
+        }
+
+        if (thisHasParty && !otherHasParty
+                && getLoadedPartySize() < PARTY_MAX_SIZE) {
+            other.setParty(
+                    socialMemory.partyId(),
+                    socialMemory.partyLeaderId()
+            );
+            reinforcePartyBond(other);
+            return;
+        }
+
+        if (!thisHasParty && otherHasParty
+                && other.getLoadedPartySize() < PARTY_MAX_SIZE) {
+            setParty(
+                    other.socialMemory.partyId(),
+                    other.socialMemory.partyLeaderId()
+            );
+            reinforcePartyBond(other);
+        }
+    }
+
+    private void reinforcePartyBond(CyberNpcEntity other) {
+        socialMemory.adjustRelationship(
+                other.getUUID(),
+                4,
+                5,
+                2,
+                -3,
+                -3
+        );
+        other.socialMemory.adjustRelationship(
+                getUUID(),
+                4,
+                5,
+                2,
+                -3,
+                -3
+        );
+    }
+
+    private int partyLeadershipScore() {
+        int score = getGearTier().ordinal();
+
+        score += switch (getPersonality()) {
+            case TACTICAL -> 5;
+            case PROTECTIVE -> 4;
+            case BRAVE -> 3;
+            case LOYAL -> 2;
+            case PATIENT -> 1;
+            case SKITTISH -> -3;
+            default -> 0;
+        };
+
+        score += switch (getWildClass()) {
+            case KNIGHT -> 3;
+            case BERSERKER -> 2;
+            case CLERIC -> 2;
+            case SPELLBLADE -> 2;
+            default -> 0;
+        };
+
+        return score;
+    }
+
+    private void setParty(@Nullable UUID partyId, @Nullable UUID leaderId) {
+        if (partyId == null || leaderId == null) {
+            socialMemory.clearParty();
+            return;
+        }
+
+        socialMemory.setParty(partyId, leaderId);
+    }
+
+    private boolean isSameParty(CyberNpcEntity other) {
+        return other != null
+                && socialMemory.hasParty()
+                && other.socialMemory.hasParty()
+                && socialMemory.partyId().equals(other.socialMemory.partyId());
+    }
+
+    private int getLoadedPartySize() {
+        if (!socialMemory.hasParty()) {
+            return 1;
+        }
+
+        return level().getEntitiesOfClass(
+                CyberNpcEntity.class,
+                getBoundingBox().inflate(48.0D),
+                npc -> npc.isAlive() && isSameParty(npc)
+        ).size() + 1;
+    }
+
+    @Nullable
+    private CyberNpcEntity getLoadedPartyLeader() {
+        if (!socialMemory.hasParty()
+                || socialMemory.partyLeaderId() == null
+                || socialMemory.partyLeaderId().equals(getUUID())
+                || !(level() instanceof ServerLevel serverLevel)) {
+            return null;
+        }
+
+        var entity = serverLevel.getEntity(socialMemory.partyLeaderId());
+        return entity instanceof CyberNpcEntity npc
+                && npc.isAlive()
+                && isSameParty(npc)
+                ? npc
+                : null;
+    }
+
+    private void tickPartyCohesion() {
+        CyberNpcEntity leader = getLoadedPartyLeader();
+        if (leader == null) {
+            return;
+        }
+
+        double distanceSqr = distanceToSqr(leader);
+        if (distanceSqr <= PARTY_FOLLOW_DISTANCE * PARTY_FOLLOW_DISTANCE
+                || distanceSqr > PARTY_FOLLOW_LIMIT * PARTY_FOLLOW_LIMIT) {
+            return;
+        }
+
+        regroupingWithParty = true;
+        setShiftKeyDown(false);
+        setSprinting(distanceSqr > 196.0D);
+        getNavigation().moveTo(
+                leader,
+                distanceSqr > 196.0D ? 1.0D : 0.82D
+        );
+    }
+
+    private void handlePartyDeath() {
+        if (!socialMemory.hasParty()
+                || !socialMemory.isPartyLeader(getUUID())) {
+            return;
+        }
+
+        List<CyberNpcEntity> members = level().getEntitiesOfClass(
+                CyberNpcEntity.class,
+                getBoundingBox().inflate(48.0D),
+                npc -> npc != this
+                        && npc.isAlive()
+                        && isSameParty(npc)
+        );
+
+        CyberNpcEntity replacement = members.stream()
+                .max(Comparator.comparingInt(CyberNpcEntity::partyLeadershipScore))
+                .orElse(null);
+
+        if (replacement == null) {
+            return;
+        }
+
+        UUID partyId = socialMemory.partyId();
+        for (CyberNpcEntity member : members) {
+            member.setParty(partyId, replacement.getUUID());
+        }
     }
 
     private void finishAiTick() {
@@ -3547,9 +3870,12 @@ public class CyberNpcEntity extends PathfinderMob {
             helpers = nearby.size();
 
             for (CyberNpcEntity helper : nearby) {
-                // Nearby allies help, but they do not count as a perfect second
-                // copy of the NPC because they may need time to arrive.
-                backupPower += helper.estimateOwnCombatPower() * 0.55D;
+                int support = helper.socialMemory.supportScore(getUUID());
+                double weight = isSameParty(helper)
+                        ? 0.85D
+                        : Mth.clamp(0.48D + support / 200.0D, 0.40D, 0.75D);
+
+                backupPower += helper.estimateOwnCombatPower() * weight;
             }
         }
 
@@ -3586,6 +3912,16 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private List<CyberNpcEntity> getPotentialCombatHelpers(LivingEntity threat) {
+        Comparator<CyberNpcEntity> priority = Comparator
+                .comparingInt((CyberNpcEntity npc) -> isSameParty(npc) ? 0 : 1)
+                .thenComparing(
+                        Comparator.comparingInt(
+                                (CyberNpcEntity npc) ->
+                                        npc.socialMemory.supportScore(getUUID())
+                        ).reversed()
+                )
+                .thenComparingDouble(this::distanceToSqr);
+
         return level().getEntitiesOfClass(
                         CyberNpcEntity.class,
                         getBoundingBox().inflate(WILD_HELP_RADIUS),
@@ -3594,12 +3930,49 @@ public class CyberNpcEntity extends PathfinderMob {
                                 && npc.getNpcType() == NpcType.WILD
                                 && !npc.isSleeping()
                                 && npc.fleeingThreat == null
-                                && npc.getHealth() >= Math.max(6.0F, npc.getMaxHealth() * 0.30F)
+                                && npc.getHealth() >= Math.max(
+                                        6.0F,
+                                        npc.getMaxHealth() * 0.30F
+                                )
                                 && npc.getTarget() != threat
+                                && npc.willHelpNpc(this, threat)
                 ).stream()
-                .sorted(Comparator.comparingDouble(this::distanceToSqr))
+                .sorted(priority)
                 .limit(MAX_COMBAT_HELPERS)
                 .toList();
+    }
+
+    private boolean willHelpNpc(
+            CyberNpcEntity caller,
+            LivingEntity threat
+    ) {
+        if (caller == null || caller == this) {
+            return false;
+        }
+
+        if (isSameParty(caller)) {
+            return true;
+        }
+
+        int support = socialMemory.supportScore(caller.getUUID());
+        int threshold = switch (getPersonality()) {
+            case PROTECTIVE, LOYAL, BRAVE -> 0;
+            case RECKLESS -> 2;
+            case TACTICAL, BALANCED -> 7;
+            case AGGRESSIVE -> 8;
+            case STUBBORN, PATIENT -> 10;
+            case OPPORTUNISTIC -> 14;
+            case CAUTIOUS -> 18;
+            case SKITTISH -> 24;
+        };
+
+        if (threat instanceof Mob mob && mob.getTarget() == caller
+                && (getPersonality() == WildNpcPersonality.PROTECTIVE
+                || getPersonality() == WildNpcPersonality.LOYAL)) {
+            threshold -= 6;
+        }
+
+        return support >= threshold;
     }
 
     private MobAggroClass classifyMobAggro(Mob mob) {
@@ -3693,6 +4066,18 @@ public class CyberNpcEntity extends PathfinderMob {
                 Math.min(0.90D, getHelpHealthFraction())
         );
 
+        Comparator<CyberNpcEntity> priority = Comparator
+                .comparingInt((CyberNpcEntity npc) -> isSameParty(npc) ? 0 : 1)
+                .thenComparingDouble(
+                        npc -> npc.getHealth() / npc.getMaxHealth()
+                )
+                .thenComparing(
+                        Comparator.comparingInt(
+                                (CyberNpcEntity npc) ->
+                                        socialMemory.supportScore(npc.getUUID())
+                        ).reversed()
+                );
+
         return level().getEntitiesOfClass(
                         CyberNpcEntity.class,
                         getBoundingBox().inflate(radius),
@@ -3701,10 +4086,11 @@ public class CyberNpcEntity extends PathfinderMob {
                                 && npc.isAlive()
                                 && npc.getMaxHealth() > 0.0F
                                 && npc.getHealth() / npc.getMaxHealth() < threshold
+                                && (isSameParty(npc)
+                                || socialMemory.supportScore(npc.getUUID()) >= 0)
                 ).stream()
-                .min(Comparator.comparingDouble(
-                        npc -> npc.getHealth() / npc.getMaxHealth()
-                ))
+                .sorted(priority)
+                .findFirst()
                 .orElse(null);
     }
 
@@ -3892,6 +4278,11 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         entityData.set(DATA_DEBUG_SPELLS, buildMageSpellDebug());
+        entityData.set(DATA_DEBUG_PARTY, buildPartyDebug());
+        entityData.set(
+                DATA_DEBUG_RELATIONSHIPS,
+                buildRelationshipDebug()
+        );
 
         entityData.set(
                 DATA_DEBUG_INVENTORY,
@@ -3900,6 +4291,84 @@ public class CyberNpcEntity extends PathfinderMob {
                         ? ""
                         : " | using:" + stackDebug(foodToEat))
         );
+    }
+
+    private String buildPartyDebug() {
+        if (!socialMemory.hasParty()) {
+            return "none";
+        }
+
+        String partyId = socialMemory.partyId().toString();
+        partyId = partyId.substring(0, Math.min(8, partyId.length()));
+
+        String leaderName = shortUuid(socialMemory.partyLeaderId());
+        if (level() instanceof ServerLevel serverLevel
+                && socialMemory.partyLeaderId() != null) {
+            var leader = serverLevel.getEntity(socialMemory.partyLeaderId());
+            if (leader != null) {
+                leaderName = leader.getName().getString();
+            }
+        }
+
+        return (socialMemory.isPartyLeader(getUUID()) ? "Leader" : "Member")
+                + " | party:" + partyId
+                + " | leader:" + leaderName
+                + " | loaded:" + getLoadedPartySize() + "/" + PARTY_MAX_SIZE;
+    }
+
+    private String buildRelationshipDebug() {
+        List<String> lines = new ArrayList<>();
+
+        if (level() instanceof ServerLevel serverLevel) {
+            for (NpcSocialMemory.RelationshipEntry entry :
+                    socialMemory.relationshipEntries().stream().limit(4).toList()) {
+                NpcSocialMemory.RelationshipSnapshot relation =
+                        entry.relationship();
+
+                var entity = serverLevel.getEntity(entry.targetId());
+                String name = entity == null
+                        ? shortUuid(entry.targetId())
+                        : entity.getName().getString();
+
+                lines.add(
+                        "NPC " + name
+                                + " | F:" + relation.friendship()
+                                + " T:" + relation.trust()
+                                + " R:" + relation.respect()
+                                + " Fear:" + relation.fear()
+                                + " Rival:" + relation.rivalry()
+                );
+            }
+
+            for (NpcSocialMemory.PlayerReputationEntry entry :
+                    socialMemory.playerReputationEntries().stream().limit(3).toList()) {
+                var player = serverLevel.getServer()
+                        .getPlayerList()
+                        .getPlayer(entry.playerId());
+
+                String name = player == null
+                        ? shortUuid(entry.playerId())
+                        : player.getGameProfile().getName();
+
+                lines.add(
+                        "Player " + name
+                                + " | Rep:"
+                                + (entry.reputation() >= 0 ? "+" : "")
+                                + entry.reputation()
+                );
+            }
+        }
+
+        return lines.isEmpty() ? "none" : String.join("|", lines);
+    }
+
+    private static String shortUuid(@Nullable UUID id) {
+        if (id == null) {
+            return "none";
+        }
+
+        String value = id.toString();
+        return value.substring(0, Math.min(8, value.length()));
     }
 
     private String buildDebugActivity() {
@@ -3956,6 +4425,9 @@ public class CyberNpcEntity extends PathfinderMob {
         }
         if (getHunger() <= HUNT_HUNGER_THRESHOLD) {
             return "Looking for food";
+        }
+        if (regroupingWithParty) {
+            return "Regrouping with party";
         }
         if (!getNavigation().isDone()) {
             return "Travelling";
@@ -4086,8 +4558,22 @@ public class CyberNpcEntity extends PathfinderMob {
                 && !player.isSpectator()) {
             ensureWildProfile();
 
+            int previousReputation =
+                    socialMemory.getPlayerReputation(player.getUUID());
+            socialMemory.adjustPlayerReputation(
+                    player.getUUID(),
+                    -Math.max(4, Mth.ceil(amount * 2.0F))
+            );
+            notifySocialWitnessesOfPlayerAttack(player, false);
+
             if (!isCombatActive() || huntingTarget) {
-                int addedProvocation = Math.max(8, Mth.ceil(amount * 6.0F));
+                int reputationModifier =
+                        Math.max(0, -previousReputation / 5)
+                                - Math.max(0, previousReputation / 12);
+                int addedProvocation = Math.max(
+                        4,
+                        Mth.ceil(amount * 6.0F) + reputationModifier
+                );
                 provocation = Mth.clamp(provocation + addedProvocation, 0, 100);
 
                 int hostilityThreshold = 100 - aggressionLevel;
@@ -4102,6 +4588,32 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         return damaged;
+    }
+
+    private void notifySocialWitnessesOfPlayerAttack(
+            Player player,
+            boolean fatal
+    ) {
+        List<CyberNpcEntity> witnesses = level().getEntitiesOfClass(
+                CyberNpcEntity.class,
+                getBoundingBox().inflate(WILD_HELP_RADIUS),
+                npc -> npc != this
+                        && npc.isAlive()
+                        && npc.getNpcType() == NpcType.WILD
+                        && (isSameParty(npc)
+                        || npc.socialMemory.supportScore(getUUID()) >= 8)
+        );
+
+        for (CyberNpcEntity witness : witnesses) {
+            int penalty = fatal
+                    ? (isSameParty(witness) ? -28 : -18)
+                    : (isSameParty(witness) ? -8 : -4);
+
+            witness.socialMemory.adjustPlayerReputation(
+                    player.getUUID(),
+                    penalty
+            );
+        }
     }
 
     private boolean isFriendlyWildNpc(CyberNpcEntity other) {
@@ -4193,6 +4705,24 @@ public class CyberNpcEntity extends PathfinderMob {
             npc.dropSearchTicks = 0;
             npc.cookingTarget = null;
             npc.combatHelpCooldown = COMBAT_HELP_COOLDOWN_TICKS;
+
+            npc.socialMemory.adjustRelationship(
+                    getUUID(),
+                    1,
+                    2,
+                    2,
+                    -1,
+                    -1
+            );
+            socialMemory.adjustRelationship(
+                    npc.getUUID(),
+                    1,
+                    2,
+                    2,
+                    -1,
+                    -1
+            );
+
             npc.beginWildCombat(target, false, false);
         }
 
@@ -4484,6 +5014,15 @@ public class CyberNpcEntity extends PathfinderMob {
             releasePersistentClaims();
         }
 
+        if (!level().isClientSide) {
+            if (source.getEntity() instanceof Player player
+                    && !player.isCreative()
+                    && !player.isSpectator()) {
+                notifySocialWitnessesOfPlayerAttack(player, true);
+            }
+            handlePartyDeath();
+        }
+
         IronSpellsCompat.clearCasterState(this);
         super.die(source);
 
@@ -4572,6 +5111,7 @@ public class CyberNpcEntity extends PathfinderMob {
             tag.putLong("CyberNpcClaimedCookingStation", claimedCookingStation.asLong());
         }
 
+        socialMemory.saveTo(tag);
         corralBrain.addSaveData(tag);
         sleepBrain.addSaveData(tag);
     }
@@ -4631,6 +5171,7 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         ensureAppearance();
+        socialMemory.loadFrom(tag);
 
         if (getNpcType() == NpcType.WILD) {
             WildNpcClass loadedClass = tag.contains("CyberNpcWildClass")
@@ -4766,6 +5307,8 @@ public class CyberNpcEntity extends PathfinderMob {
         foodChestSearchCooldown = 0;
         huntTargetRecheckCooldown = 0;
         threatScanCooldown = 0;
+        socialTickCooldown = 0;
+        regroupingWithParty = false;
         fleeingThreat = null;
         fleeSafeTicks = 0;
         fleeRepathCooldown = 0;
