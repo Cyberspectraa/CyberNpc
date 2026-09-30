@@ -2,59 +2,61 @@
 
 CyberNpc is a custom NPC framework for Minecraft 1.20.1 Forge, built for the CyberSpectra modpack.
 
-## Current release: 0.10.0
+## Current release: 0.11.0
 
-### Smarter hostile-mob combat
+### Emergency healing
 
-Wild NPCs no longer simply run straight into a hostile and trade hits.
+Wild NPCs now treat low health as an emergency instead of continuing a normal damage trade.
 
-- Sword combat now keeps practical spacing instead of standing inside zombies and similar mobs.
-- NPCs attack on a faster player-like rhythm, then back away/strafe during the recovery window.
-- If they get too close to the hostile they create space before committing to the next hit.
-- Ranged weapons remain preferred outside close sword range.
-- Low-health NPCs can ask nearby Wild NPCs for help.
-- NPCs that decide a hostile is too dangerous call nearby helpers before giving up and fleeing.
-- Up to three nearby healthy Wild NPCs can join the same fight.
-- At critically low health the NPC retreats instead of suicidally remaining in combat.
-- Creepers remain treated as a retreat threat.
+- At 8 health or lower, an NPC prioritizes retreating from an active hostile.
+- Once it has created enough distance, it stops and visibly eats a carried edible item.
+- Food consumption now uses Minecraft's real item-finish path, so special foods apply their actual effects.
+- Golden apples therefore apply their vanilla regeneration/absorption effects.
+- Emergency eating also restores a small amount of immediate health based on the food's nutrition so ordinary food can help recovery too.
+- Food pulled from a storage chest is ranked so high-value recovery items such as golden apples are preferred over ordinary food.
 
-### Movement cleanup
+### Full inventory drops on death
 
-- Fleeing NPCs no longer crouch-run.
-- Sprint state is automatically cleared if the NPC is not actually moving or its path has ended.
-- This prevents the visual bug where an NPC appears to run in place and continuously creates sprint particles while standing still.
+Wild NPC deaths now drop their complete internal inventory instead of only normal mob equipment chances.
 
-### Food storage
+Guaranteed carried drops include:
 
-Wild NPCs can now use ordinary nearby chests as a food reserve.
+- Stored sword.
+- Stored bow/crossbow.
+- Raw food.
+- Ready-to-eat food.
+- Food currently being eaten.
+- Any actual equipped item still present.
 
-- Surplus raw meat left after the NPC has eaten enough can be deposited into a chest.
-- Surplus ready-to-eat food can also be stored.
-- Any edible crop/food item the NPC is already carrying can use the same storage path, so future crop harvesting feeds into this system automatically.
-- A hungry NPC with no carried food checks nearby chests before immediately hunting.
-- Ready food is preferred; raw stored food is retrieved and sent through the existing cooking system.
-- The NPC can carry a small batch back out of the chest for later consumption.
+The weapon copy used only for rendering/combat is stowed before death so it cannot duplicate the stored weapon.
 
-### Pen harvesting and recovery
+### Zombification
 
-The v0.9.1 whole-pen claim/lead-safety system remains in place, with additional livestock behaviour:
+A new harmful effect named **Zombification** has been added.
 
-- If a claimed herd has produced a baby and there are at least two adults, a hungry NPC may harvest exactly one adult for food.
-- A long cooldown prevents the NPC from immediately killing the remaining adult while the baby is still growing.
-- Babies are never selected as the harvest target.
-- If a leashed animal stops making progress into the pen for several seconds, the NPC performs a realignment maneuver instead of staying stuck forever.
-- It walks back out from the gate, moves away to straighten the leash/animal, then walks back through the gate and retries.
-- Only a limited number of realignment attempts are made before the animal is safely abandoned/temporarily blacklisted.
+- Duration: exactly **2 minutes (2400 ticks)**.
+- Each successful zombie-family melee hit has a **1%** chance to infect a Wild NPC if it is not already infected.
+- An infected NPC is no longer treated as a valid target by hostile mobs, and nearby hostiles already targeting it are cleared.
+- The effect displays normal status-effect particles/icon.
+- When the timer reaches its end, the NPC converts into a Zombie NPC.
+- Nearby healthy Wild NPCs periodically notice infected NPCs. The closer the infection is to completion, the higher the chance they become suspicious and move away.
+- Developer Glasses report the remaining zombification time while inspecting an infected NPC.
 
-### Claims after death
+### Zombie NPCs
 
-- Dead NPCs stop all AI and claim-discovery ticks immediately.
-- On death the NPC closes/interupts its active livestock task, wakes from bed if needed, and releases its persistent world claims.
-- Pen and cooking-station claims therefore become available to other NPCs instead of being reclaimed during the death-removal window.
+Zombie NPCs are real Zombie-derived entities rather than Wild NPCs pretending to be zombies.
+
+- They inherit normal vanilla zombie AI, sounds, movement, daylight burning, combat behavior, drowning conversion, reinforcement behavior, and player/villager targeting.
+- They use the vanilla zombie appearance, matching the zombie version of the current Steve-based Wild NPC skin.
+- They use the normal vanilla zombie loot table.
+- Their original NPC name is preserved through conversion.
+- Zombie NPC attacks can apply Zombification because they are true Zombie subclasses.
+
+There is also a separate **5%** chance that a Wild NPC killed directly by a zombie-family mob immediately rises as a Zombie NPC. The original NPC still drops its full inventory first, and all of its bed/pen/cooking claims are released.
 
 ### Existing systems
 
-CyberNpc also retains persistent bed claiming/sleeping, hostile mob targeting, Enderman gaze reactions, fight-or-flee threat evaluation, adaptive bow/crossbow use, hunger/starvation, real furnace/smoker/campfire cooking, ground-food pickup, persistent cooking-station claims, full-enclosure pen claims, real livestock leads, multi-gate pen routing, player-style animations, Developer Glasses debugging, and natural Wild NPC spawning.
+CyberNpc also retains improved sword spacing/group combat, retreat AI, food chest storage, hunger/starvation, real cooking, full-pen ownership, livestock breeding/harvesting, safe leash transfer and gate realignment, persistent beds, player-style animations, Developer Glasses, and natural Wild NPC spawning.
 
 Building and mining remain intentionally excluded.
 

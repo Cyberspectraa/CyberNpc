@@ -1,5 +1,8 @@
 package com.cyberspectraa.cybernpc.entity;
 
+import com.cyberspectraa.cybernpc.effect.ZombificationEffect;
+import com.cyberspectraa.cybernpc.registry.ModEffects;
+import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.cyberspectraa.cybernpc.world.CyberNpcWorldClaims;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -16,6 +19,7 @@ import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.AgeableMob;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -37,6 +41,7 @@ import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Arrow;
 import net.minecraft.world.item.CrossbowItem;
@@ -104,6 +109,15 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final int FOOD_CHEST_SEARCH_INTERVAL = 80;
     private static final double FOOD_CHEST_USE_DISTANCE_SQR = 5.0D;
 
+    private static final float EMERGENCY_HEALTH_THRESHOLD = 8.0F;
+    private static final double EMERGENCY_EAT_SAFE_DISTANCE_SQR = 64.0D;
+
+    private static final float ZOMBIFICATION_ON_HIT_CHANCE = 0.01F;
+    private static final float ZOMBIE_KILL_CONVERSION_CHANCE = 0.05F;
+    private static final double INFECTION_SUSPICION_RADIUS = 12.0D;
+    private static final int INFECTION_SUSPICION_SCAN_INTERVAL = 20;
+    private static final int INFECTION_AVOID_TICKS = 80;
+
     private static final EntityDataAccessor<String> DATA_ROLE =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
 
@@ -167,6 +181,14 @@ public class CyberNpcEntity extends PathfinderMob {
     private ItemStack foodToEat = ItemStack.EMPTY;
     private int eatingTicks;
     private boolean utilityItemActive;
+    private boolean emergencyEating;
+    private boolean zombieConversionStarted;
+
+    @Nullable
+    private CyberNpcEntity suspiciousNpc;
+
+    private int infectionSuspicionCooldown;
+    private int infectionAvoidTicks;
 
     @Nullable
     private BlockPos claimedCookingStation;
@@ -382,6 +404,23 @@ public class CyberNpcEntity extends PathfinderMob {
         return "[" + "█".repeat(filled) + "░".repeat(10 - filled) + "] " + getHunger() + "/" + MAX_HUNGER;
     }
 
+    public boolean isZombifying() {
+        return hasEffect(ModEffects.ZOMBIFICATION.get());
+    }
+
+    public float getZombificationProgress() {
+        MobEffectInstance effect = getEffect(ModEffects.ZOMBIFICATION.get());
+        if (effect == null) {
+            return 0.0F;
+        }
+
+        return Mth.clamp(
+                1.0F - effect.getDuration() / (float) ZombificationEffect.DURATION_TICKS,
+                0.0F,
+                1.0F
+        );
+    }
+
     public void ensureDefaultName() {
         if (getCustomName() != null) {
             setCustomNameVisible(true);
@@ -547,6 +586,14 @@ public class CyberNpcEntity extends PathfinderMob {
 
     @Override
     public void tick() {
+        if (!level().isClientSide && isAlive() && isZombifying()) {
+            MobEffectInstance infection = getEffect(ModEffects.ZOMBIFICATION.get());
+            if (infection != null && infection.getDuration() <= 1) {
+                completeZombification();
+                return;
+            }
+        }
+
         super.tick();
 
         if (level().isClientSide || getNpcType() != NpcType.WILD) {
@@ -562,6 +609,10 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         ensureWildProfile();
+
+        if (isZombifying()) {
+            clearHostileTargetsWhileZombifying();
+        }
 
         if (combatHelpCooldown > 0) {
             combatHelpCooldown--;
@@ -579,6 +630,16 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         tickHunger();
+
+        if (!isZombifying() && tickInfectionSuspicion()) {
+            finishAiTick();
+            return;
+        }
+
+        if (tickEmergencyRecoveryWithoutThreat()) {
+            finishAiTick();
+            return;
+        }
 
         if (tickThreatResponse()) {
             finishAiTick();
@@ -619,6 +680,197 @@ public class CyberNpcEntity extends PathfinderMob {
         } else {
             sprintStallTicks = 0;
         }
+    }
+
+    private void clearHostileTargetsWhileZombifying() {
+        for (Mob mob : level().getEntitiesOfClass(
+                Mob.class,
+                getBoundingBox().inflate(32.0D, 16.0D, 32.0D),
+                mob -> mob != this
+                        && mob instanceof Enemy
+                        && mob.getTarget() == this
+        )) {
+            mob.setTarget(null);
+        }
+    }
+
+    private boolean tickEmergencyRecoveryWithoutThreat() {
+        if (emergencyEating) {
+            tickEating();
+            return true;
+        }
+
+        if (getHealth() > EMERGENCY_HEALTH_THRESHOLD
+                || isCombatActive()
+                || fleeingThreat != null
+                || carriedReadyFood.isEmpty()
+                || !carriedReadyFood.isEdible()) {
+            return false;
+        }
+
+        boolean nearbyThreat = !level().getEntitiesOfClass(
+                Mob.class,
+                getBoundingBox().inflate(THREAT_SCAN_RADIUS, 10.0D, THREAT_SCAN_RADIUS),
+                mob -> mob != this
+                        && mob.isAlive()
+                        && mob instanceof Enemy
+                        && mob.getTarget() == this
+        ).isEmpty();
+
+        if (nearbyThreat) {
+            return false;
+        }
+
+        beginEmergencyEating();
+        if (emergencyEating) {
+            tickEating();
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean tickInfectionSuspicion() {
+        if (isCombatActive()
+                || fleeingThreat != null
+                || emergencyEating
+                || isSleeping()) {
+            suspiciousNpc = null;
+            infectionAvoidTicks = 0;
+            return false;
+        }
+
+        if (suspiciousNpc != null) {
+            if (!suspiciousNpc.isAlive()
+                    || !suspiciousNpc.isZombifying()
+                    || distanceToSqr(suspiciousNpc) > INFECTION_SUSPICION_RADIUS * INFECTION_SUSPICION_RADIUS
+                    || infectionAvoidTicks <= 0) {
+                suspiciousNpc = null;
+                infectionAvoidTicks = 0;
+            } else {
+                infectionAvoidTicks--;
+                moveAwayFromSuspiciousNpc(suspiciousNpc);
+                return true;
+            }
+        }
+
+        if (infectionSuspicionCooldown > 0) {
+            infectionSuspicionCooldown--;
+            return false;
+        }
+
+        infectionSuspicionCooldown = INFECTION_SUSPICION_SCAN_INTERVAL;
+
+        CyberNpcEntity infected = level().getEntitiesOfClass(
+                        CyberNpcEntity.class,
+                        getBoundingBox().inflate(INFECTION_SUSPICION_RADIUS, 6.0D, INFECTION_SUSPICION_RADIUS),
+                        other -> other != this
+                                && other.isAlive()
+                                && other.getNpcType() == NpcType.WILD
+                                && other.isZombifying()
+                ).stream()
+                .min(Comparator.comparingDouble(this::distanceToSqr))
+                .orElse(null);
+
+        if (infected == null) {
+            return false;
+        }
+
+        float progress = infected.getZombificationProgress();
+        double distance = Math.sqrt(distanceToSqr(infected));
+        float distanceFactor = Mth.clamp(
+                (float) (1.0D - distance / INFECTION_SUSPICION_RADIUS),
+                0.15F,
+                1.0F
+        );
+
+        float suspicionChance = Mth.clamp(
+                0.05F + progress * 0.85F * distanceFactor,
+                0.05F,
+                0.92F
+        );
+
+        if (getRandom().nextFloat() < suspicionChance) {
+            suspiciousNpc = infected;
+            infectionAvoidTicks = INFECTION_AVOID_TICKS;
+            moveAwayFromSuspiciousNpc(infected);
+            return true;
+        }
+
+        return false;
+    }
+
+    private void moveAwayFromSuspiciousNpc(CyberNpcEntity infected) {
+        setShiftKeyDown(false);
+        setSprinting(false);
+
+        Vec3 away = DefaultRandomPos.getPosAway(
+                this,
+                10,
+                5,
+                infected.position()
+        );
+
+        if (away != null) {
+            getNavigation().moveTo(away.x, away.y, away.z, 0.95D);
+        }
+    }
+
+    private void beginEmergencyEating() {
+        if (carriedReadyFood.isEmpty() || !carriedReadyFood.isEdible()) {
+            return;
+        }
+
+        setTarget(null);
+        setCombatActive(false);
+        huntingTarget = false;
+        stowWeapons();
+        clearUtilityItem();
+        getNavigation().stop();
+        setSprinting(false);
+        setShiftKeyDown(false);
+
+        ItemStack one = carriedReadyFood.split(1);
+        if (carriedReadyFood.isEmpty()) {
+            carriedReadyFood = ItemStack.EMPTY;
+        }
+
+        emergencyEating = true;
+        beginEating(one);
+    }
+
+    private int emergencyFoodScore(ItemStack stack) {
+        if (stack.isEmpty() || !stack.isEdible()) {
+            return Integer.MIN_VALUE;
+        }
+
+        if (stack.is(Items.ENCHANTED_GOLDEN_APPLE)) {
+            return 10_000;
+        }
+        if (stack.is(Items.GOLDEN_APPLE)) {
+            return 9_000;
+        }
+
+        var food = stack.getItem().getFoodProperties();
+        if (food == null) {
+            return 0;
+        }
+
+        return food.getNutrition() * 100
+                + Math.round(food.getSaturationModifier() * 100.0F);
+    }
+
+    private float emergencyHealAmount(ItemStack stack) {
+        if (stack.isEmpty() || !stack.isEdible()) {
+            return 0.0F;
+        }
+
+        var food = stack.getItem().getFoodProperties();
+        if (food == null) {
+            return 1.0F;
+        }
+
+        return Math.max(1.0F, food.getNutrition() * 0.5F);
     }
 
     private void tickHunger() {
@@ -1052,9 +1304,10 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void retrieveFoodFromContainer(Container container) {
-        // Prefer something that can be eaten immediately, then fall back to raw
+        // Prefer the strongest ready-to-eat recovery item, then fall back to raw
         // food that can enter the existing cooking workflow.
         int readySlot = -1;
+        int readyScore = Integer.MIN_VALUE;
         int rawSlot = -1;
 
         for (int slot = 0; slot < container.getContainerSize(); slot++) {
@@ -1067,8 +1320,11 @@ public class CyberNpcEntity extends PathfinderMob {
             if (!CyberNpcHuntingData.isRawFood(stack)
                     && stack.isEdible()
                     && CyberNpcHuntingData.hungerRestored(stack) > 0) {
-                readySlot = slot;
-                break;
+                int score = emergencyFoodScore(stack);
+                if (score > readyScore) {
+                    readyScore = score;
+                    readySlot = slot;
+                }
             }
 
             if (rawSlot < 0 && CyberNpcHuntingData.isRawFood(stack)) {
@@ -1538,18 +1794,19 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         stopUsingItem();
-        level().playSound(
-                null,
-                blockPosition(),
-                SoundEvents.GENERIC_EAT,
-                SoundSource.NEUTRAL,
-                0.8F,
-                0.95F + getRandom().nextFloat() * 0.1F
-        );
 
-        setHunger(getHunger() + CyberNpcHuntingData.hungerRestored(foodToEat));
+        ItemStack consumed = foodToEat.copy();
+        foodToEat.finishUsingItem(level(), this);
+
+        setHunger(getHunger() + CyberNpcHuntingData.hungerRestored(consumed));
+
+        if (emergencyEating && getHealth() < getMaxHealth()) {
+            heal(emergencyHealAmount(consumed));
+        }
+
         foodToEat = ItemStack.EMPTY;
         eatingTicks = 0;
+        emergencyEating = false;
         clearUtilityItem();
         resetCookingSearch();
     }
@@ -1700,7 +1957,24 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private boolean tickThreatResponse() {
+        if (emergencyEating) {
+            tickEating();
+            return true;
+        }
+
         if (fleeingThreat != null) {
+            if (getHealth() <= EMERGENCY_HEALTH_THRESHOLD
+                    && !carriedReadyFood.isEmpty()
+                    && carriedReadyFood.isEdible()
+                    && (!fleeingThreat.isAlive()
+                    || distanceToSqr(fleeingThreat) >= EMERGENCY_EAT_SAFE_DISTANCE_SQR)) {
+                beginEmergencyEating();
+                if (emergencyEating) {
+                    tickEating();
+                    return true;
+                }
+            }
+
             if (!fleeingThreat.isAlive()
                     || distanceToSqr(fleeingThreat) > FLEE_RELEASE_DISTANCE * FLEE_RELEASE_DISTANCE) {
                 fleeSafeTicks++;
@@ -1740,6 +2014,23 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (threat == null) {
             return false;
+        }
+
+        if (getHealth() <= EMERGENCY_HEALTH_THRESHOLD) {
+            startFleeingFrom(threat);
+
+            if (!carriedReadyFood.isEmpty()
+                    && carriedReadyFood.isEdible()
+                    && distanceToSqr(threat) >= EMERGENCY_EAT_SAFE_DISTANCE_SQR) {
+                beginEmergencyEating();
+                if (emergencyEating) {
+                    tickEating();
+                }
+            } else {
+                tickFleeing();
+            }
+
+            return true;
         }
 
         if (shouldFightHostile(threat)) {
@@ -1950,6 +2241,14 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private String buildDebugActivity() {
+        MobEffectInstance infection = getEffect(ModEffects.ZOMBIFICATION.get());
+        if (infection != null) {
+            int seconds = Math.max(0, Mth.ceil(infection.getDuration() / 20.0F));
+            return "Zombifying — " + seconds + "s remaining";
+        }
+        if (suspiciousNpc != null && infectionAvoidTicks > 0) {
+            return "Keeping distance from suspicious NPC";
+        }
         if (fleeingThreat != null) {
             return "Fleeing/hiding from " + fleeingThreat.getName().getString();
         }
@@ -2018,7 +2317,9 @@ public class CyberNpcEntity extends PathfinderMob {
                 || sleepBrain.isBusy()
                 || fleeingThreat != null
                 || groundFoodTargetId != null
-                || foodChestTarget != null;
+                || foodChestTarget != null
+                || emergencyEating
+                || (suspiciousNpc != null && infectionAvoidTicks > 0);
     }
 
     @Override
@@ -2030,6 +2331,23 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         sleepBrain.wakeUp();
+
+        if (source.getEntity() instanceof Zombie zombie
+                && !isZombifying()
+                && getRandom().nextFloat() < ZOMBIFICATION_ON_HIT_CHANCE) {
+            addEffect(new MobEffectInstance(
+                    ModEffects.ZOMBIFICATION.get(),
+                    ZombificationEffect.DURATION_TICKS,
+                    0,
+                    false,
+                    true,
+                    true
+            ));
+
+            zombie.setTarget(null);
+            calmWildNpc();
+            fleeingThreat = null;
+        }
 
         if (source.getEntity() instanceof Player player
                 && !player.isCreative()
@@ -2055,6 +2373,10 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void beginWildCombat(LivingEntity target, boolean callForHelp, boolean isHunt) {
+        if (isZombifying() && target instanceof Enemy) {
+            return;
+        }
+
         fleeingThreat = null;
         fleeSafeTicks = 0;
         fleeRepathCooldown = 0;
@@ -2133,6 +2455,116 @@ public class CyberNpcEntity extends PathfinderMob {
         level().addFreshEntity(arrow);
     }
 
+    public void completeZombification() {
+        if (zombieConversionStarted
+                || level().isClientSide
+                || !isAlive()
+                || !(level() instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
+            return;
+        }
+
+        zombieConversionStarted = true;
+
+        corralBrain.interrupt();
+        sleepBrain.wakeUp();
+        clearUtilityItem();
+        stowWeapons();
+        setTarget(null);
+        setCombatActive(false);
+        fleeingThreat = null;
+        suspiciousNpc = null;
+        setSprinting(false);
+        setShiftKeyDown(false);
+        releasePersistentClaims();
+
+        ZombieCyberNpcEntity zombie = ModEntities.ZOMBIE_CYBER_NPC.get().create(serverLevel);
+        if (zombie == null) {
+            zombieConversionStarted = false;
+            return;
+        }
+
+        zombie.moveTo(getX(), getY(), getZ(), getYRot(), getXRot());
+        zombie.finalizeSpawn(
+                serverLevel,
+                serverLevel.getCurrentDifficultyAt(blockPosition()),
+                MobSpawnType.CONVERSION,
+                null,
+                null
+        );
+
+        if (getCustomName() != null) {
+            zombie.setCustomName(getCustomName().copy());
+            zombie.setCustomNameVisible(isCustomNameVisible());
+        }
+
+        zombie.setPersistenceRequired();
+        serverLevel.addFreshEntity(zombie);
+        discard();
+    }
+
+    private void spawnZombieNpcAfterDeath() {
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
+            return;
+        }
+
+        ZombieCyberNpcEntity zombie = ModEntities.ZOMBIE_CYBER_NPC.get().create(serverLevel);
+        if (zombie == null) {
+            return;
+        }
+
+        zombie.moveTo(getX(), getY(), getZ(), getYRot(), getXRot());
+        zombie.finalizeSpawn(
+                serverLevel,
+                serverLevel.getCurrentDifficultyAt(blockPosition()),
+                MobSpawnType.CONVERSION,
+                null,
+                null
+        );
+
+        if (getCustomName() != null) {
+            zombie.setCustomName(getCustomName().copy());
+            zombie.setCustomNameVisible(isCustomNameVisible());
+        }
+
+        zombie.setPersistenceRequired();
+        serverLevel.addFreshEntity(zombie);
+    }
+
+    private void dropOwnedStack(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return;
+        }
+
+        spawnAtLocation(stack.copy());
+    }
+
+    @Override
+    protected void dropEquipment() {
+        // Wild NPC inventory is represented by the stored weapon/food stacks.
+        // Drop every one of those stacks at 100%, then drop any actual equipped
+        // items as well. The held weapon is stowed before death so it cannot
+        // duplicate its stored copy.
+        dropOwnedStack(storedSword);
+        dropOwnedStack(storedRangedWeapon);
+        dropOwnedStack(carriedRawFood);
+        dropOwnedStack(carriedReadyFood);
+        dropOwnedStack(foodToEat);
+
+        storedSword = ItemStack.EMPTY;
+        storedRangedWeapon = ItemStack.EMPTY;
+        carriedRawFood = ItemStack.EMPTY;
+        carriedReadyFood = ItemStack.EMPTY;
+        foodToEat = ItemStack.EMPTY;
+
+        for (EquipmentSlot slot : EquipmentSlot.values()) {
+            ItemStack equipped = getItemBySlot(slot);
+            if (!equipped.isEmpty()) {
+                dropOwnedStack(equipped);
+                setItemSlot(slot, ItemStack.EMPTY);
+            }
+        }
+    }
+
     public void releasePersistentClaims() {
         if (level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
             CyberNpcWorldClaims.get(serverLevel).releaseOwner(getUUID());
@@ -2142,16 +2574,30 @@ public class CyberNpcEntity extends PathfinderMob {
 
     @Override
     public void die(DamageSource source) {
+        boolean convertFromZombieKill = !level().isClientSide
+                && source.getEntity() instanceof Zombie
+                && getRandom().nextFloat() < ZOMBIE_KILL_CONVERSION_CHANCE;
+
         if (!level().isClientSide) {
             corralBrain.interrupt();
             sleepBrain.wakeUp();
             fleeingThreat = null;
+            suspiciousNpc = null;
+            emergencyEating = false;
+            clearUtilityItem();
+            stowWeapons();
             setSprinting(false);
             setShiftKeyDown(false);
             releasePersistentClaims();
         }
 
         super.die(source);
+
+        if (convertFromZombieKill && !zombieConversionStarted) {
+            zombieConversionStarted = true;
+            spawnZombieNpcAfterDeath();
+            discard();
+        }
     }
 
     @Override
@@ -2313,6 +2759,11 @@ public class CyberNpcEntity extends PathfinderMob {
         cookingSearchCooldown = 0;
         eatingTicks = 0;
         utilityItemActive = false;
+        emergencyEating = false;
+        zombieConversionStarted = false;
+        suspiciousNpc = null;
+        infectionSuspicionCooldown = 0;
+        infectionAvoidTicks = 0;
         groundFoodTargetId = null;
         groundFoodSearchCooldown = 0;
         foodChestTarget = null;

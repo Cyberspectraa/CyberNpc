@@ -1,6 +1,7 @@
 package com.cyberspectraa.cybernpc;
 
 import com.cyberspectraa.cybernpc.command.CyberNpcCommands;
+import com.cyberspectraa.cybernpc.registry.ModEffects;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.cyberspectraa.cybernpc.registry.ModItems;
 import net.minecraftforge.common.MinecraftForge;
@@ -16,6 +17,7 @@ public final class CyberNpc {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
         ModEntities.ENTITY_TYPES.register(modEventBus);
+        ModEffects.MOB_EFFECTS.register(modEventBus);
         ModItems.ITEMS.register(modEventBus);
 
         MinecraftForge.EVENT_BUS.addListener(CyberNpcCommands::register);

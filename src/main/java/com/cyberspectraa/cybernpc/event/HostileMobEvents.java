@@ -2,6 +2,7 @@ package com.cyberspectraa.cybernpc.event;
 
 import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
+import com.cyberspectraa.cybernpc.registry.ModEffects;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -33,6 +34,13 @@ public final class HostileMobEvents {
         }
 
         LivingEntity current = mob.getTarget();
+
+        if (current instanceof CyberNpcEntity infected
+                && infected.hasEffect(ModEffects.ZOMBIFICATION.get())) {
+            mob.setTarget(null);
+            current = null;
+        }
+
         if (current != null && current.isAlive()) {
             return;
         }
@@ -57,7 +65,9 @@ public final class HostileMobEvents {
         List<CyberNpcEntity> candidates = mob.level().getEntitiesOfClass(
                 CyberNpcEntity.class,
                 search,
-                npc -> npc.isAlive() && !npc.isSpectator()
+                npc -> npc.isAlive()
+                        && !npc.isSpectator()
+                        && !npc.hasEffect(ModEffects.ZOMBIFICATION.get())
         );
 
         CyberNpcEntity nearest = candidates.stream()
@@ -76,7 +86,9 @@ public final class HostileMobEvents {
         return enderman.level().getEntitiesOfClass(
                         CyberNpcEntity.class,
                         search,
-                        npc -> npc.isAlive() && !npc.isSleeping()
+                        npc -> npc.isAlive()
+                                && !npc.isSleeping()
+                                && !npc.hasEffect(ModEffects.ZOMBIFICATION.get())
                 ).stream()
                 .filter(npc -> isLookingAt(npc, enderman))
                 .min(Comparator.comparingDouble(enderman::distanceToSqr))

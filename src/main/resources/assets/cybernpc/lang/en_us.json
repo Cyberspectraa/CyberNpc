@@ -1,5 +1,7 @@
 {
   "entity.cybernpc.cyber_npc": "Cyber NPC",
+  "entity.cybernpc.zombie_cyber_npc": "Zombie NPC",
+  "effect.cybernpc.zombification": "Zombification",
   "item.cybernpc.main_npc_spawn_egg": "Main NPC Spawn Egg",
   "item.cybernpc.quest_npc_spawn_egg": "Quest NPC Spawn Egg",
   "item.cybernpc.wild_npc_spawn_egg": "Wild NPC Spawn Egg",

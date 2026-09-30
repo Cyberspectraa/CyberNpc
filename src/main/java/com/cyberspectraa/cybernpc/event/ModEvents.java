@@ -5,6 +5,7 @@ import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.cyberspectraa.cybernpc.registry.ModItems;
 import net.minecraft.world.entity.SpawnPlacements;
+import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
@@ -18,6 +19,7 @@ public final class ModEvents {
     @SubscribeEvent
     public static void registerAttributes(EntityAttributeCreationEvent event) {
         event.put(ModEntities.CYBER_NPC.get(), CyberNpcEntity.createAttributes().build());
+        event.put(ModEntities.ZOMBIE_CYBER_NPC.get(), Zombie.createAttributes().build());
     }
 
     @SubscribeEvent

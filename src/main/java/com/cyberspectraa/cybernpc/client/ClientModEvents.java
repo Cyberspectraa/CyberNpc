@@ -2,6 +2,7 @@ package com.cyberspectraa.cybernpc.client;
 
 import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.client.render.CyberNpcRenderer;
+import com.cyberspectraa.cybernpc.client.render.ZombieCyberNpcRenderer;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
@@ -13,6 +14,7 @@ public final class ClientModEvents {
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ModEntities.CYBER_NPC.get(), CyberNpcRenderer::new);
+        event.registerEntityRenderer(ModEntities.ZOMBIE_CYBER_NPC.get(), ZombieCyberNpcRenderer::new);
     }
 
     private ClientModEvents() {
