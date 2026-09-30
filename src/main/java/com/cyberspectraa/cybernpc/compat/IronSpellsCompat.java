@@ -77,6 +77,7 @@ public final class IronSpellsCompat {
             Map.entry(MOD_ID + ":guiding_bolt", SpellTactics.longRange()),
             Map.entry(MOD_ID + ":divine_smite", new SpellTactics(0.0D, 1.7D, 2.6D, SpellRole.CLOSE, true)),
             Map.entry(MOD_ID + ":heal", new SpellTactics(0.0D, 0.0D, 64.0D, SpellRole.HEAL, false)),
+            Map.entry(MOD_ID + ":healing_circle", new SpellTactics(0.0D, 12.0D, 32.0D, SpellRole.SUPPORT, true)),
             Map.entry(MOD_ID + ":wisp", new SpellTactics(5.0D, 20.0D, 48.0D, SpellRole.RANGED, true)),
 
             // Ender
@@ -294,6 +295,51 @@ public final class IronSpellsCompat {
         }
     }
 
+
+    public static ItemStack createClericSpellBook(
+            WildNpcGearTier gearTier,
+            RandomSource random
+    ) {
+        List<String> clericSpells = List.of(
+                "guiding_bolt",
+                "healing_circle",
+                "heal"
+        );
+
+        // Standard Clerics still need both offense and ally support. Retry the
+        // randomized book a few times, then fall back to the guaranteed pair.
+        for (int attempt = 0; attempt < 8; attempt++) {
+            ItemStack book = createMageSpellBook(
+                    "villager_spell_book",
+                    clericSpells,
+                    gearTier,
+                    random
+            );
+            if (!book.isEmpty()
+                    && containsSpell(book, MOD_ID + ":guiding_bolt")
+                    && containsSpell(book, MOD_ID + ":healing_circle")) {
+                return book;
+            }
+        }
+
+        return createMageSpellBook(
+                "villager_spell_book",
+                List.of("guiding_bolt", "healing_circle"),
+                gearTier,
+                random
+        );
+    }
+
+    private static boolean containsSpell(ItemStack spellBook, String spellId) {
+        String normalized = normalizeSpellId(spellId);
+        for (SpellEntry entry : getBookSpells(spellBook)) {
+            if (normalizeSpellId(entry.spellId()).equals(normalized)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Converts the NPC's populated combat spellbook into the normal empty
      * Iron's spellbook that a player should receive as loot.
@@ -453,6 +499,59 @@ public final class IronSpellsCompat {
             LivingEntity target,
             ItemStack spellBook
     ) {
+        return tickSpell(caster, target, spellBook, false);
+    }
+
+    public static CastResult tickSupportSpell(
+            CyberNpcEntity caster,
+            LivingEntity target,
+            ItemStack spellBook
+    ) {
+        return tickSpell(caster, target, spellBook, true);
+    }
+
+    public static boolean isActiveSupportCast(CyberNpcEntity caster) {
+        ActiveCast active = ACTIVE_CASTS.get(caster.getUUID());
+        return active != null
+                && tacticsFor(active.spellId).role == SpellRole.SUPPORT;
+    }
+
+    public static boolean hasReadyAttackSpell(
+            CyberNpcEntity caster,
+            ItemStack spellBook
+    ) {
+        for (SpellEntry entry : getBookSpells(spellBook)) {
+            SpellRole role = tacticsFor(entry.spellId()).role;
+            if (role != SpellRole.SUPPORT
+                    && !isExplicitlyUnsafeMobSpell(entry.spellId())
+                    && isSupportedCombatSpell(entry.spellId())
+                    && isSpellReady(caster, entry.spellId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean hasReadySupportSpell(
+            CyberNpcEntity caster,
+            ItemStack spellBook
+    ) {
+        for (SpellEntry entry : getBookSpells(spellBook)) {
+            if (tacticsFor(entry.spellId()).role == SpellRole.SUPPORT
+                    && isSupportedCombatSpell(entry.spellId())
+                    && isSpellReady(caster, entry.spellId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static CastResult tickSpell(
+            CyberNpcEntity caster,
+            LivingEntity target,
+            ItemStack spellBook,
+            boolean supportOnly
+    ) {
         if (!isLoaded()
                 || caster.level().isClientSide
                 || !initialize()
@@ -568,12 +667,18 @@ public final class IronSpellsCompat {
             }
 
             SpellTactics tactics = tacticsFor(entry.spellId());
+
+            if (supportOnly != (tactics.role == SpellRole.SUPPORT)) {
+                continue;
+            }
+
             double distance = caster.distanceTo(target);
             if (!canUseAtCurrentDistance(caster, tactics, distance)) {
                 continue;
             }
 
-            if ((tactics.role == SpellRole.RANGED
+            if (!supportOnly
+                    && (tactics.role == SpellRole.RANGED
                     || tactics.role == SpellRole.CONTROL)
                     && !caster.hasClearFriendlyFireLane(target)) {
                 continue;
@@ -751,7 +856,8 @@ public final class IronSpellsCompat {
             }
 
             SpellTactics tactics = tacticsFor(entry.spellId());
-            if (!isRoleUseful(caster, tactics, distance)) {
+            if (tactics.role == SpellRole.SUPPORT
+                    || !isRoleUseful(caster, tactics, distance)) {
                 continue;
             }
 
@@ -786,6 +892,15 @@ public final class IronSpellsCompat {
                 return -250.0D;
             }
             return 180.0D + (1.0D - healthFraction) * 180.0D;
+        }
+
+        if (tactics.role == SpellRole.SUPPORT) {
+            double targetHealthFraction = target.getMaxHealth() <= 0.0F
+                    ? 1.0D
+                    : target.getHealth() / target.getMaxHealth();
+            return 220.0D
+                    + (1.0D - targetHealthFraction) * 220.0D
+                    - Math.abs(distance - tactics.preferredRange) * 2.0D;
         }
 
         if (tactics.role == SpellRole.DEFENSE) {
@@ -834,6 +949,10 @@ public final class IronSpellsCompat {
             return true;
         }
 
+        if (tactics.role == SpellRole.SUPPORT) {
+            return distance >= tactics.minRange && distance <= tactics.maxRange;
+        }
+
         return distance >= tactics.minRange && distance <= tactics.maxRange;
     }
 
@@ -854,6 +973,10 @@ public final class IronSpellsCompat {
             return healthFraction < 0.62D || distance < 7.0D;
         }
 
+        if (tactics.role == SpellRole.SUPPORT) {
+            return false;
+        }
+
         return true;
     }
 
@@ -867,7 +990,8 @@ public final class IronSpellsCompat {
             case CLOSE -> "Close attack";
             case RANGED -> "Ranged attack";
             case CONTROL -> "Control";
-            case HEAL -> "Heal";
+            case HEAL -> "Self heal";
+            case SUPPORT -> "Ally support";
             case DEFENSE -> "Defense";
         };
     }
@@ -1231,6 +1355,7 @@ public final class IronSpellsCompat {
         RANGED,
         CONTROL,
         HEAL,
+        SUPPORT,
         DEFENSE
     }
 
