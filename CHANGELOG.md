@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.25.0
+
+- Removed the text/icon drop shadow from Wild NPC reaction bubbles for a cleaner Minecraft-style look.
+- Added a shared speech-bubble renderer so NPC reaction bubbles and player chat bubbles use the same stable white, dark-bordered pixel bubble geometry.
+- Added player speech bubbles for normal player chat messages.
+- When a player sends a chat message, clients show that message above the speaking player's character while the normal chat window remains unchanged.
+- Player bubbles show message text only; the player's name is not repeated inside the bubble because the bubble is attached to their character.
+- Player speech bubbles wrap long messages automatically and are bounded to a maximum of four visible lines.
+- Very long chat remains complete in the normal chat window while the world-space bubble stays a manageable size.
+- New messages replace a player's older active speech bubble rather than stacking multiple bubbles.
+- Bubble lifetime scales with message length, from roughly 3.5 seconds up to 9 seconds.
+- Player speech text has no drop shadow.
+- Player chat bubbles use the same true-white fill, dark pixel border, stepped corners and speech tail as NPC bubbles.
+- Player speech bubbles render only within 32 blocks.
+- Invisible players do not render speech bubbles, preventing the bubble from revealing an invisible player's position.
+- Player chat filtering is respected before text is shown in a world-space bubble.
+- Player speech-bubble state is client-side and is cleared when leaving the server/world, so old messages cannot carry into another session.
+- Wild NPCs remain icon-only and never use player-style text dialogue.
+
+
 ## 0.24.1
 
 - Fixed reaction bubbles still appearing black in 0.24.0.
