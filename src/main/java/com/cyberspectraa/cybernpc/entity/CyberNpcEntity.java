@@ -5107,15 +5107,19 @@ public class CyberNpcEntity extends PathfinderMob {
             }
 
             if (IronSpellsCompat.hasActiveCast(npc)) {
-                if (IronSpellsCompat.isActiveSupportCast(npc)
-                        && clericSupportTarget != null
-                        && clericSupportTarget.isAlive()) {
-                    tickClericSupport(spellBook, clericSupportTarget);
+                if (IronSpellsCompat.isActiveSupportCast(npc)) {
+                    if (clericSupportTarget != null
+                            && clericSupportTarget.isAlive()) {
+                        tickClericSupport(spellBook, clericSupportTarget);
+                        return;
+                    }
+
+                    npc.cancelMageCast();
+                    clericSupportTarget = null;
+                } else {
+                    tickMage(enemy, enemyDistanceSqr, enemyLineOfSight);
                     return;
                 }
-
-                tickMage(enemy, enemyDistanceSqr, enemyLineOfSight);
-                return;
             }
 
             if (IronSpellsCompat.hasReadySupportSpell(npc, spellBook)) {
