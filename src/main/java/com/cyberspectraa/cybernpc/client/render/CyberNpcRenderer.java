@@ -22,11 +22,16 @@ import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.phys.Vec3;
 
 public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpcPlayerModel> {
-    private static final ResourceLocation DEFAULT_STEVE_TEXTURE =
-            new ResourceLocation("minecraft", "textures/entity/player/wide/steve.png");
+    private final CyberNpcPlayerModel wideModel;
+    private final CyberNpcPlayerModel slimModel;
 
     public CyberNpcRenderer(EntityRendererProvider.Context context) {
         super(context, new CyberNpcPlayerModel(context.bakeLayer(ModelLayers.PLAYER), false), 0.5F);
+        this.wideModel = getModel();
+        this.slimModel = new CyberNpcPlayerModel(
+                context.bakeLayer(ModelLayers.PLAYER_SLIM),
+                true
+        );
         addLayer(new HumanoidArmorLayer<>(
                 this,
                 new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
@@ -45,6 +50,7 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
             MultiBufferSource buffer,
             int packedLight
     ) {
+        this.model = entity.isSlimModel() ? slimModel : wideModel;
         setPlayerModelProperties(entity);
         super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
     }
@@ -199,6 +205,6 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
 
     @Override
     public ResourceLocation getTextureLocation(CyberNpcEntity entity) {
-        return DEFAULT_STEVE_TEXTURE;
+        return CyberNpcSkinCache.getNpcTexture(entity);
     }
 }
