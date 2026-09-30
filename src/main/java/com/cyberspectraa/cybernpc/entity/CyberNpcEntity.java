@@ -113,6 +113,8 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final int GROUND_FOOD_SEARCH_INTERVAL = 20;
     private static final int HUNT_TARGET_RECHECK_INTERVAL = 20;
     private static final int THREAT_SCAN_INTERVAL = 4;
+    private static final int COMBAT_TARGET_REFRESH_INTERVAL = 5;
+    private static final double COMBAT_TARGET_SWITCH_ADVANTAGE_SQR = 1.0D;
     private static final int FLEE_SAFE_TICKS = 60;
     private static final double THREAT_SCAN_RADIUS = 20.0D;
     private static final double FLEE_RELEASE_DISTANCE = 30.0D;
@@ -2677,9 +2679,22 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
-        if (target instanceof Player player && (player.isCreative() || player.isSpectator())) {
+        if (target instanceof Player player
+                && (player.isCreative() || player.isSpectator())) {
             calmWildNpc();
             return;
+        }
+
+        if (tickCount % COMBAT_TARGET_REFRESH_INTERVAL == 0) {
+            LivingEntity closer = huntingTarget
+                    ? findClosestHuntTarget(target)
+                    : findClosestActiveThreat(target);
+
+            if (closer != null && closer != target) {
+                setTarget(closer);
+                target = closer;
+                outOfRangeTicks = 0;
+            }
         }
 
         if (huntingTarget) {
@@ -2834,35 +2849,94 @@ public class CyberNpcEntity extends PathfinderMob {
                 && prey.getMaxHealth() <= maximumPreyHealth;
     }
 
-    private LivingEntity maybeSwitchHuntTarget(LivingEntity current) {
+    private LivingEntity maybeSwitchHuntTarget(
+            LivingEntity current
+    ) {
         if (huntTargetRecheckCooldown > 0) {
             huntTargetRecheckCooldown--;
             return current;
         }
 
-        huntTargetRecheckCooldown = HUNT_TARGET_RECHECK_INTERVAL;
+        huntTargetRecheckCooldown =
+                HUNT_TARGET_RECHECK_INTERVAL;
 
-        AABB nearby = current.getBoundingBox().inflate(12.0D, 5.0D, 12.0D);
-        List<LivingEntity> alternatives = level().getEntitiesOfClass(
-                LivingEntity.class,
-                nearby,
-                candidate -> candidate.getType() == current.getType()
-                        && canHuntPrey(candidate)
-        );
+        LivingEntity closest = findClosestHuntTarget(current);
+        if (closest != null && closest != current) {
+            setTarget(closest);
+            return closest;
+        }
 
-        LivingEntity best = alternatives.stream()
+        return current;
+    }
+
+    @Nullable
+    private LivingEntity findClosestHuntTarget(
+            LivingEntity current
+    ) {
+        LivingEntity closest = level().getEntitiesOfClass(
+                        LivingEntity.class,
+                        getBoundingBox().inflate(HUNT_RADIUS),
+                        this::canHuntPrey
+                ).stream()
+                .filter(candidate ->
+                        distanceToSqr(candidate) <= 9.0D
+                                || getSensing().hasLineOfSight(candidate)
+                )
                 .min(Comparator.comparingDouble(this::distanceToSqr))
-                .orElse(current);
+                .orElse(null);
 
-        if (best != current) {
-            double currentDistance = distanceToSqr(current);
-            double bestDistance = distanceToSqr(best);
-            boolean currentBlocked = !getSensing().hasLineOfSight(current);
+        if (closest == null) {
+            return current;
+        }
 
-            if (currentBlocked || bestDistance + 9.0D < currentDistance) {
-                setTarget(best);
-                return best;
-            }
+        if (current == null
+                || !current.isAlive()
+                || !canHuntPrey(current)
+                || !getSensing().hasLineOfSight(current)
+                || distanceToSqr(closest)
+                + COMBAT_TARGET_SWITCH_ADVANTAGE_SQR
+                < distanceToSqr(current)) {
+            return closest;
+        }
+
+        return current;
+    }
+
+    @Nullable
+    private LivingEntity findClosestActiveThreat(
+            LivingEntity current
+    ) {
+        LivingEntity closestHostile = level()
+                .getEntitiesOfClass(
+                        Mob.class,
+                        getBoundingBox().inflate(
+                                THREAT_SCAN_RADIUS,
+                                10.0D,
+                                THREAT_SCAN_RADIUS
+                        ),
+                        mob -> mob != this
+                                && mob.isAlive()
+                                && mob instanceof Enemy
+                                && mob.getTarget() == this
+                ).stream()
+                .filter(mob ->
+                        distanceToSqr(mob) <= 9.0D
+                                || getSensing().hasLineOfSight(mob)
+                )
+                .min(Comparator.comparingDouble(this::distanceToSqr))
+                .orElse(null);
+
+        if (closestHostile == null) {
+            return current;
+        }
+
+        if (current == null
+                || !current.isAlive()
+                || !getSensing().hasLineOfSight(current)
+                || distanceToSqr(closestHostile)
+                + COMBAT_TARGET_SWITCH_ADVANTAGE_SQR
+                < distanceToSqr(current)) {
+            return closestHostile;
         }
 
         return current;
