@@ -17,6 +17,10 @@ final class NpcSocialMemory {
     static final int MAX_RELATIONSHIPS = 48;
     static final int MAX_PLAYER_REPUTATIONS = 32;
 
+    private static final int FRIENDSHIP_THRESHOLD = 28;
+    private static final int FRIEND_TRUST_THRESHOLD = 22;
+    private static final int FRIEND_RIVALRY_LIMIT = 12;
+
     private final Map<UUID, Relationship> relationships = new LinkedHashMap<>();
     private final Map<UUID, Integer> playerReputation = new LinkedHashMap<>();
 
@@ -50,12 +54,86 @@ final class NpcSocialMemory {
         relation.respect = clampTrait(relation.respect + respect);
         relation.fear = clampTrait(relation.fear + fear);
         relation.rivalry = clampTrait(relation.rivalry + rivalry);
+
+        if (relation.friend) {
+            // Friendship is a persistent social milestone. Friends can still
+            // become annoyed or afraid, but they do not silently stop being
+            // friends because an unrelated value changed later.
+            relation.friendship = Math.max(
+                    relation.friendship,
+                    FRIENDSHIP_THRESHOLD
+            );
+            relation.trust = Math.max(
+                    relation.trust,
+                    FRIEND_TRUST_THRESHOLD
+            );
+        }
+    }
+
+    boolean canBecomeFriends(UUID target) {
+        Relationship relationship = relationships.get(target);
+        return relationship != null
+                && !relationship.friend
+                && relationship.friendship >= FRIENDSHIP_THRESHOLD
+                && relationship.trust >= FRIEND_TRUST_THRESHOLD
+                && relationship.rivalry <= FRIEND_RIVALRY_LIMIT;
+    }
+
+    boolean markFriends(UUID target) {
+        if (target == null) {
+            return false;
+        }
+
+        Relationship relationship = relationships.get(target);
+        if (relationship == null) {
+            makeRelationshipSpace();
+            relationship = new Relationship();
+            relationships.put(target, relationship);
+        }
+
+        boolean newlyFriends = !relationship.friend;
+        relationship.friend = true;
+        relationship.friendship = Math.max(
+                relationship.friendship,
+                FRIENDSHIP_THRESHOLD
+        );
+        relationship.trust = Math.max(
+                relationship.trust,
+                FRIEND_TRUST_THRESHOLD
+        );
+        relationship.rivalry = Math.min(
+                relationship.rivalry,
+                FRIEND_RIVALRY_LIMIT
+        );
+        return newlyFriends;
+    }
+
+    void seedFriendship(
+            UUID target,
+            int friendship,
+            int trust,
+            int respect
+    ) {
+        adjustRelationship(
+                target,
+                Math.max(friendship, FRIENDSHIP_THRESHOLD),
+                Math.max(trust, FRIEND_TRUST_THRESHOLD),
+                Math.max(0, respect),
+                0,
+                0
+        );
+        markFriends(target);
+    }
+
+    boolean isFriend(UUID target) {
+        Relationship relationship = relationships.get(target);
+        return relationship != null && relationship.friend;
     }
 
     RelationshipSnapshot relationship(UUID target) {
         Relationship relation = relationships.get(target);
         if (relation == null) {
-            return new RelationshipSnapshot(0, 0, 0, 0, 0);
+            return new RelationshipSnapshot(0, 0, 0, 0, 0, false);
         }
 
         return relation.snapshot();
@@ -69,7 +147,8 @@ final class NpcSocialMemory {
                         + relation.trust() * 0.35D
                         + relation.respect() * 0.25D
                         - relation.fear() * 0.15D
-                        - relation.rivalry() * 0.35D;
+                        - relation.rivalry() * 0.35D
+                        + (relation.friend() ? 12.0D : 0.0D);
 
         return Mth.clamp((int) Math.round(score), -100, 100);
     }
@@ -161,6 +240,7 @@ final class NpcSocialMemory {
             entry.putInt("Respect", relationship.respect);
             entry.putInt("Fear", relationship.fear);
             entry.putInt("Rivalry", relationship.rivalry);
+            entry.putBoolean("Friend", relationship.friend);
             relationshipList.add(entry);
         }
         tag.put("CyberNpcRelationships", relationshipList);
@@ -205,6 +285,19 @@ final class NpcSocialMemory {
             relationship.respect = clampTrait(entry.getInt("Respect"));
             relationship.fear = clampTrait(entry.getInt("Fear"));
             relationship.rivalry = clampTrait(entry.getInt("Rivalry"));
+            relationship.friend = entry.getBoolean("Friend");
+
+            if (relationship.friend) {
+                relationship.friendship = Math.max(
+                        relationship.friendship,
+                        FRIENDSHIP_THRESHOLD
+                );
+                relationship.trust = Math.max(
+                        relationship.trust,
+                        FRIEND_TRUST_THRESHOLD
+                );
+            }
+
             relationships.put(entry.getUUID("Target"), relationship);
         }
 
@@ -275,7 +368,8 @@ final class NpcSocialMemory {
                 + relationship.trust()
                 + relationship.respect()
                 + relationship.fear()
-                + relationship.rivalry();
+                + relationship.rivalry()
+                + (relationship.friend() ? 100 : 0);
     }
 
     private static int clampTrait(int value) {
@@ -288,6 +382,7 @@ final class NpcSocialMemory {
         private int respect;
         private int fear;
         private int rivalry;
+        private boolean friend;
 
         private RelationshipSnapshot snapshot() {
             return new RelationshipSnapshot(
@@ -295,7 +390,8 @@ final class NpcSocialMemory {
                     trust,
                     respect,
                     fear,
-                    rivalry
+                    rivalry,
+                    friend
             );
         }
     }
@@ -305,7 +401,8 @@ final class NpcSocialMemory {
             int trust,
             int respect,
             int fear,
-            int rivalry
+            int rivalry,
+            boolean friend
     ) {
     }
 
