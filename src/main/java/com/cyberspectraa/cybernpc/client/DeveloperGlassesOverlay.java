@@ -146,7 +146,7 @@ public final class DeveloperGlassesOverlay {
                 ));
                 lines.add(new DebugLine(
                         "Gear: " + npc.getGearTierDisplayName()
-                                + (npc.getWildClass() == WildNpcClass.MAGE
+                                + (npc.getWildClass().hasMagicSchool()
                                 ? "    School: " + npc.getMageSchoolDisplayName()
                                 : ""),
                         0xD7E8FF
@@ -175,7 +175,7 @@ public final class DeveloperGlassesOverlay {
                 lines.add(new DebugLine("Personality: " + npc.getPersonalityDisplayName(), 0xDADADA));
                 lines.add(new DebugLine(
                         "Gear: " + npc.getGearTierDisplayName()
-                                + (npc.getWildClass() == WildNpcClass.MAGE
+                                + (npc.getWildClass().hasMagicSchool()
                                 ? "    School: " + npc.getMageSchoolDisplayName()
                                 : ""),
                         0xD7E8FF
@@ -196,8 +196,8 @@ public final class DeveloperGlassesOverlay {
                 ));
             }
             case SPELLS -> {
-                if (npc.getWildClass() != WildNpcClass.MAGE) {
-                    lines.add(new DebugLine("This NPC is not a Mage.", 0x8F8F8F));
+                if (!npc.getWildClass().usesSpellBook()) {
+                    lines.add(new DebugLine("This NPC has no spellbook.", 0x8F8F8F));
                 } else {
                     lines.add(new DebugLine(
                             "School: " + npc.getMageSchoolDisplayName(),
@@ -229,7 +229,7 @@ public final class DeveloperGlassesOverlay {
                         "Class: " + npc.getWildClass().serializedName()
                                 + " | personality:" + npc.getPersonality().serializedName()
                                 + " | gear:" + npc.getGearTier().serializedName()
-                                + (npc.getWildClass() == WildNpcClass.MAGE
+                                + (npc.getWildClass().hasMagicSchool()
                                 ? " | school:" + npc.getMageSchool().serializedName()
                                 : ""),
                         0x8F8F8F
@@ -265,7 +265,10 @@ public final class DeveloperGlassesOverlay {
             case ARCHER -> "Ranged control / kiting";
             case KNIGHT -> "Armored committed melee";
             case ROGUE -> "Fast flanking melee";
+            case BERSERKER -> "Heavy axe pressure / low-health rage";
             case MAGE -> "Iron's Spells caster / distance control";
+            case CLERIC -> "Holy support / healing + ranged pressure";
+            case SPELLBLADE -> "Sword + spell hybrid";
             default -> "Mixed sword + ranged";
         };
     }
@@ -275,7 +278,10 @@ public final class DeveloperGlassesOverlay {
             case ARCHER -> 0x7FD67F;
             case KNIGHT -> 0x8DB9FF;
             case ROGUE -> 0xD39BFF;
+            case BERSERKER -> 0xFF7A6E;
             case MAGE -> 0xFF8EF3;
+            case CLERIC -> 0xFFF0A6;
+            case SPELLBLADE -> 0x9FD8FF;
             default -> 0xDADADA;
         };
     }
