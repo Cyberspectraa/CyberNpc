@@ -2,6 +2,7 @@ package com.cyberspectraa.cybernpc.client;
 
 import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
+import com.cyberspectraa.cybernpc.entity.NpcAppearance;
 import com.cyberspectraa.cybernpc.entity.WildNpcClass;
 import com.cyberspectraa.cybernpc.registry.ModItems;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -165,6 +166,38 @@ public final class DeveloperGlassesOverlay {
                                 ? String.format("Zombification: %.0f%%", npc.getZombificationProgress() * 100.0F)
                                 : "Zombification: none",
                         npc.isZombifying() ? 0x7FCB65 : 0xB8B8B8
+                ));
+            }
+            case APPEARANCE -> {
+                lines.add(new DebugLine(
+                        "Gender: " + npc.getAppearanceGender().displayName()
+                                + "    Model: "
+                                + (npc.isSlimModel() ? "Slim / Alex" : "Classic / Steve"),
+                        0xF5D7FF
+                ));
+                lines.add(new DebugLine(
+                        "Skin tone: " + npc.getSkinToneDisplayName(),
+                        0xFFD7C2
+                ));
+                lines.add(new DebugLine(
+                        "Eyes: " + npc.getEyeStyleDisplayName(),
+                        0xBFE8FF
+                ));
+                lines.add(new DebugLine(
+                        "Hair: " + npc.getHairStyleDisplayName(),
+                        0xE1BC88
+                ));
+                lines.add(new DebugLine(
+                        "Hair colour: " + NpcAppearance.hairColorDisplayName(),
+                        0xE1BC88
+                ));
+                lines.add(new DebugLine(
+                        "Appearance ID: "
+                                + npc.getAppearanceGender().serializedName()
+                                + "-" + npc.getSkinToneIndex()
+                                + "-" + npc.getEyeStyleIndex()
+                                + "-" + npc.getHairStyleIndex(),
+                        0x8F8F8F
                 ));
             }
             case COMBAT -> {
@@ -338,6 +371,7 @@ public final class DeveloperGlassesOverlay {
 
     private enum Tab {
         OVERVIEW("Overview"),
+        APPEARANCE("Appearance"),
         COMBAT("Combat"),
         SPELLS("Spells"),
         SURVIVAL("Survival"),
