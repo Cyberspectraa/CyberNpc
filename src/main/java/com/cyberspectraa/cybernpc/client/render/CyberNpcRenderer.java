@@ -158,14 +158,15 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
                 packedLight
         );
 
-        // Bright inner panel, inset by two pixels from the outline.
+        // Bright inner panel. These strips touch at the edges but never
+        // overlap, which avoids depth flicker at oblique camera angles.
         drawBubbleRect(
                 background,
                 bubblePose,
                 -halfWidth + 4.0F,
                 -9.0F,
                 halfWidth - 4.0F,
-                9.0F,
+                -6.0F,
                 0.02F,
                 fill,
                 packedLight
@@ -177,6 +178,17 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
                 -6.0F,
                 halfWidth - 2.0F,
                 6.0F,
+                0.02F,
+                fill,
+                packedLight
+        );
+        drawBubbleRect(
+                background,
+                bubblePose,
+                -halfWidth + 4.0F,
+                6.0F,
+                halfWidth - 4.0F,
+                9.0F,
                 0.02F,
                 fill,
                 packedLight
@@ -196,12 +208,13 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
                 packedLight
         );
 
-        // Fill the inside of the stepped speech tail.
+        // Fill the inside of the stepped speech tail without overlapping the
+        // lower body strip.
         drawBubbleRect(
                 background,
                 bubblePose,
                 -1.0F,
-                8.0F,
+                9.0F,
                 4.0F,
                 12.0F,
                 0.02F,
@@ -212,7 +225,7 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
                 background,
                 bubblePose,
                 1.0F,
-                11.0F,
+                12.0F,
                 4.0F,
                 14.0F,
                 0.02F,
