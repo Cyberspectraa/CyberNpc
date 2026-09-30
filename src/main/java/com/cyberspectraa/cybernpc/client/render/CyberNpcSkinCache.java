@@ -34,6 +34,13 @@ public final class CyberNpcSkinCache {
 
     private static final Map<String, ResourceLocation> CACHE = new HashMap<>();
     private static Map<String, byte[]> packedAssets;
+    private static Boolean justExpressionsPresent;
+
+    private enum ZombieExpression {
+        NORMAL,
+        BLINK,
+        FOCUSED
+    }
 
     private CyberNpcSkinCache() {
     }
@@ -44,7 +51,8 @@ public final class CyberNpcSkinCache {
                 entity.getAppearanceGender(),
                 entity.getSkinToneIndex(),
                 entity.getEyeStyleIndex(),
-                entity.getHairStyleIndex()
+                entity.getHairStyleIndex(),
+                ZombieExpression.NORMAL
         );
     }
 
@@ -54,7 +62,8 @@ public final class CyberNpcSkinCache {
                 entity.getAppearanceGender(),
                 entity.getSkinToneIndex(),
                 entity.getEyeStyleIndex(),
-                entity.getHairStyleIndex()
+                entity.getHairStyleIndex(),
+                getZombieExpression(entity)
         );
     }
 
@@ -63,7 +72,8 @@ public final class CyberNpcSkinCache {
             NpcAppearance.Gender gender,
             int skinTone,
             int eyeStyle,
-            int hairStyle
+            int hairStyle,
+            ZombieExpression expression
     ) {
         int tone = NpcAppearance.sanitizeSkinTone(skinTone);
         int eyes = NpcAppearance.sanitizeEyeStyle(eyeStyle);
@@ -73,7 +83,8 @@ public final class CyberNpcSkinCache {
                 + gender.serializedName()
                 + "_" + tone
                 + "_" + eyes
-                + "_" + hair;
+                + "_" + hair
+                + (zombie ? "_" + expression.name().toLowerCase() : "");
 
         ResourceLocation existing = CACHE.get(key);
         if (existing != null) {
@@ -108,6 +119,15 @@ public final class CyberNpcSkinCache {
                 blend(composed, hairLayer);
             }
 
+            if (zombie
+                    && expression != ZombieExpression.NORMAL) {
+                applyZombieExpression(
+                        composed,
+                        eyes,
+                        expression
+                );
+            }
+
             // Starlight/Lunar exports may contain editor marker pixels in the
             // unused 8x8 corner at the top-left of a 64x64 skin. Minecraft
             // should never need that region for the player model, so sanitize
@@ -127,6 +147,106 @@ public final class CyberNpcSkinCache {
             return generated;
         } catch (IOException | RuntimeException exception) {
             return fallback(zombie, gender);
+        }
+    }
+
+    private static ZombieExpression getZombieExpression(
+            ZombieCyberNpcEntity entity
+    ) {
+        if (!hasJustExpressionsResources()) {
+            return ZombieExpression.NORMAL;
+        }
+
+        int offset = Math.floorMod(entity.getId() * 31, 97);
+        int phase = Math.floorMod(
+                entity.tickCount + offset,
+                97
+        );
+
+        if (phase < 4) {
+            return ZombieExpression.BLINK;
+        }
+
+        if (entity.hurtTime > 0
+                || entity.getTarget() != null) {
+            return ZombieExpression.FOCUSED;
+        }
+
+        return ZombieExpression.NORMAL;
+    }
+
+    private static boolean hasJustExpressionsResources() {
+        if (justExpressionsPresent != null) {
+            return justExpressionsPresent;
+        }
+
+        var manager = Minecraft.getInstance()
+                .getResourceManager();
+
+        justExpressionsPresent =
+                manager.getResource(
+                        new ResourceLocation(
+                                "minecraft",
+                                "emf/cem/player_face.jpm"
+                        )
+                ).isPresent()
+                        || manager.getResource(
+                        new ResourceLocation(
+                                "minecraft",
+                                "optifine/cem/player_face.jpm"
+                        )
+                ).isPresent();
+
+        return justExpressionsPresent;
+    }
+
+    private static void applyZombieExpression(
+            NativeImage image,
+            int eyeStyle,
+            ZombieExpression expression
+    ) {
+        // The current Lunar eye layers place their two 2x2 eyes on the front
+        // face at x 9-10 and x 13-14. Low/Middle/High only change the Y row.
+        int eyeTop = switch (
+                NpcAppearance.eyeStyleKey(eyeStyle)
+        ) {
+            case "low" -> 13;
+            case "middle" -> 12;
+            default -> 11;
+        };
+
+        if (eyeTop < 0 || eyeTop + 1 >= image.getHeight()) {
+            return;
+        }
+
+        int leftSkin = image.getPixelRGBA(8, eyeTop);
+        int rightSkin = image.getPixelRGBA(15, eyeTop);
+        int leftLine = image.getPixelRGBA(10, eyeTop);
+        int rightLine = image.getPixelRGBA(13, eyeTop);
+
+        if (expression == ZombieExpression.FOCUSED) {
+            // Half-close the top of the eye for a more focused/hostile look.
+            image.setPixelRGBA(9, eyeTop, leftSkin);
+            image.setPixelRGBA(10, eyeTop, leftSkin);
+            image.setPixelRGBA(13, eyeTop, rightSkin);
+            image.setPixelRGBA(14, eyeTop, rightSkin);
+            return;
+        }
+
+        if (expression == ZombieExpression.BLINK) {
+            for (int y = eyeTop; y <= eyeTop + 1; y++) {
+                image.setPixelRGBA(9, y, leftSkin);
+                image.setPixelRGBA(10, y, leftSkin);
+                image.setPixelRGBA(13, y, rightSkin);
+                image.setPixelRGBA(14, y, rightSkin);
+            }
+
+            // Reuse the eye's own dark pixel so the closed-eye line matches the
+            // supplied skin rather than hardcoding a colour.
+            image.setPixelRGBA(9, eyeTop + 1, leftLine);
+            image.setPixelRGBA(10, eyeTop + 1, leftLine);
+            image.setPixelRGBA(13, eyeTop + 1, rightLine);
+            image.setPixelRGBA(14, eyeTop + 1, rightLine);
         }
     }
 
