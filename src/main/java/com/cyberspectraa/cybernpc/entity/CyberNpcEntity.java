@@ -1943,6 +1943,12 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     void prepareForSleep() {
+        if (getVehicle() instanceof AbstractHorse horse) {
+            stopUsingHorse(horse);
+        } else {
+            clearHorseTarget();
+        }
+
         corralBrain.interrupt();
         clearUtilityItem();
         cancelMageCast();
@@ -2254,7 +2260,8 @@ public class CyberNpcEntity extends PathfinderMob {
                 || isSleeping()
                 || isZombifying()
                 || socialConversationHoldTicks > 0
-                || getHunger() <= HUNT_HUNGER_THRESHOLD) {
+                || getHunger() <= HUNT_HUNGER_THRESHOLD
+                || hasNonHorseUrgentNeed()) {
             clearHorseTarget();
             return false;
         }
@@ -2320,6 +2327,19 @@ public class CyberNpcEntity extends PathfinderMob {
 
         showReaction(NpcReactionIcon.MOUNT, 60);
         return true;
+    }
+
+    private boolean hasNonHorseUrgentNeed() {
+        return !foodToEat.isEmpty()
+                || cookingMode != COOK_MODE_NONE
+                || dropSearchTicks > 0
+                || cookingTarget != null
+                || corralBrain.isBusy()
+                || groundFoodTargetId != null
+                || foodChestTarget != null
+                || emergencyEating
+                || (suspiciousNpc != null
+                && infectionAvoidTicks > 0);
     }
 
     private boolean tickRidingHorse(AbstractHorse horse) {
@@ -2397,8 +2417,24 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (persistent.hasUUID("CyberNpcHorseClaim")) {
             UUID claim = persistent.getUUID("CyberNpcHorseClaim");
+
             if (!getUUID().equals(claim)) {
-                return false;
+                boolean liveClaim = false;
+
+                if (level() instanceof ServerLevel serverLevel) {
+                    var claimant = serverLevel.getEntity(claim);
+                    liveClaim = claimant instanceof CyberNpcEntity npc
+                            && npc.isAlive();
+                }
+
+                if (liveClaim) {
+                    return false;
+                }
+
+                // Claims are only coordination hints, not ownership. If the
+                // claimant is no longer loaded/alive, clear the stale claim so
+                // this horse cannot become permanently locked after a reload.
+                persistent.remove("CyberNpcHorseClaim");
             }
         } else if (alreadyClaimedByThisNpc) {
             return false;
@@ -5399,6 +5435,12 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void startFleeingFrom(LivingEntity threat) {
+        if (getVehicle() instanceof AbstractHorse horse) {
+            stopUsingHorse(horse);
+        } else {
+            clearHorseTarget();
+        }
+
         sleepBrain.interrupt();
         corralBrain.interrupt();
         stopUsingItem();
@@ -6684,6 +6726,14 @@ public class CyberNpcEntity extends PathfinderMob {
         pendingPartyInviteTicks = 0;
         pendingPartyInviteFrom = null;
         regroupingWithParty = false;
+        chatReactionCooldown = 0;
+        horseTargetId = null;
+        horseRideOrigin = null;
+        horseSearchCooldown = 0;
+        horseRideTicks = 0;
+        horseRepathCooldown = 0;
+        beastTamerSearchCooldown = 0;
+        beastTamerWolfTargetId = null;
         fleeingThreat = null;
         fleeSafeTicks = 0;
         fleeRepathCooldown = 0;
