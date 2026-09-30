@@ -81,12 +81,22 @@ public final class CyberNpcSkinCache {
         }
 
         try {
-            NativeImage composed = loadImage(
-                    zombie
-                            ? "zombie/" + gender.serializedName() + ".png"
-                            : "base/" + gender.serializedName() + "/"
-                            + NpcAppearance.skinToneKey(tone) + ".png"
-            );
+            NativeImage composed;
+            if (zombie && gender == NpcAppearance.Gender.FEMALE) {
+                composed = loadResourceImage(
+                        new ResourceLocation(
+                                CyberNpc.MOD_ID,
+                                "textures/entity/appearance/zombie/female.png"
+                        )
+                );
+            } else {
+                composed = loadImage(
+                        zombie
+                                ? "zombie/" + gender.serializedName() + ".png"
+                                : "base/" + gender.serializedName() + "/"
+                                + NpcAppearance.skinToneKey(tone) + ".png"
+                );
+            }
 
             try (NativeImage eyeLayer = loadImage(
                     "eyes/" + NpcAppearance.eyeStyleKey(eyes) + ".png"
@@ -131,6 +141,21 @@ public final class CyberNpcSkinCache {
         }
 
         try (ByteArrayInputStream input = new ByteArrayInputStream(bytes)) {
+            return NativeImage.read(input);
+        }
+    }
+
+    private static NativeImage loadResourceImage(
+            ResourceLocation location
+    ) throws IOException {
+        Resource resource = Minecraft.getInstance()
+                .getResourceManager()
+                .getResource(location)
+                .orElseThrow(() -> new IOException(
+                        "Missing CyberNpc appearance asset: " + location
+                ));
+
+        try (InputStream input = resource.open()) {
             return NativeImage.read(input);
         }
     }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.20.1
+
+- Replaced the bundled female zombie appearance with the corrected slim/Alex-compatible ZombieFemale texture from the latest Lunarskins pack.
+- Female converted zombies now explicitly load that corrected raw resource before applying their preserved eyes and hairstyle.
+- No living-NPC appearance combinations changed from 0.20.0.
+
+
 ## 0.20.0
 
 - Added persistent randomized visual identities for CyberNpc entities.
