@@ -42,6 +42,7 @@ final class WildNpcSleepBrain {
         if (npc.isSleeping()) {
             if (npc.isCombatActive()
                     || !level.isNight()
+                    || npc.getHunger() <= CyberNpcEntity.HUNT_HUNGER_THRESHOLD
                     || !isValidClaimedBed(level)) {
                 wakeUp();
                 busy = false;
@@ -107,20 +108,21 @@ final class WildNpcSleepBrain {
 
     void wakeUp() {
         busy = false;
+        boolean wasSleeping = npc.isSleeping();
 
         if (!(npc.level() instanceof ServerLevel level)) {
-            if (npc.isSleeping()) {
+            if (wasSleeping) {
                 npc.stopSleeping();
             }
             return;
         }
 
-        if (npc.isSleeping()) {
+        if (wasSleeping) {
             npc.stopSleeping();
-        }
 
-        if (claimedBed != null) {
-            setBedOccupied(level, claimedBed, false);
+            if (claimedBed != null) {
+                setBedOccupied(level, claimedBed, false);
+            }
         }
 
         npc.getNavigation().stop();
@@ -152,7 +154,7 @@ final class WildNpcSleepBrain {
         // Sleeping itself is intentionally not restored directly. After loading,
         // the NPC walks back to the claimed bed if it is still night.
         if (npc.isSleeping()) {
-            npc.stopSleeping();
+            wakeUp();
         }
     }
 
