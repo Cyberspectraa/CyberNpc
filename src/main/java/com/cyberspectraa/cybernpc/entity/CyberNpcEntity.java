@@ -11,6 +11,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.Container;
 import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -45,6 +46,7 @@ import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.CampfireBlockEntity;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -65,7 +67,7 @@ public class CyberNpcEntity extends PathfinderMob {
     public static final int RANGED_STATE_CROSSBOW_HOLD = 3;
 
     private static final int MELEE_SWING_DURATION = 6;
-    private static final double WILD_HELP_RADIUS = 20.0D;
+    private static final double WILD_HELP_RADIUS = 24.0D;
     private static final double WILD_DISENGAGE_DISTANCE = 40.0D;
     private static final int WILD_DISENGAGE_TICKS = 100;
     private static final int WILD_MIN_AGGRESSION = 10;
@@ -92,6 +94,15 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final int FLEE_SAFE_TICKS = 60;
     private static final double THREAT_SCAN_RADIUS = 20.0D;
     private static final double FLEE_RELEASE_DISTANCE = 30.0D;
+
+    private static final int COMBAT_HELP_COOLDOWN_TICKS = 100;
+    private static final int MAX_COMBAT_HELPERS = 3;
+    private static final int SPRINT_STALL_TICKS = 8;
+    private static final double SPRINT_MOVEMENT_EPSILON_SQR = 0.0025D;
+
+    private static final int FOOD_CHEST_SEARCH_RADIUS = 16;
+    private static final int FOOD_CHEST_SEARCH_INTERVAL = 80;
+    private static final double FOOD_CHEST_USE_DISTANCE_SQR = 5.0D;
 
     private static final EntityDataAccessor<String> DATA_ROLE =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
@@ -140,6 +151,7 @@ public class CyberNpcEntity extends PathfinderMob {
     private ItemStack storedSword = ItemStack.EMPTY;
     private ItemStack storedRangedWeapon = ItemStack.EMPTY;
     private ItemStack carriedRawFood = ItemStack.EMPTY;
+    private ItemStack carriedReadyFood = ItemStack.EMPTY;
 
     private boolean huntingTarget;
     private int huntSearchCooldown;
@@ -170,6 +182,12 @@ public class CyberNpcEntity extends PathfinderMob {
     private int threatScanCooldown;
     private int fleeSafeTicks;
     private int fleeRepathCooldown;
+    private int combatHelpCooldown;
+    private int sprintStallTicks;
+
+    @Nullable
+    private BlockPos foodChestTarget;
+    private int foodChestSearchCooldown;
 
     private final WildNpcCorralBrain corralBrain;
     private final WildNpcSleepBrain sleepBrain;
@@ -535,7 +553,19 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
+        // Dead NPCs must never run another AI/claim tick after die() releases
+        // their persistent world claims.
+        if (!isAlive()) {
+            setSprinting(false);
+            setShiftKeyDown(false);
+            return;
+        }
+
         ensureWildProfile();
+
+        if (combatHelpCooldown > 0) {
+            combatHelpCooldown--;
+        }
 
         // Pen ownership is discovered independently from hunger so nearby pens
         // are reserved immediately instead of only when livestock work starts.
@@ -551,19 +581,44 @@ public class CyberNpcEntity extends PathfinderMob {
         tickHunger();
 
         if (tickThreatResponse()) {
-            updateDebugState();
+            finishAiTick();
             return;
         }
 
         tickWildCombat();
 
         if (sleepBrain.tick()) {
-            updateDebugState();
+            finishAiTick();
             return;
         }
 
         tickHuntingAndFood();
+        finishAiTick();
+    }
+
+    private void finishAiTick() {
+        fixStuckSprintAnimation();
         updateDebugState();
+    }
+
+    private void fixStuckSprintAnimation() {
+        if (!isSprinting()) {
+            sprintStallTicks = 0;
+            return;
+        }
+
+        Vec3 motion = getDeltaMovement();
+        double horizontalSpeedSqr = motion.x * motion.x + motion.z * motion.z;
+
+        if (getNavigation().isDone() || horizontalSpeedSqr < SPRINT_MOVEMENT_EPSILON_SQR) {
+            sprintStallTicks++;
+            if (sprintStallTicks >= SPRINT_STALL_TICKS) {
+                setSprinting(false);
+                sprintStallTicks = 0;
+            }
+        } else {
+            sprintStallTicks = 0;
+        }
     }
 
     private void tickHunger() {
@@ -615,6 +670,22 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (huntingTarget) {
             target = maybeSwitchHuntTarget(target);
+        } else if (target instanceof Mob hostile && hostile instanceof Enemy) {
+            if (getHealth() <= 4.0F) {
+                startFleeingFrom(hostile);
+                return;
+            }
+
+            if (combatHelpCooldown <= 0
+                    && (getHealth() <= getMaxHealth() * 0.60F || !shouldFightHostile(hostile))) {
+                int helpers = alertNearbyWildNpcs(target, MAX_COMBAT_HELPERS);
+                combatHelpCooldown = COMBAT_HELP_COOLDOWN_TICKS;
+
+                if (helpers == 0 && !shouldFightHostile(hostile)) {
+                    startFleeingFrom(hostile);
+                    return;
+                }
+            }
         }
 
         if (distanceToSqr(target) > WILD_DISENGAGE_DISTANCE * WILD_DISENGAGE_DISTANCE) {
@@ -652,6 +723,15 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
+        if (!carriedReadyFood.isEmpty() && getHunger() < STOP_EATING_HUNGER) {
+            ItemStack one = carriedReadyFood.split(1);
+            if (carriedReadyFood.isEmpty()) {
+                carriedReadyFood = ItemStack.EMPTY;
+            }
+            beginEating(one);
+            return;
+        }
+
         if (cookingMode != COOK_MODE_NONE) {
             tickCooking();
             return;
@@ -664,6 +744,10 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (dropSearchTicks > 0) {
             tickFoodPickup();
+            return;
+        }
+
+        if (tickFoodStorage()) {
             return;
         }
 
@@ -759,10 +843,275 @@ public class CyberNpcEntity extends PathfinderMob {
         return current;
     }
 
+    private boolean tickFoodStorage() {
+        boolean wantsStore = getHunger() >= STOP_EATING_HUNGER
+                && (!carriedRawFood.isEmpty() || !carriedReadyFood.isEmpty());
+
+        boolean wantsRetrieve = getHunger() <= HUNT_HUNGER_THRESHOLD
+                && carriedRawFood.isEmpty()
+                && carriedReadyFood.isEmpty()
+                && foodToEat.isEmpty()
+                && cookingMode == COOK_MODE_NONE;
+
+        if (!wantsStore && !wantsRetrieve) {
+            foodChestTarget = null;
+            return false;
+        }
+
+        Container chest = foodChestTarget == null ? null : getFoodChestContainer(foodChestTarget);
+
+        if (chest == null
+                || (wantsStore && !canStoreAnyFood(chest))
+                || (wantsRetrieve && !containerHasUsableFood(chest))) {
+            foodChestTarget = null;
+
+            if (foodChestSearchCooldown > 0) {
+                foodChestSearchCooldown--;
+                return false;
+            }
+
+            foodChestSearchCooldown = FOOD_CHEST_SEARCH_INTERVAL;
+            foodChestTarget = findFoodChest(wantsStore);
+
+            if (foodChestTarget == null) {
+                return false;
+            }
+
+            chest = getFoodChestContainer(foodChestTarget);
+            if (chest == null) {
+                foodChestTarget = null;
+                return false;
+            }
+        }
+
+        Vec3 chestPos = Vec3.atCenterOf(foodChestTarget);
+        if (distanceToSqr(chestPos) > FOOD_CHEST_USE_DISTANCE_SQR) {
+            setShiftKeyDown(false);
+            setSprinting(false);
+            getNavigation().moveTo(
+                    chestPos.x,
+                    chestPos.y,
+                    chestPos.z,
+                    0.90D
+            );
+            return true;
+        }
+
+        getNavigation().stop();
+        setSprinting(false);
+        setShiftKeyDown(false);
+
+        if (wantsStore) {
+            boolean changed = false;
+
+            if (!carriedReadyFood.isEmpty()) {
+                ItemStack remaining = insertIntoContainer(chest, carriedReadyFood);
+                changed |= remaining.getCount() != carriedReadyFood.getCount();
+                carriedReadyFood = remaining;
+            }
+
+            if (!carriedRawFood.isEmpty()) {
+                ItemStack remaining = insertIntoContainer(chest, carriedRawFood);
+                changed |= remaining.getCount() != carriedRawFood.getCount();
+                carriedRawFood = remaining;
+            }
+
+            if (changed) {
+                chest.setChanged();
+                level().playSound(
+                        null,
+                        blockPosition(),
+                        SoundEvents.CHEST_OPEN,
+                        SoundSource.BLOCKS,
+                        0.45F,
+                        1.0F
+                );
+            }
+        } else {
+            retrieveFoodFromContainer(chest);
+        }
+
+        foodChestTarget = null;
+        foodChestSearchCooldown = FOOD_CHEST_SEARCH_INTERVAL;
+        return true;
+    }
+
+    @Nullable
+    private BlockPos findFoodChest(boolean storing) {
+        BlockPos origin = blockPosition();
+        BlockPos best = null;
+        double bestDistance = Double.MAX_VALUE;
+
+        for (BlockPos pos : BlockPos.betweenClosed(
+                origin.offset(-FOOD_CHEST_SEARCH_RADIUS, -4, -FOOD_CHEST_SEARCH_RADIUS),
+                origin.offset(FOOD_CHEST_SEARCH_RADIUS, 4, FOOD_CHEST_SEARCH_RADIUS)
+        )) {
+            Container chest = getFoodChestContainer(pos);
+            if (chest == null) {
+                continue;
+            }
+
+            if (storing ? !canStoreAnyFood(chest) : !containerHasUsableFood(chest)) {
+                continue;
+            }
+
+            double distance = pos.distSqr(origin);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = pos.immutable();
+            }
+        }
+
+        return best;
+    }
+
+    @Nullable
+    private Container getFoodChestContainer(BlockPos pos) {
+        var state = level().getBlockState(pos);
+        if (!(state.getBlock() instanceof ChestBlock chestBlock)) {
+            return null;
+        }
+
+        return ChestBlock.getContainer(chestBlock, state, level(), pos, false);
+    }
+
+    private boolean canStoreAnyFood(Container chest) {
+        return (!carriedReadyFood.isEmpty() && canInsertIntoContainer(chest, carriedReadyFood))
+                || (!carriedRawFood.isEmpty() && canInsertIntoContainer(chest, carriedRawFood));
+    }
+
+    private boolean canInsertIntoContainer(Container container, ItemStack stack) {
+        if (stack.isEmpty()) {
+            return false;
+        }
+
+        for (int slot = 0; slot < container.getContainerSize(); slot++) {
+            ItemStack existing = container.getItem(slot);
+
+            if (existing.isEmpty() && container.canPlaceItem(slot, stack)) {
+                return true;
+            }
+
+            if (ItemStack.isSameItemSameTags(existing, stack)
+                    && existing.getCount() < Math.min(existing.getMaxStackSize(), container.getMaxStackSize())
+                    && container.canPlaceItem(slot, stack)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private ItemStack insertIntoContainer(Container container, ItemStack source) {
+        ItemStack remaining = source.copy();
+
+        for (int slot = 0; slot < container.getContainerSize() && !remaining.isEmpty(); slot++) {
+            ItemStack existing = container.getItem(slot);
+
+            if (!existing.isEmpty()
+                    && ItemStack.isSameItemSameTags(existing, remaining)
+                    && container.canPlaceItem(slot, remaining)) {
+                int max = Math.min(existing.getMaxStackSize(), container.getMaxStackSize());
+                int room = max - existing.getCount();
+
+                if (room > 0) {
+                    int moved = Math.min(room, remaining.getCount());
+                    ItemStack updated = existing.copy();
+                    updated.grow(moved);
+                    container.setItem(slot, updated);
+                    remaining.shrink(moved);
+                }
+            }
+        }
+
+        for (int slot = 0; slot < container.getContainerSize() && !remaining.isEmpty(); slot++) {
+            ItemStack existing = container.getItem(slot);
+
+            if (existing.isEmpty() && container.canPlaceItem(slot, remaining)) {
+                int max = Math.min(remaining.getMaxStackSize(), container.getMaxStackSize());
+                int moved = Math.min(max, remaining.getCount());
+                ItemStack placed = remaining.copy();
+                placed.setCount(moved);
+                container.setItem(slot, placed);
+                remaining.shrink(moved);
+            }
+        }
+
+        return remaining.isEmpty() ? ItemStack.EMPTY : remaining;
+    }
+
+    private boolean containerHasUsableFood(Container container) {
+        for (int slot = 0; slot < container.getContainerSize(); slot++) {
+            ItemStack stack = container.getItem(slot);
+            if (isUsefulGroundFood(stack)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void retrieveFoodFromContainer(Container container) {
+        // Prefer something that can be eaten immediately, then fall back to raw
+        // food that can enter the existing cooking workflow.
+        int readySlot = -1;
+        int rawSlot = -1;
+
+        for (int slot = 0; slot < container.getContainerSize(); slot++) {
+            ItemStack stack = container.getItem(slot);
+
+            if (stack.isEmpty()) {
+                continue;
+            }
+
+            if (!CyberNpcHuntingData.isRawFood(stack)
+                    && stack.isEdible()
+                    && CyberNpcHuntingData.hungerRestored(stack) > 0) {
+                readySlot = slot;
+                break;
+            }
+
+            if (rawSlot < 0 && CyberNpcHuntingData.isRawFood(stack)) {
+                rawSlot = slot;
+            }
+        }
+
+        int slot = readySlot >= 0 ? readySlot : rawSlot;
+        if (slot < 0) {
+            return;
+        }
+
+        ItemStack stack = container.getItem(slot);
+        int amount = Math.min(4, stack.getCount());
+        ItemStack taken = container.removeItem(slot, amount);
+
+        if (taken.isEmpty()) {
+            return;
+        }
+
+        if (CyberNpcHuntingData.isRawFood(taken)) {
+            carriedRawFood = taken;
+            resetCookingSearch();
+        } else {
+            carriedReadyFood = taken;
+        }
+
+        container.setChanged();
+        level().playSound(
+                null,
+                blockPosition(),
+                SoundEvents.CHEST_OPEN,
+                SoundSource.BLOCKS,
+                0.45F,
+                1.0F
+        );
+    }
+
     private boolean tickGroundFoodPickup() {
         if (!(level() instanceof net.minecraft.server.level.ServerLevel serverLevel)
                 || getHunger() >= STOP_EATING_HUNGER
                 || !carriedRawFood.isEmpty()
+                || !carriedReadyFood.isEmpty()
                 || !foodToEat.isEmpty()
                 || cookingMode != COOK_MODE_NONE) {
             groundFoodTargetId = null;
@@ -826,15 +1175,23 @@ public class CyberNpcEntity extends PathfinderMob {
 
             resetCookingSearch();
         } else {
-            ItemStack one = stack.copy();
-            one.setCount(1);
-            stack.shrink(1);
-
-            if (stack.isEmpty()) {
+            if (carriedReadyFood.isEmpty()) {
+                carriedReadyFood = stack.copy();
                 targetFood.discard();
-            }
+            } else if (ItemStack.isSameItemSameTags(carriedReadyFood, stack)) {
+                carriedReadyFood.grow(stack.getCount());
+                targetFood.discard();
+            } else {
+                ItemStack one = stack.copy();
+                one.setCount(1);
+                stack.shrink(1);
 
-            beginEating(one);
+                if (stack.isEmpty()) {
+                    targetFood.discard();
+                }
+
+                beginEating(one);
+            }
         }
 
         groundFoodTargetId = null;
@@ -1392,6 +1749,18 @@ public class CyberNpcEntity extends PathfinderMob {
             return false;
         }
 
+        if (!(threat instanceof Creeper)
+                && getHealth() > 4.0F
+                && combatHelpCooldown <= 0) {
+            int helpers = alertNearbyWildNpcs(threat, MAX_COMBAT_HELPERS);
+            combatHelpCooldown = COMBAT_HELP_COOLDOWN_TICKS;
+
+            if (helpers > 0) {
+                beginWildCombat(threat, false, false);
+                return false;
+            }
+        }
+
         startFleeingFrom(threat);
         tickFleeing();
         return true;
@@ -1433,6 +1802,9 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
+        // Fleeing is a full-speed escape, never a crouch-run.
+        setShiftKeyDown(false);
+
         if (fleeRepathCooldown > 0) {
             fleeRepathCooldown--;
             return;
@@ -1449,7 +1821,7 @@ public class CyberNpcEntity extends PathfinderMob {
             } else {
                 getNavigation().stop();
                 setSprinting(false);
-                setShiftKeyDown(true);
+                setShiftKeyDown(false);
             }
             return;
         }
@@ -1465,7 +1837,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 } else {
                     getNavigation().stop();
                     setSprinting(false);
-                    setShiftKeyDown(true);
+                    setShiftKeyDown(false);
                 }
                 return;
             }
@@ -1572,6 +1944,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 "sword:" + stackDebug(storedSword)
                         + " | ranged:" + stackDebug(storedRangedWeapon)
                         + " | raw:" + stackDebug(carriedRawFood)
+                        + " | ready:" + stackDebug(carriedReadyFood)
                         + " | eating:" + stackDebug(foodToEat)
         );
     }
@@ -1599,6 +1972,11 @@ public class CyberNpcEntity extends PathfinderMob {
         }
         if (!carriedRawFood.isEmpty()) {
             return claimedCookingStation == null ? "Looking for cooking station" : "Returning to cooking station";
+        }
+        if (foodChestTarget != null) {
+            return getHunger() >= STOP_EATING_HUNGER
+                    ? "Storing surplus food in chest"
+                    : "Retrieving food from chest";
         }
         if (groundFoodTargetId != null) {
             return "Picking up food";
@@ -1639,7 +2017,8 @@ public class CyberNpcEntity extends PathfinderMob {
                 || corralBrain.isBusy()
                 || sleepBrain.isBusy()
                 || fleeingThreat != null
-                || groundFoodTargetId != null;
+                || groundFoodTargetId != null
+                || foodChestTarget != null;
     }
 
     @Override
@@ -1690,26 +2069,35 @@ public class CyberNpcEntity extends PathfinderMob {
         getNavigation().stop();
 
         if (callForHelp) {
-            alertNearbyWildNpcs(target);
+            alertNearbyWildNpcs(target, MAX_COMBAT_HELPERS);
+            combatHelpCooldown = COMBAT_HELP_COOLDOWN_TICKS;
         }
     }
 
-    private void alertNearbyWildNpcs(LivingEntity target) {
+    private int alertNearbyWildNpcs(LivingEntity target, int maxHelpers) {
         List<CyberNpcEntity> nearbyWildNpcs = level().getEntitiesOfClass(
-                CyberNpcEntity.class,
-                getBoundingBox().inflate(WILD_HELP_RADIUS),
-                npc -> npc != this
-                        && npc.isAlive()
-                        && npc.getNpcType() == NpcType.WILD
-        );
+                        CyberNpcEntity.class,
+                        getBoundingBox().inflate(WILD_HELP_RADIUS),
+                        npc -> npc != this
+                                && npc.isAlive()
+                                && npc.getNpcType() == NpcType.WILD
+                                && npc.getHealth() >= 6.0F
+                                && npc.getTarget() != target
+                ).stream()
+                .sorted(Comparator.comparingDouble(this::distanceToSqr))
+                .limit(Math.max(0, maxHelpers))
+                .toList();
 
         for (CyberNpcEntity npc : nearbyWildNpcs) {
             npc.ensureWildProfile();
             npc.huntingTarget = false;
             npc.dropSearchTicks = 0;
             npc.cookingTarget = null;
+            npc.combatHelpCooldown = COMBAT_HELP_COOLDOWN_TICKS;
             npc.beginWildCombat(target, false, false);
         }
+
+        return nearbyWildNpcs.size();
     }
 
     private void calmWildNpc() {
@@ -1754,7 +2142,15 @@ public class CyberNpcEntity extends PathfinderMob {
 
     @Override
     public void die(DamageSource source) {
-        releasePersistentClaims();
+        if (!level().isClientSide) {
+            corralBrain.interrupt();
+            sleepBrain.wakeUp();
+            fleeingThreat = null;
+            setSprinting(false);
+            setShiftKeyDown(false);
+            releasePersistentClaims();
+        }
+
         super.die(source);
     }
 
@@ -1798,6 +2194,10 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (!carriedRawFood.isEmpty()) {
             tag.put("CyberNpcRawFood", carriedRawFood.save(new CompoundTag()));
+        }
+
+        if (!carriedReadyFood.isEmpty()) {
+            tag.put("CyberNpcReadyFood", carriedReadyFood.save(new CompoundTag()));
         }
 
         if (!foodToEat.isEmpty()) {
@@ -1866,6 +2266,10 @@ public class CyberNpcEntity extends PathfinderMob {
                 ? ItemStack.of(tag.getCompound("CyberNpcRawFood"))
                 : ItemStack.EMPTY;
 
+        carriedReadyFood = tag.contains("CyberNpcReadyFood")
+                ? ItemStack.of(tag.getCompound("CyberNpcReadyFood"))
+                : ItemStack.EMPTY;
+
         foodToEat = tag.contains("CyberNpcCookedFood")
                 ? ItemStack.of(tag.getCompound("CyberNpcCookedFood"))
                 : ItemStack.EMPTY;
@@ -1911,6 +2315,8 @@ public class CyberNpcEntity extends PathfinderMob {
         utilityItemActive = false;
         groundFoodTargetId = null;
         groundFoodSearchCooldown = 0;
+        foodChestTarget = null;
+        foodChestSearchCooldown = 0;
         huntTargetRecheckCooldown = 0;
         threatScanCooldown = 0;
         fleeingThreat = null;
@@ -1991,7 +2397,11 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private static final class WildNpcCombatGoal extends Goal {
-        private static final double MELEE_DISTANCE_SQR = 20.25D;
+        private static final double MELEE_ENGAGE_DISTANCE_SQR = 12.25D;
+        private static final double MELEE_ATTACK_DISTANCE_SQR = 9.0D;
+        private static final double MELEE_TOO_CLOSE_SQR = 4.84D;
+        private static final int MELEE_ATTACK_COOLDOWN = 12;
+        private static final int MELEE_RECOVERY_TICKS = 7;
         private static final double HUNT_STALK_MIN_SQR = 25.0D;
         private static final double HUNT_STALK_MAX_SQR = 196.0D;
         private static final double RANGED_STOP_DISTANCE_SQR = 100.0D;
@@ -1999,6 +2409,9 @@ public class CyberNpcEntity extends PathfinderMob {
 
         private final CyberNpcEntity npc;
         private int meleeCooldown;
+        private int meleeRecoveryTicks;
+        private int meleeStrafeDirection = 1;
+        private int meleeStrafeTicks;
         private int rangedCooldown;
         private int bowDrawTicks;
         private int crossbowChargeTicks;
@@ -2047,6 +2460,15 @@ public class CyberNpcEntity extends PathfinderMob {
             if (meleeCooldown > 0) {
                 meleeCooldown--;
             }
+            if (meleeRecoveryTicks > 0) {
+                meleeRecoveryTicks--;
+            }
+            if (meleeStrafeTicks > 0) {
+                meleeStrafeTicks--;
+            } else {
+                meleeStrafeTicks = 20 + npc.getRandom().nextInt(20);
+                meleeStrafeDirection *= -1;
+            }
             if (rangedCooldown > 0) {
                 rangedCooldown--;
             }
@@ -2064,7 +2486,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 npc.setShiftKeyDown(false);
             }
 
-            if (distanceSqr <= MELEE_DISTANCE_SQR) {
+            if (distanceSqr <= MELEE_ENGAGE_DISTANCE_SQR) {
                 tickMelee(target, distanceSqr);
                 return;
             }
@@ -2075,14 +2497,97 @@ public class CyberNpcEntity extends PathfinderMob {
         private void tickMelee(LivingEntity target, double distanceSqr) {
             resetRangedUse();
             npc.setShiftKeyDown(false);
-            npc.setSprinting(true);
             npc.equipSword();
-            npc.getNavigation().moveTo(target, 1.20D);
 
-            if (distanceSqr <= MELEE_DISTANCE_SQR && meleeCooldown <= 0) {
+            // After each hit, create space instead of standing inside the hostile
+            // and trading damage. This makes sword combat behave much closer to a
+            // player timing hits and backing out during the cooldown.
+            if (meleeRecoveryTicks > 0) {
+                npc.setSprinting(false);
+                moveForMeleeSpacing(target, true);
+                return;
+            }
+
+            if (distanceSqr < MELEE_TOO_CLOSE_SQR) {
+                npc.setSprinting(false);
+                moveForMeleeSpacing(target, true);
+
+                if (meleeCooldown <= 0) {
+                    npc.startMeleeSwingAnimation();
+                    npc.doHurtTarget(target);
+                    meleeCooldown = MELEE_ATTACK_COOLDOWN;
+                    meleeRecoveryTicks = MELEE_RECOVERY_TICKS;
+                }
+                return;
+            }
+
+            if (distanceSqr > MELEE_ATTACK_DISTANCE_SQR) {
+                boolean moving = npc.getNavigation().moveTo(target, 1.06D);
+                npc.setSprinting(moving && distanceSqr > 10.24D);
+                return;
+            }
+
+            npc.setSprinting(false);
+
+            if (meleeCooldown <= 0) {
                 npc.startMeleeSwingAnimation();
                 npc.doHurtTarget(target);
-                meleeCooldown = 16;
+                meleeCooldown = MELEE_ATTACK_COOLDOWN;
+                meleeRecoveryTicks = MELEE_RECOVERY_TICKS;
+                moveForMeleeSpacing(target, true);
+            } else {
+                moveForMeleeSpacing(target, false);
+            }
+        }
+
+        private void moveForMeleeSpacing(LivingEntity target, boolean retreat) {
+            Vec3 away = new Vec3(
+                    npc.getX() - target.getX(),
+                    0.0D,
+                    npc.getZ() - target.getZ()
+            );
+
+            if (away.lengthSqr() < 0.001D) {
+                Vec3 look = npc.getViewVector(1.0F);
+                away = new Vec3(-look.x, 0.0D, -look.z);
+            }
+
+            if (away.lengthSqr() < 0.001D) {
+                away = new Vec3(1.0D, 0.0D, 0.0D);
+            }
+
+            away = away.normalize();
+            Vec3 side = new Vec3(-away.z, 0.0D, away.x)
+                    .scale(0.75D * meleeStrafeDirection);
+
+            double radius = retreat ? 3.6D : 2.85D;
+            Vec3 desired = target.position()
+                    .add(away.scale(radius))
+                    .add(side);
+
+            boolean moving = npc.getNavigation().moveTo(
+                    desired.x,
+                    npc.getY(),
+                    desired.z,
+                    retreat ? 1.08D : 0.82D
+            );
+
+            if (!moving && retreat) {
+                Vec3 fallback = DefaultRandomPos.getPosAway(
+                        npc,
+                        8,
+                        4,
+                        target.position()
+                );
+
+                if (fallback != null) {
+                    npc.getNavigation().moveTo(
+                            fallback.x,
+                            fallback.y,
+                            fallback.z,
+                            1.05D
+                    );
+                }
             }
         }
 
@@ -2249,6 +2754,9 @@ public class CyberNpcEntity extends PathfinderMob {
         private void resetTimers() {
             resetRangedUse();
             meleeCooldown = 0;
+            meleeRecoveryTicks = 0;
+            meleeStrafeTicks = 0;
+            meleeStrafeDirection = 1;
             rangedCooldown = 0;
         }
     }

@@ -57,6 +57,11 @@ final class WildNpcCorralBrain {
     private static final double HOLDING_NPC_REACHED_SQR = 2.5D * 2.5D;
     private static final double HOLDING_ANIMAL_REACHED_SQR = 4.0D * 4.0D;
 
+    private static final int GATE_STALL_TICKS = 140;
+    private static final int MAX_GATE_REALIGN_ATTEMPTS = 2;
+    private static final double GATE_REALIGN_DISTANCE = 4.0D;
+    private static final int PEN_HARVEST_COOLDOWN_TICKS = 6000;
+
     private final CyberNpcEntity npc;
 
     @Nullable
@@ -91,6 +96,11 @@ final class WildNpcCorralBrain {
     private int claimSearchCooldown;
     private int claimValidationCooldown;
     private int breedCooldown;
+    private int penHarvestCooldown;
+    private int transferStallTicks;
+    private int gateRealignStage;
+    private int gateRealignAttempts;
+    private double lastAnimalHoldingDistance = Double.MAX_VALUE;
 
     private boolean leashAttachedByNpc;
     private boolean busy;
@@ -150,6 +160,10 @@ final class WildNpcCorralBrain {
             if (failedRecruitCooldown == 0) {
                 failedRecruitId = null;
             }
+        }
+
+        if (penHarvestCooldown > 0) {
+            penHarvestCooldown--;
         }
 
         ensureCorral(level);
@@ -213,6 +227,32 @@ final class WildNpcCorralBrain {
                 .filter(animal -> !animal.isBaby())
                 .toList();
 
+        List<Animal> babiesInside = insideAnimals.stream()
+                .filter(animal -> animal.getType() == livestockType)
+                .filter(Animal::isBaby)
+                .toList();
+
+        // Once the herd has successfully produced a baby, a hungry NPC may take
+        // exactly one adult as food. The cooldown prevents it from immediately
+        // consuming the remaining adults while that baby is still growing.
+        if (npc.getHunger() <= CyberNpcEntity.HUNT_HUNGER_THRESHOLD
+                && !babiesInside.isEmpty()
+                && adultsInside.size() >= 2
+                && penHarvestCooldown <= 0) {
+            Animal harvest = adultsInside.stream()
+                    .filter(animal -> !animal.isInLove())
+                    .min(Comparator.comparingDouble(npc::distanceToSqr))
+                    .orElse(adultsInside.get(0));
+
+            penHarvestCooldown = PEN_HARVEST_COOLDOWN_TICKS;
+            closeAllGates(level);
+            stopLeading(level);
+            busy = false;
+            debugActivity = "Harvesting one adult from successful herd";
+            npc.beginCorralHunt(harvest);
+            return true;
+        }
+
         if (adultsInside.size() >= 2) {
             closeAllGates(level);
             stopLeading(level);
@@ -260,6 +300,10 @@ final class WildNpcCorralBrain {
         activeEntryGate = selectEntryGate(recruit);
         activeExitGate = null;
         recruitApproachTicks = 0;
+        transferStallTicks = 0;
+        gateRealignStage = 0;
+        gateRealignAttempts = 0;
+        lastAnimalHoldingDistance = Double.MAX_VALUE;
         leashAttachedByNpc = false;
         exitingPen = false;
         deliveredAnimal = false;
@@ -287,6 +331,9 @@ final class WildNpcCorralBrain {
         if (primaryGate != null) {
             tag.putLong("CyberNpcPenGate", primaryGate.asLong());
         }
+        if (penHarvestCooldown > 0) {
+            tag.putInt("CyberNpcPenHarvestCooldown", penHarvestCooldown);
+        }
     }
 
     void readSaveData(CompoundTag tag) {
@@ -310,6 +357,13 @@ final class WildNpcCorralBrain {
         claimSearchCooldown = 0;
         claimValidationCooldown = 0;
         breedCooldown = 0;
+        penHarvestCooldown = tag.contains("CyberNpcPenHarvestCooldown")
+                ? Math.max(0, tag.getInt("CyberNpcPenHarvestCooldown"))
+                : 0;
+        transferStallTicks = 0;
+        gateRealignStage = 0;
+        gateRealignAttempts = 0;
+        lastAnimalHoldingDistance = Double.MAX_VALUE;
         leashAttachedByNpc = false;
         exitingPen = false;
         deliveredAnimal = false;
@@ -376,6 +430,10 @@ final class WildNpcCorralBrain {
             return true;
         }
 
+        if (gateRealignStage > 0) {
+            return tickGateRealignment(level, recruit);
+        }
+
         BlockPos outside = outsideForGate(activeEntryGate);
         BlockPos inside = insideForGate(activeEntryGate);
 
@@ -403,12 +461,38 @@ final class WildNpcCorralBrain {
         openOnlyGate(level, activeEntryGate);
 
         Vec3 hold = Vec3.atBottomCenterOf(holdingPoint);
+
+        double animalHoldingDistance = recruit.distanceToSqr(hold);
+        if (lastAnimalHoldingDistance - animalHoldingDistance > 0.75D) {
+            transferStallTicks = 0;
+        } else {
+            transferStallTicks++;
+        }
+        lastAnimalHoldingDistance = animalHoldingDistance;
+
+        if (transferStallTicks >= GATE_STALL_TICKS
+                && (isNpcInsidePen()
+                || npc.distanceToSqr(Vec3.atBottomCenterOf(activeEntryGate)) <= 36.0D)) {
+            if (gateRealignAttempts >= MAX_GATE_REALIGN_ATTEMPTS) {
+                debugActivity = "Animal would not enter pen; abandoning transfer";
+                abortRecruit(level, true);
+                return false;
+            }
+
+            gateRealignAttempts++;
+            gateRealignStage = 1;
+            transferStallTicks = 0;
+            lastAnimalHoldingDistance = Double.MAX_VALUE;
+            debugActivity = "Realigning livestock with pen gate";
+            return tickGateRealignment(level, recruit);
+        }
+
         npc.getNavigation().moveTo(hold.x, hold.y, hold.z, 0.78D);
         npc.setSprinting(false);
         debugActivity = "Taking livestock to back of pen";
 
         boolean npcAtHolding = npc.distanceToSqr(hold) <= HOLDING_NPC_REACHED_SQR;
-        boolean animalAtHolding = recruit.distanceToSqr(hold) <= HOLDING_ANIMAL_REACHED_SQR;
+        boolean animalAtHolding = animalHoldingDistance <= HOLDING_ANIMAL_REACHED_SQR;
 
         if (npcAtHolding && animalAtHolding && isInsidePen(recruit)) {
             recruit.dropLeash(true, false);
@@ -431,6 +515,64 @@ final class WildNpcCorralBrain {
 
             debugActivity = "Livestock secured at back; leaving pen";
             return tickExitPen(level);
+        }
+
+        return true;
+    }
+
+    private boolean tickGateRealignment(ServerLevel level, Animal recruit) {
+        if (activeEntryGate == null) {
+            abortRecruit(level, true);
+            return false;
+        }
+
+        BlockPos outside = outsideForGate(activeEntryGate);
+        BlockPos inside = insideForGate(activeEntryGate);
+        if (outside == null || inside == null) {
+            abortRecruit(level, true);
+            return false;
+        }
+
+        openOnlyGate(level, activeEntryGate);
+        npc.setSprinting(false);
+
+        Vec3 gateCenter = Vec3.atBottomCenterOf(activeEntryGate);
+        Vec3 outsideCenter = Vec3.atBottomCenterOf(outside);
+        Vec3 outward = outsideCenter.subtract(gateCenter);
+        outward = new Vec3(outward.x, 0.0D, outward.z);
+
+        if (outward.lengthSqr() < 0.001D) {
+            outward = outsideCenter.subtract(Vec3.atBottomCenterOf(inside));
+            outward = new Vec3(outward.x, 0.0D, outward.z);
+        }
+
+        if (outward.lengthSqr() < 0.001D) {
+            abortRecruit(level, true);
+            return false;
+        }
+
+        Vec3 awayPoint = outsideCenter.add(outward.normalize().scale(GATE_REALIGN_DISTANCE));
+
+        if (gateRealignStage == 1) {
+            npc.getNavigation().moveTo(awayPoint.x, awayPoint.y, awayPoint.z, 0.86D);
+            debugActivity = "Backing away to straighten livestock at gate";
+
+            if (npc.distanceToSqr(awayPoint) <= 4.0D) {
+                gateRealignStage = 2;
+                npc.getNavigation().stop();
+            }
+
+            return true;
+        }
+
+        Vec3 insidePoint = Vec3.atBottomCenterOf(inside);
+        npc.getNavigation().moveTo(insidePoint.x, insidePoint.y, insidePoint.z, 0.82D);
+        debugActivity = "Walking back through gate with aligned livestock";
+
+        if (isNpcInsidePen() || npc.distanceToSqr(insidePoint) <= 2.25D) {
+            gateRealignStage = 0;
+            transferStallTicks = 0;
+            lastAnimalHoldingDistance = recruit.distanceToSqr(Vec3.atBottomCenterOf(holdingPoint));
         }
 
         return true;
@@ -568,6 +710,10 @@ final class WildNpcCorralBrain {
         activeEntryGate = null;
         activeExitGate = null;
         recruitApproachTicks = 0;
+        transferStallTicks = 0;
+        gateRealignStage = 0;
+        gateRealignAttempts = 0;
+        lastAnimalHoldingDistance = Double.MAX_VALUE;
         leashAttachedByNpc = false;
         exitingPen = false;
         deliveredAnimal = false;
