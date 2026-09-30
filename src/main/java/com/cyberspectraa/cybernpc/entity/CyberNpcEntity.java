@@ -45,12 +45,14 @@ import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.monster.Warden;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Arrow;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.Rarity;
 import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
@@ -60,6 +62,7 @@ import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.CampfireBlockEntity;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.pathfinder.BlockPathTypes;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -67,6 +70,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
@@ -126,6 +130,11 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final int SCULK_SCAN_INTERVAL = 20;
     private static final int SCULK_STEALTH_HOLD_TICKS = 30;
     private static final int SCULK_SCAN_RADIUS = 16;
+
+    private static final int WARDEN_SCAN_INTERVAL = 5;
+    private static final double WARDEN_QUIET_AVOID_RADIUS = 22.0D;
+    private static final double WARDEN_PANIC_RADIUS = 8.0D;
+    private static final double QUIET_RETREAT_SPEED = 0.30D;
 
     private static final int SPRINT_STALL_TICKS = 8;
     private static final double SPRINT_MOVEMENT_EPSILON_SQR = 0.0025D;
@@ -260,6 +269,10 @@ public class CyberNpcEntity extends PathfinderMob {
     private int sculkScanCooldown;
     private int sculkStealthTicks;
     private boolean sculkSneaking;
+    private int wardenScanCooldown;
+
+    @Nullable
+    private Warden nearbyWarden;
 
     @Nullable
     private BlockPos foodChestTarget;
@@ -278,12 +291,18 @@ public class CyberNpcEntity extends PathfinderMob {
             groundNavigation.setCanOpenDoors(true);
             groundNavigation.setCanPassDoors(true);
         }
+
+        setPathfindingMalus(BlockPathTypes.LAVA, -1.0F);
+        setPathfindingMalus(BlockPathTypes.DAMAGE_FIRE, 16.0F);
+        setPathfindingMalus(BlockPathTypes.DANGER_FIRE, 10.0F);
+        setPathfindingMalus(BlockPathTypes.DAMAGE_OTHER, 12.0F);
+        setPathfindingMalus(BlockPathTypes.DANGER_OTHER, 8.0F);
     }
 
     public static AttributeSupplier.Builder createAttributes() {
         return Mob.createMobAttributes()
                 .add(Attributes.MAX_HEALTH, 20.0D)
-                .add(Attributes.MOVEMENT_SPEED, 0.27D)
+                .add(Attributes.MOVEMENT_SPEED, 0.425D)
                 .add(Attributes.FOLLOW_RANGE, 40.0D)
                 .add(Attributes.ATTACK_DAMAGE, 2.0D)
                 .add(Attributes.ARMOR, 0.0D);
@@ -332,7 +351,7 @@ public class CyberNpcEntity extends PathfinderMob {
         goalSelector.addGoal(0, new FloatGoal(this));
         goalSelector.addGoal(1, new OpenDoorGoal(this, true));
         goalSelector.addGoal(2, new WildNpcCombatGoal(this));
-        goalSelector.addGoal(5, new ConditionalRandomStrollGoal(this, 0.6D, 120));
+        goalSelector.addGoal(5, new ConditionalRandomStrollGoal(this, 1.0D, 120));
         goalSelector.addGoal(6, new ConditionalLookAtPlayerGoal(this, 8.0F));
         goalSelector.addGoal(7, new ConditionalRandomLookAroundGoal(this));
     }
@@ -1003,31 +1022,31 @@ public class CyberNpcEntity extends PathfinderMob {
         switch (getWildClass()) {
             case ARCHER -> {
                 maxHealth = 20.0D;
-                movementSpeed = 0.285D;
+                movementSpeed = 0.435D;
                 armor = 0.0D;
                 attackDamage = 2.0D;
             }
             case KNIGHT -> {
                 maxHealth = 26.0D;
-                movementSpeed = 0.255D;
+                movementSpeed = 0.395D;
                 armor = 2.0D;
                 attackDamage = 3.0D;
             }
             case ROGUE -> {
                 maxHealth = 18.0D;
-                movementSpeed = 0.31D;
+                movementSpeed = 0.455D;
                 armor = 0.0D;
                 attackDamage = 2.5D;
             }
             case MAGE -> {
                 maxHealth = 22.0D;
-                movementSpeed = 0.275D;
+                movementSpeed = 0.420D;
                 armor = 0.0D;
                 attackDamage = 2.0D;
             }
             default -> {
                 maxHealth = 20.0D;
-                movementSpeed = 0.27D;
+                movementSpeed = 0.425D;
                 armor = 0.0D;
                 attackDamage = 2.0D;
             }
@@ -1422,6 +1441,11 @@ public class CyberNpcEntity extends PathfinderMob {
 
         tickHunger();
 
+        if (tickEnvironmentalSafety()) {
+            finishAiTick();
+            return;
+        }
+
         if (!isZombifying() && tickInfectionSuspicion()) {
             finishAiTick();
             return;
@@ -1455,7 +1479,8 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void updateSculkStealth() {
-        boolean normalMovement = !isCombatActive()
+        boolean normalMovement = nearbyWarden == null
+                && !isCombatActive()
                 && fleeingThreat == null
                 && !emergencyEating
                 && !isSleeping()
@@ -1609,6 +1634,147 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         return false;
+    }
+
+    private boolean tickEnvironmentalSafety() {
+        if (isSleeping()) {
+            return false;
+        }
+
+        BlockPos feet = blockPosition();
+        BlockPos below = feet.below();
+
+        if (isInLava()
+                || isOnFire()
+                || isImmediateHazard(level().getBlockState(feet).getBlock())
+                || isImmediateHazard(level().getBlockState(below).getBlock())) {
+            Vec3 safe = findNearbySafeEscapePosition(feet);
+            if (safe != null) {
+                cancelMageCast();
+                setShiftKeyDown(false);
+                setSprinting(true);
+                getNavigation().moveTo(safe.x, safe.y, safe.z, 1.0D);
+            }
+            return true;
+        }
+
+        if (wardenScanCooldown > 0) {
+            wardenScanCooldown--;
+        } else {
+            wardenScanCooldown = WARDEN_SCAN_INTERVAL;
+            nearbyWarden = level().getEntitiesOfClass(
+                            Warden.class,
+                            getBoundingBox().inflate(
+                                    WARDEN_QUIET_AVOID_RADIUS,
+                                    10.0D,
+                                    WARDEN_QUIET_AVOID_RADIUS
+                            ),
+                            Warden::isAlive
+                    ).stream()
+                    .min(Comparator.comparingDouble(this::distanceToSqr))
+                    .orElse(null);
+        }
+
+        if (nearbyWarden == null
+                || !nearbyWarden.isAlive()
+                || distanceToSqr(nearbyWarden)
+                > WARDEN_QUIET_AVOID_RADIUS * WARDEN_QUIET_AVOID_RADIUS) {
+            nearbyWarden = null;
+            return false;
+        }
+
+        double distance = distanceTo(nearbyWarden);
+        boolean committedDanger = nearbyWarden.getTarget() == this
+                || distance <= WARDEN_PANIC_RADIUS;
+
+        if (committedDanger) {
+            startFleeingFrom(nearbyWarden);
+            tickFleeing();
+            return true;
+        }
+
+        if (!isCombatActive() && !emergencyEating) {
+            stopUsingItem();
+            clearUtilityItem();
+            cancelMageCast();
+            setSprinting(false);
+            setShiftKeyDown(true);
+
+            Vec3 away = DefaultRandomPos.getPosAway(
+                    this,
+                    12,
+                    5,
+                    nearbyWarden.position()
+            );
+
+            if (away != null
+                    && isSafeStandingPosition(BlockPos.containing(away))) {
+                getNavigation().moveTo(
+                        away.x,
+                        away.y,
+                        away.z,
+                        QUIET_RETREAT_SPEED
+                );
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean isImmediateHazard(net.minecraft.world.level.block.Block block) {
+        return block == Blocks.CAMPFIRE
+                || block == Blocks.SOUL_CAMPFIRE
+                || block == Blocks.FIRE
+                || block == Blocks.SOUL_FIRE
+                || block == Blocks.MAGMA_BLOCK
+                || block == Blocks.CACTUS
+                || block == Blocks.SWEET_BERRY_BUSH
+                || block == Blocks.WITHER_ROSE;
+    }
+
+    @Nullable
+    private Vec3 findNearbySafeEscapePosition(BlockPos danger) {
+        for (int attempt = 0; attempt < 10; attempt++) {
+            Vec3 candidate = DefaultRandomPos.getPosAway(
+                    this,
+                    10,
+                    5,
+                    Vec3.atCenterOf(danger)
+            );
+
+            if (candidate != null
+                    && isSafeStandingPosition(BlockPos.containing(candidate))) {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private boolean isSafeStandingPosition(BlockPos feet) {
+        if (!level().getFluidState(feet).isEmpty()
+                || !level().getFluidState(feet.below()).isEmpty()) {
+            return false;
+        }
+
+        var feetBlock = level().getBlockState(feet).getBlock();
+        var belowBlock = level().getBlockState(feet.below()).getBlock();
+
+        if (isImmediateHazard(feetBlock) || isImmediateHazard(belowBlock)) {
+            return false;
+        }
+
+        return level().getBlockState(feet)
+                        .getCollisionShape(level(), feet)
+                        .isEmpty()
+                && level().getBlockState(feet.above())
+                        .getCollisionShape(level(), feet.above())
+                        .isEmpty()
+                && !level().getBlockState(feet.below())
+                        .getCollisionShape(level(), feet.below())
+                        .isEmpty();
     }
 
     private boolean tickInfectionSuspicion() {
@@ -3324,7 +3490,7 @@ public class CyberNpcEntity extends PathfinderMob {
         if (shelter != null) {
             Vec3 shelterSpot = Vec3.atBottomCenterOf(shelter);
             if (distanceToSqr(shelterSpot) > 3.0D) {
-                getNavigation().moveTo(shelterSpot.x, shelterSpot.y, shelterSpot.z, 1.22D);
+                getNavigation().moveTo(shelterSpot.x, shelterSpot.y, shelterSpot.z, 1.0D);
                 setShiftKeyDown(false);
             } else {
                 getNavigation().stop();
@@ -3340,7 +3506,7 @@ public class CyberNpcEntity extends PathfinderMob {
             if (threatToBed > 100.0D) {
                 Vec3 bedSpot = Vec3.atBottomCenterOf(bed);
                 if (distanceToSqr(bedSpot) > 4.0D) {
-                    navigateTowardPersistentClaim(bed, 1.22D);
+                    navigateTowardPersistentClaim(bed, 1.0D);
                     setShiftKeyDown(false);
                 } else {
                     getNavigation().stop();
@@ -3353,7 +3519,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         Vec3 away = DefaultRandomPos.getPosAway(this, 16, 7, fleeingThreat.position());
         if (away != null) {
-            getNavigation().moveTo(away.x, away.y, away.z, 1.25D);
+            getNavigation().moveTo(away.x, away.y, away.z, 1.0D);
             setSprinting(true);
         }
     }
@@ -3903,39 +4069,122 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void dropOwnedStack(ItemStack stack) {
+        dropOwnedStack(stack, true);
+    }
+
+    private void dropOwnedStack(ItemStack stack, boolean guaranteed) {
         if (stack == null || stack.isEmpty()) {
             return;
         }
 
         ItemStack droppedStack = stack.copy();
 
-        // Mage NPCs fight using a real populated Iron's spellbook, but killing
-        // one rewards the underlying book rather than handing the player the
-        // NPC's pre-rolled combat spells.
         if (isMageSpellBook(droppedStack)) {
             droppedStack = IronSpellsCompat.createEmptyLootSpellBook(droppedStack);
+            guaranteed = true;
         }
 
-        if (!droppedStack.isEmpty()) {
+        if (!guaranteed && !shouldDropOwnedStack(droppedStack)) {
+            return;
+        }
+
+        if (!guaranteed) {
+            droppedStack.setCount(rollDroppedStackCount(droppedStack));
+        }
+
+        if (!droppedStack.isEmpty() && droppedStack.getCount() > 0) {
             spawnAtLocation(droppedStack);
         }
     }
 
-    @Override
-    protected void dropEquipment() {
-        // The 18-slot Wild NPC inventory is authoritative. Combat/utility hand
-        // items are only presentation copies, so stow them before this runs.
-        for (ItemStack stack : inventory.removeAll()) {
-            dropOwnedStack(stack);
+    private boolean shouldDropOwnedStack(ItemStack stack) {
+        double chance = switch (effectiveLootRarity(stack)) {
+            case COMMON -> 0.68D;
+            case UNCOMMON -> 0.48D;
+            case RARE -> 0.28D;
+            case EPIC -> 0.12D;
+        };
+
+        chance += switch (getGearTier()) {
+            case STANDARD -> 0.00D;
+            case FINE -> 0.08D;
+            case RARE -> 0.18D;
+            case ELITE -> 0.32D;
+        };
+
+        return getRandom().nextDouble() < Math.min(0.95D, chance);
+    }
+
+    private Rarity effectiveLootRarity(ItemStack stack) {
+        Rarity rarity = stack.getRarity();
+
+        if (!stack.isEnchanted()) {
+            return rarity;
         }
 
-        dropOwnedStack(foodToEat);
+        return switch (rarity) {
+            case COMMON -> Rarity.UNCOMMON;
+            case UNCOMMON -> Rarity.RARE;
+            case RARE, EPIC -> Rarity.EPIC;
+        };
+    }
+
+    private int rollDroppedStackCount(ItemStack stack) {
+        if (stack.getCount() <= 1) {
+            return 1;
+        }
+
+        double minFraction;
+        double maxFraction;
+
+        switch (getGearTier()) {
+            case STANDARD -> {
+                minFraction = 0.25D;
+                maxFraction = 0.50D;
+            }
+            case FINE -> {
+                minFraction = 0.35D;
+                maxFraction = 0.62D;
+            }
+            case RARE -> {
+                minFraction = 0.50D;
+                maxFraction = 0.78D;
+            }
+            case ELITE -> {
+                minFraction = 0.65D;
+                maxFraction = 1.00D;
+            }
+            default -> {
+                minFraction = 0.25D;
+                maxFraction = 0.50D;
+            }
+        }
+
+        double fraction = minFraction
+                + getRandom().nextDouble() * (maxFraction - minFraction);
+
+        return Mth.clamp(
+                (int) Math.round(stack.getCount() * fraction),
+                1,
+                stack.getCount()
+        );
+    }
+
+    @Override
+    protected void dropEquipment() {
+        List<ItemStack> carried = new ArrayList<>(inventory.removeAll());
+
+        for (ItemStack stack : carried) {
+            dropOwnedStack(stack, isMageSpellBook(stack));
+        }
+
+        dropOwnedStack(foodToEat, false);
         foodToEat = ItemStack.EMPTY;
 
         for (EquipmentSlot slot : EquipmentSlot.values()) {
             ItemStack equipped = getItemBySlot(slot);
             if (!equipped.isEmpty()) {
-                dropOwnedStack(equipped);
+                dropOwnedStack(equipped, false);
                 setItemSlot(slot, ItemStack.EMPTY);
             }
         }
