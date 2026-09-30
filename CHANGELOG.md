@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.18.0
+
+- Fixed repeated Archer/Classless bow shots missing the bow-draw pose by rendering CyberNpc's synced aiming state directly.
+- Slightly reduced CyberNpc height from 1.80 to 1.75 blocks and scaled the humanoid render to match.
+- Retuned Wild NPC movement toward player-like walking pace and changed idle wandering from 60% to full navigation speed.
+- Added strong route avoidance for lava, fire, campfires and other damaging terrain, plus an emergency escape if an NPC is pushed or spawned onto a hazard.
+- Added proactive Warden awareness: nearby uncommitted Wardens cause quiet crouched retreat; a Warden that targets or gets dangerously close causes immediate full-speed escape.
+- Refined Mage spell ranges from Iron's actual spell implementations, including true melee spacing for Flaming Strike/Divine Smite and self-AoE spacing for Frostwave/Shockwave.
+- Long Mage casts now obey Iron's own shouldAIStopCasting rule where provided, improving spell-specific range/target behaviour.
+- Added rarity-aware death loot: common items drop more often than uncommon/rare/epic items, enchanted items count as one rarity tier higher, and stronger gear tiers improve drop odds.
+- Stackable inventory loot now drops a gear-tier-scaled fraction instead of always dropping the whole carried stack.
+- Mage spellbooks remain guaranteed death loot and still drop empty.
+
+
 ## 0.17.0
 
 - Reduced gap jumping to a conservative 1-block walking gap and up to 3 blocks while sprinting; larger/unsafe gaps remain pathfinding detours.
