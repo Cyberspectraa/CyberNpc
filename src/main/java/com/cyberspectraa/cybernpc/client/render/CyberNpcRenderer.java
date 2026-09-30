@@ -5,19 +5,15 @@ import com.cyberspectraa.cybernpc.client.render.layer.CyberNpcHeldItemLayer;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.entity.NpcReactionIcon;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
-import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.MobRenderer;
 import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
-import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -27,14 +23,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix3f;
-import org.joml.Matrix4f;
 
 public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpcPlayerModel> {
-    private static final double REACTION_RENDER_DISTANCE_SQR = 32.0D * 32.0D;
-    private static final ResourceLocation REACTION_WHITE_TEXTURE =
-            new ResourceLocation("minecraft", "textures/misc/white.png");
-
     private final CyberNpcPlayerModel wideModel;
     private final CyberNpcPlayerModel slimModel;
     private final EntityRenderDispatcher renderDispatcher;
@@ -90,258 +80,20 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
 
         if (reaction == NpcReactionIcon.NONE
                 || reaction.glyph().isBlank()
-                || entity.isSleeping()
-                || renderDispatcher.distanceToSqr(entity)
-                > REACTION_RENDER_DISTANCE_SQR) {
+                || entity.isSleeping()) {
             return;
         }
 
-        String glyph = reaction.glyph();
-        int glyphWidth = font.width(glyph);
-        float halfWidth = Math.max(
-                12.0F,
-                (glyphWidth + 16.0F) * 0.5F
-        );
-
-        float bob = Mth.sin(
-                (entity.tickCount + partialTicks) * 0.12F
-        ) * 0.035F;
-
-        poseStack.pushPose();
-        poseStack.translate(
-                0.0D,
-                entity.getBbHeight() + 1.02D + bob,
-                0.0D
-        );
-        poseStack.mulPose(renderDispatcher.cameraOrientation());
-        poseStack.scale(-0.032F, -0.032F, 0.032F);
-
-        PoseStack.Pose bubblePose = poseStack.last();
-        Matrix4f matrix = bubblePose.pose();
-        VertexConsumer background = buffer.getBuffer(
-                RenderType.entityTranslucent(REACTION_WHITE_TEXTURE)
-        );
-
-        // IMPORTANT: border and fill occupy different XY regions on the exact
-        // same Z plane. There is no full black silhouette behind the white
-        // panel anymore, so depth ordering cannot turn the whole bubble black.
-        int border = 0xFF2B2927;
-        int fill = 0xFFFFFFFF;
-
-        drawBubbleFrameAndFill(
-                background,
-                bubblePose,
-                halfWidth,
-                border,
-                fill
-        );
-
-        int iconColor = reactionColor(reaction);
-        float iconX = -glyphWidth / 2.0F;
-        float iconY = -4.5F;
-
-        font.drawInBatch(
-                glyph,
-                iconX,
-                iconY,
-                iconColor,
-                false,
-                matrix,
+        SpeechBubbleRenderUtil.renderIconBubble(
+                entity,
+                partialTicks,
+                poseStack,
                 buffer,
-                Font.DisplayMode.POLYGON_OFFSET,
-                0,
-                LightTexture.FULL_BRIGHT
+                font,
+                renderDispatcher,
+                reaction.glyph(),
+                reactionColor(reaction)
         );
-
-        poseStack.popPose();
-    }
-
-    private static void drawBubbleFrameAndFill(
-            VertexConsumer consumer,
-            PoseStack.Pose pose,
-            float halfWidth,
-            int border,
-            int fill
-    ) {
-        final float z = 0.0F;
-
-        // Top stepped border.
-        drawBubbleRect(
-                consumer, pose,
-                -halfWidth + 3.0F, -11.0F,
-                halfWidth - 3.0F, -9.0F,
-                z, border
-        );
-        drawBubbleRect(
-                consumer, pose,
-                -halfWidth + 1.0F, -9.0F,
-                -halfWidth + 3.0F, -7.0F,
-                z, border
-        );
-        drawBubbleRect(
-                consumer, pose,
-                halfWidth - 3.0F, -9.0F,
-                halfWidth - 1.0F, -7.0F,
-                z, border
-        );
-
-        // Side borders.
-        drawBubbleRect(
-                consumer, pose,
-                -halfWidth, -7.0F,
-                -halfWidth + 2.0F, 7.0F,
-                z, border
-        );
-        drawBubbleRect(
-                consumer, pose,
-                halfWidth - 2.0F, -7.0F,
-                halfWidth, 7.0F,
-                z, border
-        );
-
-        // Bottom stepped border.
-        drawBubbleRect(
-                consumer, pose,
-                -halfWidth + 1.0F, 7.0F,
-                -halfWidth + 3.0F, 9.0F,
-                z, border
-        );
-        drawBubbleRect(
-                consumer, pose,
-                halfWidth - 3.0F, 7.0F,
-                halfWidth - 1.0F, 9.0F,
-                z, border
-        );
-        drawBubbleRect(
-                consumer, pose,
-                -halfWidth + 3.0F, 9.0F,
-                halfWidth - 3.0F, 11.0F,
-                z, border
-        );
-
-        // White interior. These regions meet the border at their edges but do
-        // not overlap any dark geometry.
-        drawBubbleRect(
-                consumer, pose,
-                -halfWidth + 3.0F, -9.0F,
-                halfWidth - 3.0F, -7.0F,
-                z, fill
-        );
-        drawBubbleRect(
-                consumer, pose,
-                -halfWidth + 2.0F, -7.0F,
-                halfWidth - 2.0F, 7.0F,
-                z, fill
-        );
-        drawBubbleRect(
-                consumer, pose,
-                -halfWidth + 3.0F, 7.0F,
-                halfWidth - 3.0F, 9.0F,
-                z, fill
-        );
-
-        // Pixel speech tail. Like the body, the white center and dark edge use
-        // separate coordinates instead of stacked surfaces.
-        drawBubbleRect(
-                consumer, pose,
-                -2.0F, 11.0F,
-                0.0F, 14.0F,
-                z, border
-        );
-        drawBubbleRect(
-                consumer, pose,
-                0.0F, 13.0F,
-                2.0F, 16.0F,
-                z, border
-        );
-        drawBubbleRect(
-                consumer, pose,
-                4.0F, 11.0F,
-                6.0F, 14.0F,
-                z, border
-        );
-        drawBubbleRect(
-                consumer, pose,
-                2.0F, 15.0F,
-                4.0F, 17.0F,
-                z, border
-        );
-
-        drawBubbleRect(
-                consumer, pose,
-                0.0F, 11.0F,
-                4.0F, 13.0F,
-                z, fill
-        );
-        drawBubbleRect(
-                consumer, pose,
-                2.0F, 13.0F,
-                4.0F, 15.0F,
-                z, fill
-        );
-    }
-
-    private static void drawBubbleRect(
-            VertexConsumer consumer,
-            PoseStack.Pose pose,
-            float left,
-            float top,
-            float right,
-            float bottom,
-            float z,
-            int color
-    ) {
-        Matrix4f matrix = pose.pose();
-        Matrix3f normal = pose.normal();
-
-        int alpha = color >>> 24 & 0xFF;
-        int red = color >>> 16 & 0xFF;
-        int green = color >>> 8 & 0xFF;
-        int blue = color & 0xFF;
-
-        bubbleVertex(
-                consumer, matrix, normal,
-                left, top, z, 0.0F, 0.0F,
-                red, green, blue, alpha
-        );
-        bubbleVertex(
-                consumer, matrix, normal,
-                left, bottom, z, 0.0F, 1.0F,
-                red, green, blue, alpha
-        );
-        bubbleVertex(
-                consumer, matrix, normal,
-                right, bottom, z, 1.0F, 1.0F,
-                red, green, blue, alpha
-        );
-        bubbleVertex(
-                consumer, matrix, normal,
-                right, top, z, 1.0F, 0.0F,
-                red, green, blue, alpha
-        );
-    }
-
-    private static void bubbleVertex(
-            VertexConsumer consumer,
-            Matrix4f matrix,
-            Matrix3f normal,
-            float x,
-            float y,
-            float z,
-            float u,
-            float v,
-            int red,
-            int green,
-            int blue,
-            int alpha
-    ) {
-        consumer.vertex(matrix, x, y, z)
-                .color(red, green, blue, alpha)
-                .uv(u, v)
-                .overlayCoords(OverlayTexture.NO_OVERLAY)
-                .uv2(LightTexture.FULL_BRIGHT)
-                .normal(normal, 0.0F, 0.0F, 1.0F)
-                .endVertex();
     }
 
     private static int reactionColor(NpcReactionIcon reaction) {
