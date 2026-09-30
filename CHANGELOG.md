@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.23.0
+
+- Added Minecraft-style world-space reaction bubbles for Wild NPCs.
+- Wild NPCs remain non-verbal: reaction bubbles contain compact icon/emoticon symbols only and never generate dialogue lines.
+- Added reaction states for Happy, Thinking, Confused, Friendly, Surprised, Sad, Annoyed, Scared and Angry.
+- Reaction state is synchronized to clients but intentionally not saved to NBT; persistent relationship/reputation values remain the long-term memory underneath.
+- Higher-priority reactions such as Angry or Scared are not immediately overwritten by low-priority casual reactions.
+- Reaction bubbles are camera-facing, blocky white panels with a dark pixel border and tail, rendered only within 32 blocks.
+- Player attacks now produce Annoyed or Angry reactions depending on severity and prior reputation.
+- NPCs witnessing attacks against friends/party members react visibly, with stronger reactions for fatal attacks and party bonds.
+- NPCs show Scared reactions when they decide to flee a dangerous threat.
+- NPCs can show Confused reactions when they become suspicious of a nearby zombifying NPC.
+- Helping an NPC in combat can produce Happy/Friendly reactions, especially when the player kills the threat.
+- Forming or joining a party produces Friendly/Happy reactions.
+- Peaceful nearby NPC interactions have a deliberately low chance to produce paired reactions, so towns feel socially alive without filling the screen with bubbles.
+- The reaction system is exposed through a reusable showReaction API so future social-conversation logic can drive the same icon-only bubbles without adding text dialogue.
+
+
 ## 0.22.1
 
 - Converted CyberNpc zombies are now permanently adult. Baby rolls and chicken-jockey conversion data are suppressed during spawn, setBaby(true) is ignored, and old saved custom zombies with baby NBT are corrected when loaded.
