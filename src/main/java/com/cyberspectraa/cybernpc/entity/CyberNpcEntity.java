@@ -4734,6 +4734,9 @@ public class CyberNpcEntity extends PathfinderMob {
         private int crossbowChargeTicks;
         private int crossbowHoldTicks;
 
+        @Nullable
+        private CyberNpcEntity clericSupportTarget;
+
         private WildNpcCombatGoal(CyberNpcEntity npc) {
             this.npc = npc;
             setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
@@ -4805,7 +4808,7 @@ public class CyberNpcEntity extends PathfinderMob {
             }
 
             switch (npc.getWildClass()) {
-                case KNIGHT, ROGUE -> {
+                case KNIGHT, ROGUE, BERSERKER -> {
                     tickMelee(target, distanceSqr);
                     return;
                 }
@@ -4819,6 +4822,14 @@ public class CyberNpcEntity extends PathfinderMob {
                 }
                 case MAGE -> {
                     tickMage(target, distanceSqr, lineOfSight);
+                    return;
+                }
+                case CLERIC -> {
+                    tickCleric(target, distanceSqr, lineOfSight);
+                    return;
+                }
+                case SPELLBLADE -> {
+                    tickSpellblade(target, distanceSqr, lineOfSight);
                     return;
                 }
                 default -> {
@@ -4835,7 +4846,7 @@ public class CyberNpcEntity extends PathfinderMob {
         private void tickMelee(LivingEntity target, double distanceSqr) {
             resetRangedUse();
             npc.setShiftKeyDown(false);
-            npc.equipSword();
+            npc.equipMeleeWeapon();
 
             WildNpcClass npcClass = npc.getWildClass();
             WildNpcPersonality personality = npc.getPersonality();
@@ -4843,30 +4854,53 @@ public class CyberNpcEntity extends PathfinderMob {
             int attackCooldown = switch (npcClass) {
                 case ROGUE -> 9;
                 case KNIGHT -> 13;
+                case BERSERKER -> 14;
+                case SPELLBLADE -> 11;
                 default -> MELEE_ATTACK_COOLDOWN;
             };
 
             int recoveryTicks = switch (npcClass) {
                 case ROGUE -> 4;
                 case KNIGHT -> 6;
+                case BERSERKER -> 5;
+                case SPELLBLADE -> 5;
                 default -> MELEE_RECOVERY_TICKS;
             };
 
-            if (personality == WildNpcPersonality.AGGRESSIVE) {
-                attackCooldown = Math.max(7, attackCooldown - 2);
-                recoveryTicks = Math.max(3, recoveryTicks - 1);
-            } else if (personality == WildNpcPersonality.CAUTIOUS) {
-                attackCooldown += 2;
-                recoveryTicks += 2;
-            } else if (personality == WildNpcPersonality.TACTICAL) {
-                recoveryTicks += 1;
+            attackCooldown = Math.max(
+                    6,
+                    attackCooldown + personality.attackCooldownModifier()
+            );
+            recoveryTicks = Math.max(
+                    2,
+                    recoveryTicks + personality.recoveryModifier()
+            );
+
+            boolean berserkerRage = npcClass == WildNpcClass.BERSERKER
+                    && npc.getHealth() <= npc.getMaxHealth() * 0.45F;
+
+            if (berserkerRage) {
+                attackCooldown = Math.max(6, attackCooldown - 3);
+                recoveryTicks = Math.max(2, recoveryTicks - 2);
             }
 
-            double attackDistanceSqr = npcClass == WildNpcClass.ROGUE ? 8.41D : MELEE_ATTACK_DISTANCE_SQR;
-            double tooCloseSqr = npcClass == WildNpcClass.KNIGHT ? 4.0D : MELEE_TOO_CLOSE_SQR;
+            double attackDistanceSqr = switch (npcClass) {
+                case ROGUE -> 8.41D;
+                case BERSERKER -> 10.24D;
+                default -> MELEE_ATTACK_DISTANCE_SQR;
+            };
+
+            double tooCloseSqr = switch (npcClass) {
+                case KNIGHT -> 4.0D;
+                case BERSERKER -> 3.24D;
+                default -> MELEE_TOO_CLOSE_SQR;
+            };
+
             double approachSpeed = switch (npcClass) {
                 case ROGUE -> 1.20D;
+                case BERSERKER -> berserkerRage ? 1.28D : 1.16D;
                 case KNIGHT -> 1.02D;
+                case SPELLBLADE -> 1.10D;
                 default -> 1.06D;
             };
 
@@ -4928,12 +4962,10 @@ public class CyberNpcEntity extends PathfinderMob {
 
             away = away.normalize();
 
-            double sideStrength = npc.getWildClass() == WildNpcClass.ROGUE ? 1.25D : 0.75D;
-            if (npc.getPersonality() == WildNpcPersonality.TACTICAL) {
-                sideStrength += 0.35D;
-            } else if (npc.getPersonality() == WildNpcPersonality.AGGRESSIVE) {
-                sideStrength *= 0.75D;
-            }
+            double sideStrength = npc.getWildClass() == WildNpcClass.ROGUE
+                    ? 1.25D
+                    : (npc.getWildClass() == WildNpcClass.BERSERKER ? 0.45D : 0.75D);
+            sideStrength *= npc.getPersonality().strafeMultiplier();
 
             Vec3 side = new Vec3(-away.z, 0.0D, away.x)
                     .scale(sideStrength * meleeStrafeDirection);
@@ -4943,23 +4975,26 @@ public class CyberNpcEntity extends PathfinderMob {
                 radius = retreat ? 3.0D : 2.55D;
             } else if (npc.getWildClass() == WildNpcClass.ROGUE) {
                 radius = retreat ? 4.2D : 3.1D;
+            } else if (npc.getWildClass() == WildNpcClass.BERSERKER) {
+                radius = retreat ? 2.7D : 2.3D;
+            } else if (npc.getWildClass() == WildNpcClass.SPELLBLADE) {
+                radius = retreat ? 3.8D : 3.0D;
             } else {
                 radius = retreat ? 3.6D : 2.85D;
             }
 
-            if (npc.getPersonality() == WildNpcPersonality.CAUTIOUS) {
-                radius += 0.8D;
-            } else if (npc.getPersonality() == WildNpcPersonality.AGGRESSIVE) {
-                radius -= 0.45D;
-            }
+            radius += npc.getPersonality().spacingOffset();
 
             Vec3 desired = target.position()
                     .add(away.scale(Math.max(2.2D, radius)))
                     .add(side);
 
-            double speed = npc.getWildClass() == WildNpcClass.ROGUE
-                    ? (retreat ? 1.20D : 0.96D)
-                    : (retreat ? 1.08D : 0.82D);
+            double speed = switch (npc.getWildClass()) {
+                case ROGUE -> retreat ? 1.20D : 0.96D;
+                case BERSERKER -> retreat ? 1.12D : 0.98D;
+                case SPELLBLADE -> retreat ? 1.12D : 0.90D;
+                default -> retreat ? 1.08D : 0.82D;
+            };
 
             boolean moving = npc.getNavigation().moveTo(
                     desired.x,
@@ -5000,13 +5035,9 @@ public class CyberNpcEntity extends PathfinderMob {
 
             away = away.normalize();
             Vec3 side = new Vec3(-away.z, 0.0D, away.x)
-                    .scale(npc.getPersonality() == WildNpcPersonality.TACTICAL ? 1.5D : 0.8D);
+                    .scale(0.8D * npc.getPersonality().strafeMultiplier());
 
-            if (npc.getPersonality() == WildNpcPersonality.CAUTIOUS) {
-                radius += 2.0D;
-            } else if (npc.getPersonality() == WildNpcPersonality.AGGRESSIVE) {
-                radius -= 1.5D;
-            }
+            radius += npc.getPersonality().spacingOffset() * 1.8D;
 
             Vec3 desired = target.position()
                     .add(away.scale(Math.max(6.0D, radius)))
@@ -5054,6 +5085,141 @@ public class CyberNpcEntity extends PathfinderMob {
             } else {
                 tickBow(target, distanceSqr);
             }
+        }
+
+        private void tickCleric(
+                LivingEntity enemy,
+                double enemyDistanceSqr,
+                boolean enemyLineOfSight
+        ) {
+            ItemStack spellBook = npc.getMageSpellBook();
+
+            if (spellBook.isEmpty()
+                    || !IronSpellsCompat.hasUsableCombatSpells(spellBook)) {
+                npc.classLoadoutInitialized = false;
+                npc.ensureWildProfile();
+                spellBook = npc.getMageSpellBook();
+            }
+
+            if (spellBook.isEmpty()) {
+                tickMelee(enemy, enemyDistanceSqr);
+                return;
+            }
+
+            if (IronSpellsCompat.hasActiveCast(npc)) {
+                if (IronSpellsCompat.isActiveSupportCast(npc)
+                        && clericSupportTarget != null
+                        && clericSupportTarget.isAlive()) {
+                    tickClericSupport(spellBook, clericSupportTarget);
+                    return;
+                }
+
+                tickMage(enemy, enemyDistanceSqr, enemyLineOfSight);
+                return;
+            }
+
+            if (IronSpellsCompat.hasReadySupportSpell(npc, spellBook)) {
+                clericSupportTarget = npc.findMostInjuredFriendly(24.0D);
+                if (clericSupportTarget != null) {
+                    tickClericSupport(spellBook, clericSupportTarget);
+                    return;
+                }
+            }
+
+            clericSupportTarget = null;
+            tickMage(enemy, enemyDistanceSqr, enemyLineOfSight);
+        }
+
+        private void tickClericSupport(
+                ItemStack spellBook,
+                CyberNpcEntity ally
+        ) {
+            resetRangedUse();
+            npc.clearUtilityItem();
+            npc.stowWeapons();
+            npc.setSprinting(false);
+            npc.setShiftKeyDown(false);
+
+            double distance = npc.distanceTo(ally);
+            boolean lineOfSight = npc.getSensing().hasLineOfSight(ally);
+
+            if (distance > 30.0D || !lineOfSight) {
+                npc.getNavigation().moveTo(ally, 0.95D);
+                return;
+            }
+
+            npc.getNavigation().stop();
+
+            IronSpellsCompat.CastResult result =
+                    IronSpellsCompat.tickSupportSpell(npc, ally, spellBook);
+
+            if (!result.success()) {
+                clericSupportTarget = null;
+                return;
+            }
+
+            npc.startMageCastingVisual(
+                    spellBook,
+                    result.spellId(),
+                    result.visualTicks(),
+                    result.castType()
+            );
+
+            if (!result.casting()) {
+                clericSupportTarget = null;
+                mageCooldown = Math.max(
+                        4,
+                        8 + npc.getPersonality().attackCooldownModifier()
+                );
+            }
+        }
+
+        private void tickSpellblade(
+                LivingEntity target,
+                double distanceSqr,
+                boolean lineOfSight
+        ) {
+            ItemStack spellBook = npc.getMageSpellBook();
+
+            if (spellBook.isEmpty()
+                    || !IronSpellsCompat.hasUsableCombatSpells(spellBook)) {
+                npc.classLoadoutInitialized = false;
+                npc.ensureWildProfile();
+                spellBook = npc.getMageSpellBook();
+            }
+
+            if (spellBook.isEmpty()) {
+                tickMelee(target, distanceSqr);
+                return;
+            }
+
+            if (IronSpellsCompat.hasActiveCast(npc)) {
+                tickMage(target, distanceSqr, lineOfSight);
+                return;
+            }
+
+            IronSpellsCompat.CombatPlan plan =
+                    IronSpellsCompat.getCombatPlan(npc, target, spellBook);
+
+            double healthFraction = npc.getMaxHealth() <= 0.0F
+                    ? 1.0D
+                    : npc.getHealth() / npc.getMaxHealth();
+
+            boolean defensiveMagic = plan.available()
+                    && ("HEAL".equals(plan.role())
+                    || "DEFENSE".equals(plan.role()))
+                    && healthFraction < 0.65D;
+
+            // Spellblades use magic to open/control at range, but once they are
+            // inside sword distance they commit to melee unless defensive magic
+            // has become urgent.
+            if (!defensiveMagic
+                    && (distanceSqr <= 36.0D || !plan.available())) {
+                tickMelee(target, distanceSqr);
+                return;
+            }
+
+            tickMage(target, distanceSqr, lineOfSight);
         }
 
         private void tickMage(LivingEntity target, double distanceSqr, boolean lineOfSight) {
@@ -5109,16 +5275,9 @@ public class CyberNpcEntity extends PathfinderMob {
                 );
 
                 if (!result.casting()) {
-                    int personalityAdjustment = switch (npc.getPersonality()) {
-                        case AGGRESSIVE -> -2;
-                        case CAUTIOUS -> 2;
-                        case TACTICAL -> -1;
-                        default -> 0;
-                    };
-
                     mageCooldown = Math.max(
                             3,
-                            6 + personalityAdjustment
+                            6 + npc.getPersonality().attackCooldownModifier()
                     );
                 }
                 return;
@@ -5212,16 +5371,9 @@ public class CyberNpcEntity extends PathfinderMob {
                 return;
             }
 
-            int personalityAdjustment = switch (npc.getPersonality()) {
-                case AGGRESSIVE -> -2;
-                case CAUTIOUS -> 2;
-                case TACTICAL -> -1;
-                default -> 0;
-            };
-
             mageCooldown = Math.max(
                     3,
-                    6 + personalityAdjustment
+                    6 + npc.getPersonality().attackCooldownModifier()
             );
         }
 
@@ -5300,9 +5452,11 @@ public class CyberNpcEntity extends PathfinderMob {
             );
 
             bowDrawTicks = 0;
-            rangedCooldown = npc.getWildClass() == WildNpcClass.ARCHER
-                    ? (npc.getPersonality() == WildNpcPersonality.AGGRESSIVE ? 8 : 10)
-                    : 12;
+            rangedCooldown = Math.max(
+                    6,
+                    (npc.getWildClass() == WildNpcClass.ARCHER ? 10 : 12)
+                            + npc.getPersonality().attackCooldownModifier()
+            );
         }
 
         private void tickCrossbow(LivingEntity target, ItemStack crossbow, double distanceSqr) {
@@ -5388,9 +5542,11 @@ public class CyberNpcEntity extends PathfinderMob {
                 npc.setRangedState(RANGED_STATE_NONE);
                 crossbowChargeTicks = 0;
                 crossbowHoldTicks = 0;
-                rangedCooldown = npc.getWildClass() == WildNpcClass.ARCHER
-                        ? (npc.getPersonality() == WildNpcPersonality.AGGRESSIVE ? 20 : 24)
-                        : 28;
+                rangedCooldown = Math.max(
+                        14,
+                        (npc.getWildClass() == WildNpcClass.ARCHER ? 24 : 28)
+                                + npc.getPersonality().attackCooldownModifier() * 2
+                );
             }
         }
 
@@ -5416,6 +5572,7 @@ public class CyberNpcEntity extends PathfinderMob {
             meleeStrafeDirection = 1;
             rangedCooldown = 0;
             mageCooldown = 0;
+            clericSupportTarget = null;
         }
     }
 }
