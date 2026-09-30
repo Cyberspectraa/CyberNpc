@@ -1,50 +1,148 @@
 # CyberNpc
 
-## Current release: 0.13.1
+## Current release: 0.14.0
 
-v0.13.1 keeps the class/personality and tabbed Developer Glasses systems from v0.13.0, but changes Mage integration.
+CyberNpc v0.14.0 expands the Wild NPC class system into persistent equipment/loadout classes.
 
-### Mage requires Iron's Spells 'n Spellbooks
+## Gear quality
 
-Mage is now a true optional-integration class.
+Every Wild NPC now rolls a persistent gear tier independently of class:
 
-- Mage is only included in the Wild NPC class spawn roll when the mod id `irons_spellbooks` is loaded.
-- Without Iron's installed, the Mage weight is skipped entirely and the remaining classes are re-normalized automatically.
-- Any saved Mage loaded without Iron's installed is safely converted to Classless.
-- CyberNpc does not hard-link to Iron's classes, so CyberNpc itself can still load without Iron's.
-- Iron's is declared as an optional AFTER dependency so its registries are ready before CyberNpc uses the integration.
+- **Standard — 70%**
+- **Fine — 20%**
+- **Rare — 8%**
+- **Elite — 2%**
 
-### Real Iron's spells only
+Higher tiers can provide stronger armor/weapons, enchantments, and small base-stat improvements. Elite NPCs are intentionally uncommon.
 
-The temporary CyberNpc-created magic attack has been removed.
+All Wild NPC classes now spawn with visible armor, including Classless NPCs.
 
-Mage combat now invokes Iron's own spell registry and server-side spell lifecycle using `CastSource.MOB`.
+### Classless
+- Standard: leather armor and ordinary starting weapons.
+- Fine: chainmail armor, improved iron/ranged gear.
+- Rare: iron armor with stronger enchanted gear.
+- Elite: diamond armor with rare high-end weaponry.
+- Remains the common/default class; gear tier does not turn it into a special class.
 
-The initial verified Mage attack pool is:
-- `irons_spellbooks:firebolt`
-- `irons_spellbooks:magic_missile`
-- `irons_spellbooks:icicle`
+### Archer
+- Standard leather armor.
+- Fine chainmail.
+- Rare iron.
+- Elite diamond.
+- Uses bow/crossbow plus a backup sword.
+- Better gear tiers improve and enchant its weapons.
 
-CyberNpc checks that a selected Iron's spell exists, is enabled, and is an INSTANT spell before casting it. The spell itself creates the projectile/effect, sound, damage behavior, school scaling, and other Iron's mechanics.
+### Knight
+- Standard chainmail.
+- Fine iron.
+- Rare diamond.
+- Elite netherite.
+- Sword-focused melee class.
+- Better gear tiers increase health/speed/attack stats in addition to equipment quality.
 
-If Iron's cannot provide a valid spell at runtime, the Mage repositions and retries later. It does not fall back to fake CyberNpc magic.
+### Rogue
+- Standard leather.
+- Fine chainmail.
+- Rare iron.
+- Elite diamond.
+- Fast melee/flanking class.
+- Better tiers improve sword quality, enchantments and class stats.
 
-### Class rarity
+## Mage schools
 
-When Iron's is installed:
-- Classless 78%
-- Archer 8%
-- Knight 6%
-- Rogue 5%
-- Mage 3%
+Mage still only exists when **Iron's Spells 'n Spellbooks** is installed.
 
-When Iron's is not installed, Mage is excluded from the roll.
+Each Mage now rolls one persistent Iron's magic school:
 
-### Developer Glasses
+- **Fire** — Pyromancer armor.
+- **Ice** — Cryomancer armor.
+- **Lightning** — Electromancer armor.
+- **Nature** — Plagued armor.
+- **Holy** — Priest armor.
+- **Ender** — Shadowwalker armor.
+- **Blood** — Cultist armor.
+- **Evocation** — Archevoker armor.
 
-The Mage combat-style line now reports `Iron's Spells caster / distance control`.
+The school is saved with the NPC and shown in Developer Glasses.
 
-The existing Overview, Combat, Survival and Debug tabs remain unchanged, with V as the default configurable tab-cycle key.
+## Real Iron's spellbooks
+
+Every Mage receives a real Iron's spellbook stored in its 18-slot NPC inventory.
+
+Where Iron's provides a suitable school-specific book, CyberNpc uses it:
+
+- Fire: Blaze Spell Book.
+- Nature: Druidic Spell Book.
+- Holy: Villager Spell Book.
+- Ender: Dragonskin Spell Book.
+- Blood: Necronomicon Spell Book.
+- Evocation: Evoker Spell Book.
+
+Ice and Lightning currently use an appropriate generic Iron's spellbook because the tested Iron's 1.20.1 version does not provide a dedicated school book for those schools.
+
+The spellbook is populated with actual Iron's spell-container NBT and real spells from that Mage's school. Gear quality affects spell count and spell level:
+
+- Standard: up to 2 school spells.
+- Fine: up to 3.
+- Rare: up to 3 at higher levels.
+- Elite: up to 4 at the strongest initial levels.
+
+The book is the Mage's actual persistent item. It is shown in the offhand while casting and is dropped with the rest of the NPC's inventory on death.
+
+## Real Iron's casting lifecycle
+
+Mage combat no longer uses CyberNpc-created magic.
+
+CyberNpc's optional compatibility bridge now follows Iron's own mob-casting sequence:
+
+- Reads spells from the Mage's actual spellbook.
+- Uses Iron's real spell registry.
+- Uses `CastSource.MOB`.
+- Creates Iron's `MagicData` and server-side synced spell data for the NPC.
+- Checks the spell's Iron's pre-cast conditions.
+- Uses the real Iron's cast time.
+- Calls Iron's server pre-cast, cast-tick, cast and cast-complete hooks.
+- Supports both **INSTANT** and **LONG** spells.
+- Continuous/channelled spells are intentionally excluded for this first loadout pass until their full repeated-tick behavior is supported safely.
+
+This lets schools such as Nature use their real long-cast Iron's spells rather than being forced into fake instant projectiles.
+
+## Spellcasting animation
+
+CyberNpc still uses its player-shaped model, so it does not replace itself with Iron's GeckoLib mob model.
+
+Instead, the player model now follows the real Iron's cast type/timing:
+
+- Instant spells use a quick forward casting thrust.
+- Long spells hold a sustained two-arm casting pose for the actual Iron's cast duration.
+- The real spellbook is visible in the offhand during the cast.
+- The spell projectile/effect, sound, damage and cast timing still come from Iron's itself.
+
+## Armor rendering
+
+CyberNpc now includes a humanoid armor render layer so vanilla class armor and compatible Forge custom armor can render on the NPC model.
+
+## Curios
+
+No extra Curios dependency was added in v0.14.0 because it is not required for NPC MOB casting: the authoritative spellbook is kept in the real NPC inventory and Iron's MOB casting can use it without a player Curios slot. This also avoids creating a duplicate copy of the book between the NPC inventory and a Curios inventory.
+
+If a later feature specifically requires Curios-only bonuses/accessories, a dedicated soft Curios bridge can be added then.
+
+## Developer Glasses
+
+The tabbed Developer Glasses HUD now also shows:
+
+- Gear tier.
+- Mage school.
+- Current Iron's spell being cast.
+- Internal class/personality/gear/school IDs on the Debug page.
+
+## Existing systems
+
+v0.14.0 keeps the proper 18-slot inventory, class rarity/personality system, combat spacing and assistance, hunger/starvation, food storage, real cooking, beds, persistent claims, livestock management, Zombification/Zombie NPCs, and the tabbed Developer Glasses HUD.
+
+Better Combat remains optional and is not required by CyberNpc.
 
 ## Development target
+
 Minecraft 1.20.1, Forge 47.4.10, Java 17.

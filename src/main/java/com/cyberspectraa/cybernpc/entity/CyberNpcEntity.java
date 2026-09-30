@@ -7,6 +7,7 @@ import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.cyberspectraa.cybernpc.world.CyberNpcWorldClaims;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -73,6 +74,10 @@ public class CyberNpcEntity extends PathfinderMob {
     public static final int RANGED_STATE_CROSSBOW_CHARGE = 2;
     public static final int RANGED_STATE_CROSSBOW_HOLD = 3;
 
+    public static final int SPELL_CAST_MODE_NONE = 0;
+    public static final int SPELL_CAST_MODE_INSTANT = 1;
+    public static final int SPELL_CAST_MODE_LONG = 2;
+
     private static final int MELEE_SWING_DURATION = 6;
     private static final double WILD_HELP_RADIUS = 24.0D;
     private static final double WILD_DISENGAGE_DISTANCE = 40.0D;
@@ -135,6 +140,21 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> DATA_PERSONALITY =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
 
+    private static final EntityDataAccessor<String> DATA_GEAR_TIER =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
+    private static final EntityDataAccessor<String> DATA_MAGE_SCHOOL =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
+    private static final EntityDataAccessor<Integer> DATA_SPELL_CAST_TICKS =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.INT);
+
+    private static final EntityDataAccessor<Integer> DATA_SPELL_CAST_MODE =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.INT);
+
+    private static final EntityDataAccessor<String> DATA_CASTING_SPELL =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
     private static final EntityDataAccessor<Boolean> DATA_COMBAT_ACTIVE =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.BOOLEAN);
 
@@ -166,6 +186,7 @@ public class CyberNpcEntity extends PathfinderMob {
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
 
     private int aggressionLevel = -1;
+    private boolean classLoadoutInitialized;
     private int provocation;
     private int outOfRangeTicks;
     private int hungerDecayTimer;
@@ -259,6 +280,11 @@ public class CyberNpcEntity extends PathfinderMob {
         entityData.define(DATA_NPC_TYPE, NpcType.MAIN.serializedName());
         entityData.define(DATA_WILD_CLASS, "");
         entityData.define(DATA_PERSONALITY, "");
+        entityData.define(DATA_GEAR_TIER, "");
+        entityData.define(DATA_MAGE_SCHOOL, "");
+        entityData.define(DATA_SPELL_CAST_TICKS, 0);
+        entityData.define(DATA_SPELL_CAST_MODE, SPELL_CAST_MODE_NONE);
+        entityData.define(DATA_CASTING_SPELL, "");
         entityData.define(DATA_COMBAT_ACTIVE, false);
         entityData.define(DATA_HUNGER, MAX_HUNGER);
         entityData.define(DATA_RANGED_STATE, RANGED_STATE_NONE);
@@ -301,6 +327,11 @@ public class CyberNpcEntity extends PathfinderMob {
         if (safeType != NpcType.WILD) {
             entityData.set(DATA_WILD_CLASS, "");
             entityData.set(DATA_PERSONALITY, "");
+            entityData.set(DATA_GEAR_TIER, "");
+            entityData.set(DATA_MAGE_SCHOOL, "");
+            entityData.set(DATA_SPELL_CAST_TICKS, 0);
+            entityData.set(DATA_SPELL_CAST_MODE, SPELL_CAST_MODE_NONE);
+            entityData.set(DATA_CASTING_SPELL, "");
             setPersistenceRequired();
             sleepBrain.interrupt();
             calmWildNpc();
@@ -333,6 +364,48 @@ public class CyberNpcEntity extends PathfinderMob {
                 ? WildNpcPersonality.BALANCED
                 : personality;
         entityData.set(DATA_PERSONALITY, safe.serializedName());
+    }
+
+    public WildNpcGearTier getGearTier() {
+        return WildNpcGearTier.fromSerializedName(entityData.get(DATA_GEAR_TIER));
+    }
+
+    public String getGearTierDisplayName() {
+        return getGearTier().displayName();
+    }
+
+    private void setGearTier(WildNpcGearTier tier) {
+        WildNpcGearTier safe = tier == null ? WildNpcGearTier.STANDARD : tier;
+        entityData.set(DATA_GEAR_TIER, safe.serializedName());
+    }
+
+    public MageSchool getMageSchool() {
+        return MageSchool.fromSerializedName(entityData.get(DATA_MAGE_SCHOOL));
+    }
+
+    public String getMageSchoolDisplayName() {
+        return getWildClass() == WildNpcClass.MAGE
+                ? getMageSchool().displayName()
+                : "None";
+    }
+
+    private void setMageSchool(MageSchool school) {
+        entityData.set(
+                DATA_MAGE_SCHOOL,
+                school == null ? "" : school.serializedName()
+        );
+    }
+
+    public boolean isSpellCastingVisual() {
+        return entityData.get(DATA_SPELL_CAST_TICKS) > 0;
+    }
+
+    public int getSpellCastingVisualMode() {
+        return entityData.get(DATA_SPELL_CAST_MODE);
+    }
+
+    public String getCastingSpellId() {
+        return entityData.get(DATA_CASTING_SPELL);
     }
 
     public boolean canWander() {
@@ -489,6 +562,25 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (!getWildClass().isAvailable()) {
             setWildClass(WildNpcClass.CLASSLESS);
+            setMageSchool(null);
+            classLoadoutInitialized = false;
+        }
+
+        if (entityData.get(DATA_GEAR_TIER).isBlank()) {
+            setGearTier(WildNpcGearTier.randomTier(getRandom()));
+        }
+
+        if (getWildClass() == WildNpcClass.MAGE) {
+            if (entityData.get(DATA_MAGE_SCHOOL).isBlank()) {
+                setMageSchool(MageSchool.randomSchool(getRandom()));
+            }
+        } else {
+            setMageSchool(null);
+        }
+
+        if (!classLoadoutInitialized) {
+            initializeClassLoadout();
+            classLoadoutInitialized = true;
         }
 
         applyClassAttributes();
@@ -508,63 +600,410 @@ public class CyberNpcEntity extends PathfinderMob {
             entityData.set(DATA_AGGRESSION, aggressionLevel);
         }
 
-        switch (getWildClass()) {
-            case CLASSLESS, ARCHER -> {
-                if (getStoredSword().isEmpty()) {
-                    inventory.add(CyberNpcWeaponPool.randomWildSword(getRandom()));
-                }
-                if (getStoredRangedWeapon().isEmpty()) {
-                    inventory.add(CyberNpcWeaponPool.randomWildRangedWeapon(getRandom()));
-                }
+        if (getWildClass() == WildNpcClass.CLASSLESS) {
+            if (getStoredSword().isEmpty()) {
+                inventory.add(CyberNpcWeaponPool.randomWildSword(getRandom()));
             }
-            case KNIGHT, ROGUE, MAGE -> {
-                if (getStoredSword().isEmpty()) {
-                    inventory.add(CyberNpcWeaponPool.randomWildSword(getRandom()));
-                }
+            if (getStoredRangedWeapon().isEmpty()) {
+                inventory.add(CyberNpcWeaponPool.randomWildRangedWeapon(getRandom()));
             }
         }
 
-        if (!isCombatActive() && !utilityItemActive && !getMainHandItem().isEmpty()) {
+        if (!isCombatActive()
+                && !utilityItemActive
+                && !isSpellCastingVisual()
+                && !getMainHandItem().isEmpty()) {
             stowWeapons();
         }
+    }
+
+    private void initializeClassLoadout() {
+        if (getWildClass() == WildNpcClass.CLASSLESS) {
+            initializeClasslessLoadout();
+            return;
+        }
+
+        inventory.removeMatching(stack ->
+                isSwordStack(stack)
+                        || isRangedWeaponStack(stack)
+                        || isMageSpellBook(stack)
+        );
+
+        clearArmorSlots();
+
+        switch (getWildClass()) {
+            case ARCHER -> initializeArcherLoadout();
+            case KNIGHT -> initializeKnightLoadout();
+            case ROGUE -> initializeRogueLoadout();
+            case MAGE -> initializeMageLoadout();
+            default -> initializeClasslessLoadout();
+        }
+    }
+
+    private void initializeClasslessLoadout() {
+        // Classless stays the ordinary/high-frequency NPC, but it still owns
+        // visible equipment. Rare gear tiers remain uncommon and provide the
+        // occasional tougher "normal" NPC without turning it into a class.
+        WildNpcGearTier tier = getGearTier();
+
+        if (tier != WildNpcGearTier.STANDARD) {
+            inventory.removeMatching(stack ->
+                    isSwordStack(stack) || isRangedWeaponStack(stack)
+            );
+
+            ItemStack sword = switch (tier) {
+                case FINE -> new ItemStack(Items.IRON_SWORD);
+                case RARE -> new ItemStack(Items.DIAMOND_SWORD);
+                case ELITE -> new ItemStack(Items.NETHERITE_SWORD);
+                default -> CyberNpcWeaponPool.randomWildSword(getRandom());
+            };
+
+            ItemStack ranged = getRandom().nextFloat() < 0.30F
+                    ? new ItemStack(Items.CROSSBOW)
+                    : new ItemStack(Items.BOW);
+
+            applyWeaponEnchantments(sword, tier);
+            applyWeaponEnchantments(ranged, tier);
+            inventory.add(sword);
+            inventory.add(ranged);
+        }
+
+        switch (tier) {
+            case STANDARD -> equipArmorSet(
+                    Items.LEATHER_HELMET,
+                    Items.LEATHER_CHESTPLATE,
+                    Items.LEATHER_LEGGINGS,
+                    Items.LEATHER_BOOTS
+            );
+            case FINE -> equipArmorSet(
+                    Items.CHAINMAIL_HELMET,
+                    Items.CHAINMAIL_CHESTPLATE,
+                    Items.CHAINMAIL_LEGGINGS,
+                    Items.CHAINMAIL_BOOTS
+            );
+            case RARE -> equipArmorSet(
+                    Items.IRON_HELMET,
+                    Items.IRON_CHESTPLATE,
+                    Items.IRON_LEGGINGS,
+                    Items.IRON_BOOTS
+            );
+            case ELITE -> equipArmorSet(
+                    Items.DIAMOND_HELMET,
+                    Items.DIAMOND_CHESTPLATE,
+                    Items.DIAMOND_LEGGINGS,
+                    Items.DIAMOND_BOOTS
+            );
+        }
+    }
+
+    private void initializeArcherLoadout() {
+        WildNpcGearTier tier = getGearTier();
+
+        ItemStack sword = switch (tier) {
+            case ELITE, RARE -> new ItemStack(Items.DIAMOND_SWORD);
+            case FINE -> new ItemStack(Items.IRON_SWORD);
+            default -> new ItemStack(Items.STONE_SWORD);
+        };
+
+        ItemStack ranged = getRandom().nextFloat() < 0.35F
+                ? new ItemStack(Items.CROSSBOW)
+                : new ItemStack(Items.BOW);
+
+        applyWeaponEnchantments(sword, tier);
+        applyWeaponEnchantments(ranged, tier);
+        inventory.add(sword);
+        inventory.add(ranged);
+
+        switch (tier) {
+            case STANDARD -> equipArmorSet(
+                    Items.LEATHER_HELMET,
+                    Items.LEATHER_CHESTPLATE,
+                    Items.LEATHER_LEGGINGS,
+                    Items.LEATHER_BOOTS
+            );
+            case FINE -> equipArmorSet(
+                    Items.CHAINMAIL_HELMET,
+                    Items.CHAINMAIL_CHESTPLATE,
+                    Items.CHAINMAIL_LEGGINGS,
+                    Items.CHAINMAIL_BOOTS
+            );
+            case RARE -> equipArmorSet(
+                    Items.IRON_HELMET,
+                    Items.IRON_CHESTPLATE,
+                    Items.IRON_LEGGINGS,
+                    Items.IRON_BOOTS
+            );
+            case ELITE -> equipArmorSet(
+                    Items.DIAMOND_HELMET,
+                    Items.DIAMOND_CHESTPLATE,
+                    Items.DIAMOND_LEGGINGS,
+                    Items.DIAMOND_BOOTS
+            );
+        }
+    }
+
+    private void initializeKnightLoadout() {
+        WildNpcGearTier tier = getGearTier();
+
+        ItemStack sword = switch (tier) {
+            case ELITE -> new ItemStack(Items.NETHERITE_SWORD);
+            case RARE -> new ItemStack(Items.DIAMOND_SWORD);
+            default -> new ItemStack(Items.IRON_SWORD);
+        };
+
+        applyWeaponEnchantments(sword, tier);
+        inventory.add(sword);
+
+        switch (tier) {
+            case STANDARD -> equipArmorSet(
+                    Items.CHAINMAIL_HELMET,
+                    Items.CHAINMAIL_CHESTPLATE,
+                    Items.CHAINMAIL_LEGGINGS,
+                    Items.CHAINMAIL_BOOTS
+            );
+            case FINE -> equipArmorSet(
+                    Items.IRON_HELMET,
+                    Items.IRON_CHESTPLATE,
+                    Items.IRON_LEGGINGS,
+                    Items.IRON_BOOTS
+            );
+            case RARE -> equipArmorSet(
+                    Items.DIAMOND_HELMET,
+                    Items.DIAMOND_CHESTPLATE,
+                    Items.DIAMOND_LEGGINGS,
+                    Items.DIAMOND_BOOTS
+            );
+            case ELITE -> equipArmorSet(
+                    Items.NETHERITE_HELMET,
+                    Items.NETHERITE_CHESTPLATE,
+                    Items.NETHERITE_LEGGINGS,
+                    Items.NETHERITE_BOOTS
+            );
+        }
+    }
+
+    private void initializeRogueLoadout() {
+        WildNpcGearTier tier = getGearTier();
+
+        ItemStack sword = switch (tier) {
+            case ELITE -> new ItemStack(Items.DIAMOND_SWORD);
+            case RARE, FINE -> new ItemStack(Items.IRON_SWORD);
+            default -> new ItemStack(Items.STONE_SWORD);
+        };
+
+        applyWeaponEnchantments(sword, tier);
+        inventory.add(sword);
+
+        switch (tier) {
+            case STANDARD -> equipArmorSet(
+                    Items.LEATHER_HELMET,
+                    Items.LEATHER_CHESTPLATE,
+                    Items.LEATHER_LEGGINGS,
+                    Items.LEATHER_BOOTS
+            );
+            case FINE -> equipArmorSet(
+                    Items.CHAINMAIL_HELMET,
+                    Items.CHAINMAIL_CHESTPLATE,
+                    Items.CHAINMAIL_LEGGINGS,
+                    Items.CHAINMAIL_BOOTS
+            );
+            case RARE -> equipArmorSet(
+                    Items.IRON_HELMET,
+                    Items.IRON_CHESTPLATE,
+                    Items.IRON_LEGGINGS,
+                    Items.IRON_BOOTS
+            );
+            case ELITE -> equipArmorSet(
+                    Items.DIAMOND_HELMET,
+                    Items.DIAMOND_CHESTPLATE,
+                    Items.DIAMOND_LEGGINGS,
+                    Items.DIAMOND_BOOTS
+            );
+        }
+    }
+
+    private void initializeMageLoadout() {
+        if (!IronSpellsCompat.isLoaded()) {
+            setWildClass(WildNpcClass.CLASSLESS);
+            setMageSchool(null);
+            classLoadoutInitialized = false;
+            return;
+        }
+
+        MageSchool school = getMageSchool();
+        WildNpcGearTier tier = getGearTier();
+
+        ItemStack book = IronSpellsCompat.createMageSpellBook(
+                school.preferredSpellBookId(),
+                school.spellIds(),
+                tier,
+                getRandom()
+        );
+
+        if (!book.isEmpty()) {
+            book.getOrCreateTag().putString(
+                    "CyberNpcMageSchool",
+                    school.serializedName()
+            );
+            inventory.add(book);
+        }
+
+        String prefix = school.armorPrefix();
+        ItemStack helmet = IronSpellsCompat.createItem(prefix + "_helmet");
+        ItemStack chest = IronSpellsCompat.createItem(prefix + "_chestplate");
+        ItemStack legs = IronSpellsCompat.createItem(prefix + "_leggings");
+        ItemStack boots = IronSpellsCompat.createItem(prefix + "_boots");
+
+        if (!helmet.isEmpty()
+                && !chest.isEmpty()
+                && !legs.isEmpty()
+                && !boots.isEmpty()) {
+            applyArmorEnchantments(helmet, tier);
+            applyArmorEnchantments(chest, tier);
+            applyArmorEnchantments(legs, tier);
+            applyArmorEnchantments(boots, tier);
+            setItemSlot(EquipmentSlot.HEAD, helmet);
+            setItemSlot(EquipmentSlot.CHEST, chest);
+            setItemSlot(EquipmentSlot.LEGS, legs);
+            setItemSlot(EquipmentSlot.FEET, boots);
+        } else {
+            equipArmorSet(
+                    Items.LEATHER_HELMET,
+                    Items.LEATHER_CHESTPLATE,
+                    Items.LEATHER_LEGGINGS,
+                    Items.LEATHER_BOOTS
+            );
+        }
+    }
+
+    private void clearArmorSlots() {
+        setItemSlot(EquipmentSlot.HEAD, ItemStack.EMPTY);
+        setItemSlot(EquipmentSlot.CHEST, ItemStack.EMPTY);
+        setItemSlot(EquipmentSlot.LEGS, ItemStack.EMPTY);
+        setItemSlot(EquipmentSlot.FEET, ItemStack.EMPTY);
+    }
+
+    private void equipArmorSet(
+            net.minecraft.world.item.Item helmet,
+            net.minecraft.world.item.Item chest,
+            net.minecraft.world.item.Item legs,
+            net.minecraft.world.item.Item boots
+    ) {
+        ItemStack helmetStack = new ItemStack(helmet);
+        ItemStack chestStack = new ItemStack(chest);
+        ItemStack legStack = new ItemStack(legs);
+        ItemStack bootStack = new ItemStack(boots);
+
+        applyArmorEnchantments(helmetStack, getGearTier());
+        applyArmorEnchantments(chestStack, getGearTier());
+        applyArmorEnchantments(legStack, getGearTier());
+        applyArmorEnchantments(bootStack, getGearTier());
+
+        setItemSlot(EquipmentSlot.HEAD, helmetStack);
+        setItemSlot(EquipmentSlot.CHEST, chestStack);
+        setItemSlot(EquipmentSlot.LEGS, legStack);
+        setItemSlot(EquipmentSlot.FEET, bootStack);
+    }
+
+    private void applyArmorEnchantments(ItemStack stack, WildNpcGearTier tier) {
+        int protection = switch (tier) {
+            case FINE -> 1;
+            case RARE -> 2;
+            case ELITE -> 3;
+            default -> 0;
+        };
+
+        if (protection > 0) {
+            stack.enchant(Enchantments.ALL_DAMAGE_PROTECTION, protection);
+            stack.enchant(
+                    Enchantments.UNBREAKING,
+                    tier == WildNpcGearTier.ELITE ? 2 : 1
+            );
+        }
+    }
+
+    private void applyWeaponEnchantments(ItemStack stack, WildNpcGearTier tier) {
+        int level = switch (tier) {
+            case FINE -> 1;
+            case RARE -> 2;
+            case ELITE -> 3;
+            default -> 0;
+        };
+
+        if (level <= 0 || stack.isEmpty()) {
+            return;
+        }
+
+        if (stack.getItem() instanceof SwordItem) {
+            stack.enchant(Enchantments.SHARPNESS, level);
+            stack.enchant(Enchantments.UNBREAKING, Math.max(1, level - 1));
+        } else if (stack.is(Items.BOW)) {
+            stack.enchant(Enchantments.POWER_ARROWS, level);
+            stack.enchant(Enchantments.UNBREAKING, Math.max(1, level - 1));
+        } else if (stack.is(Items.CROSSBOW)) {
+            stack.enchant(Enchantments.QUICK_CHARGE, Math.min(3, level));
+            stack.enchant(Enchantments.UNBREAKING, Math.max(1, level - 1));
+        }
+    }
+
+    private boolean isMageSpellBook(ItemStack stack) {
+        return !stack.isEmpty()
+                && stack.hasTag()
+                && stack.getTag().getBoolean("CyberNpcMageSpellbook");
+    }
+
+    public ItemStack getMageSpellBook() {
+        return inventory.findFirst(this::isMageSpellBook);
     }
 
     private void applyClassAttributes() {
         double maxHealth;
         double movementSpeed;
         double armor;
+        double attackDamage;
 
         switch (getWildClass()) {
             case ARCHER -> {
                 maxHealth = 20.0D;
                 movementSpeed = 0.285D;
-                armor = 1.0D;
+                armor = 0.0D;
+                attackDamage = 2.0D;
             }
             case KNIGHT -> {
                 maxHealth = 26.0D;
                 movementSpeed = 0.255D;
-                armor = 5.0D;
+                armor = 2.0D;
+                attackDamage = 3.0D;
             }
             case ROGUE -> {
                 maxHealth = 18.0D;
                 movementSpeed = 0.31D;
-                armor = 1.0D;
+                armor = 0.0D;
+                attackDamage = 2.5D;
             }
             case MAGE -> {
                 maxHealth = 22.0D;
                 movementSpeed = 0.275D;
-                armor = 2.0D;
+                armor = 0.0D;
+                attackDamage = 2.0D;
             }
             default -> {
                 maxHealth = 20.0D;
                 movementSpeed = 0.27D;
                 armor = 0.0D;
+                attackDamage = 2.0D;
             }
         }
+
+        WildNpcGearTier tier = getGearTier();
+        maxHealth += tier.healthBonus();
+        movementSpeed += tier.speedBonus();
+        attackDamage += tier.attackBonus();
 
         var healthAttribute = getAttribute(Attributes.MAX_HEALTH);
         var speedAttribute = getAttribute(Attributes.MOVEMENT_SPEED);
         var armorAttribute = getAttribute(Attributes.ARMOR);
+        var attackAttribute = getAttribute(Attributes.ATTACK_DAMAGE);
 
         if (healthAttribute != null && healthAttribute.getBaseValue() != maxHealth) {
             double previousMax = healthAttribute.getBaseValue();
@@ -584,6 +1023,10 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (armorAttribute != null && armorAttribute.getBaseValue() != armor) {
             armorAttribute.setBaseValue(armor);
+        }
+
+        if (attackAttribute != null && attackAttribute.getBaseValue() != attackDamage) {
+            attackAttribute.setBaseValue(attackDamage);
         }
     }
 
@@ -740,6 +1183,68 @@ public class CyberNpcEntity extends PathfinderMob {
         }
     }
 
+    private void startMageCastingVisual(
+            ItemStack spellBook,
+            String spellId,
+            int visualTicks,
+            String castType
+    ) {
+        if (spellBook.isEmpty()) {
+            return;
+        }
+
+        ItemStack visualBook = spellBook.copy();
+        visualBook.setCount(1);
+        setItemSlot(EquipmentSlot.OFFHAND, visualBook);
+        entityData.set(DATA_CASTING_SPELL, spellId == null ? "" : spellId);
+        entityData.set(
+                DATA_SPELL_CAST_MODE,
+                "LONG".equals(castType)
+                        ? SPELL_CAST_MODE_LONG
+                        : SPELL_CAST_MODE_INSTANT
+        );
+        entityData.set(
+                DATA_SPELL_CAST_TICKS,
+                Math.max(entityData.get(DATA_SPELL_CAST_TICKS), Math.max(2, visualTicks))
+        );
+    }
+
+    private void tickSpellCastingVisual() {
+        int ticks = entityData.get(DATA_SPELL_CAST_TICKS);
+        if (ticks <= 0) {
+            return;
+        }
+
+        ticks--;
+        entityData.set(DATA_SPELL_CAST_TICKS, ticks);
+
+        if (ticks <= 0) {
+            entityData.set(DATA_CASTING_SPELL, "");
+            entityData.set(DATA_SPELL_CAST_MODE, SPELL_CAST_MODE_NONE);
+
+            ItemStack offhand = getOffhandItem();
+            if (isMageSpellBook(offhand)) {
+                setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+            }
+        }
+    }
+
+    private void clearSpellCastingVisual() {
+        entityData.set(DATA_SPELL_CAST_TICKS, 0);
+        entityData.set(DATA_SPELL_CAST_MODE, SPELL_CAST_MODE_NONE);
+        entityData.set(DATA_CASTING_SPELL, "");
+
+        ItemStack offhand = getOffhandItem();
+        if (isMageSpellBook(offhand)) {
+            setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+        }
+    }
+
+    private void cancelMageCast() {
+        IronSpellsCompat.cancelCast(this);
+        clearSpellCastingVisual();
+    }
+
     void equipUtilityItem(ItemStack stack) {
         if (isCombatActive() || stack.isEmpty()) {
             return;
@@ -774,6 +1279,7 @@ public class CyberNpcEntity extends PathfinderMob {
     void prepareForSleep() {
         corralBrain.interrupt();
         clearUtilityItem();
+        cancelMageCast();
         stowWeapons();
         getNavigation().stop();
         setSprinting(false);
@@ -849,6 +1355,7 @@ public class CyberNpcEntity extends PathfinderMob {
         corralBrain.tickClaimDiscovery();
 
         tickMeleeSwingAnimation();
+        tickSpellCastingVisual();
 
         if (onClimbable() && horizontalCollision) {
             Vec3 movement = getDeltaMovement();
@@ -2495,6 +3002,9 @@ public class CyberNpcEntity extends PathfinderMob {
         if (fleeingThreat != null) {
             return "Fleeing/hiding from " + fleeingThreat.getName().getString();
         }
+        if (isSpellCastingVisual()) {
+            return "Casting " + getCastingSpellId();
+        }
         if (isSleeping()) {
             return "Sleeping";
         }
@@ -2666,6 +3176,7 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void calmWildNpc() {
+        cancelMageCast();
         setTarget(null);
         setCombatActive(false);
         huntingTarget = false;
@@ -2821,6 +3332,7 @@ public class CyberNpcEntity extends PathfinderMob {
             suspiciousNpc = null;
             emergencyEating = false;
             clearUtilityItem();
+            cancelMageCast();
             stowWeapons();
             setSprinting(false);
             setShiftKeyDown(false);
@@ -2843,8 +3355,13 @@ public class CyberNpcEntity extends PathfinderMob {
 
             if (getNpcType() == NpcType.WILD) {
                 player.sendSystemMessage(Component.literal(
-                        displayName + " — " + getWildClassDisplayName() + " / "
-                                + getPersonalityDisplayName() + " — Hunger " + getHungerBar()
+                        displayName + " — " + getWildClassDisplayName()
+                                + " / " + getPersonalityDisplayName()
+                                + " / " + getGearTierDisplayName()
+                                + (getWildClass() == WildNpcClass.MAGE
+                                ? " / " + getMageSchoolDisplayName()
+                                : "")
+                                + " — Hunger " + getHungerBar()
                 ));
             } else {
                 player.sendSystemMessage(Component.literal(displayName + " — " + getRole()));
@@ -2864,6 +3381,12 @@ public class CyberNpcEntity extends PathfinderMob {
         if (getNpcType() == NpcType.WILD) {
             tag.putString("CyberNpcWildClass", getWildClass().serializedName());
             tag.putString("CyberNpcPersonality", getPersonality().serializedName());
+            tag.putString("CyberNpcGearTier", getGearTier().serializedName());
+            tag.putBoolean("CyberNpcClassLoadoutInitialized", classLoadoutInitialized);
+
+            if (getWildClass() == WildNpcClass.MAGE) {
+                tag.putString("CyberNpcMageSchool", getMageSchool().serializedName());
+            }
         }
 
         if (aggressionLevel >= 0) {
@@ -2915,24 +3438,47 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         if (getNpcType() == NpcType.WILD) {
-            if (tag.contains("CyberNpcWildClass")) {
-                setWildClass(WildNpcClass.fromSerializedName(tag.getString("CyberNpcWildClass")));
-            } else {
-                setWildClass(WildNpcClass.randomSpawnClass(getRandom()));
-            }
+            WildNpcClass loadedClass = tag.contains("CyberNpcWildClass")
+                    ? WildNpcClass.fromSerializedName(tag.getString("CyberNpcWildClass"))
+                    : WildNpcClass.randomSpawnClass(getRandom());
 
-            if (!getWildClass().isAvailable()) {
-                setWildClass(WildNpcClass.CLASSLESS);
-            }
+            boolean unavailableLoadedClass = !loadedClass.isAvailable();
+            setWildClass(
+                    unavailableLoadedClass
+                            ? WildNpcClass.CLASSLESS
+                            : loadedClass
+            );
 
             if (tag.contains("CyberNpcPersonality")) {
                 setPersonality(WildNpcPersonality.fromSerializedName(tag.getString("CyberNpcPersonality")));
             } else {
                 setPersonality(WildNpcPersonality.randomPersonality(getRandom()));
             }
+
+            if (tag.contains("CyberNpcGearTier")) {
+                setGearTier(WildNpcGearTier.fromSerializedName(tag.getString("CyberNpcGearTier")));
+            } else {
+                setGearTier(WildNpcGearTier.randomTier(getRandom()));
+            }
+
+            if (getWildClass() == WildNpcClass.MAGE) {
+                if (tag.contains("CyberNpcMageSchool")) {
+                    setMageSchool(MageSchool.fromSerializedName(tag.getString("CyberNpcMageSchool")));
+                } else {
+                    setMageSchool(MageSchool.randomSchool(getRandom()));
+                }
+            } else {
+                setMageSchool(null);
+            }
+
+            classLoadoutInitialized = !unavailableLoadedClass
+                    && tag.getBoolean("CyberNpcClassLoadoutInitialized");
         } else {
             entityData.set(DATA_WILD_CLASS, "");
             entityData.set(DATA_PERSONALITY, "");
+            entityData.set(DATA_GEAR_TIER, "");
+            entityData.set(DATA_MAGE_SCHOOL, "");
+            classLoadoutInitialized = false;
         }
 
         if (tag.contains("CyberNpcAggression")) {
@@ -2997,6 +3543,12 @@ public class CyberNpcEntity extends PathfinderMob {
         setCombatActive(false);
         setRangedState(RANGED_STATE_NONE);
         entityData.set(DATA_MELEE_SWING_TICKS, 0);
+        entityData.set(DATA_SPELL_CAST_TICKS, 0);
+        entityData.set(DATA_SPELL_CAST_MODE, SPELL_CAST_MODE_NONE);
+        entityData.set(DATA_CASTING_SPELL, "");
+        if (isMageSpellBook(getOffhandItem())) {
+            setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+        }
         huntingTarget = false;
         provocation = 0;
         outOfRangeTicks = 0;
@@ -3143,6 +3695,7 @@ public class CyberNpcEntity extends PathfinderMob {
         @Override
         public void stop() {
             npc.getNavigation().stop();
+            npc.cancelMageCast();
             npc.stowWeapons();
             resetTimers();
         }
@@ -3445,15 +3998,65 @@ public class CyberNpcEntity extends PathfinderMob {
             npc.setShiftKeyDown(false);
 
             if (!IronSpellsCompat.isLoaded()) {
-                // Mage should never exist without Iron's Spells installed, but
-                // fail safe to classless behavior rather than inventing magic.
+                npc.cancelMageCast();
                 npc.setWildClass(WildNpcClass.CLASSLESS);
+                npc.setMageSchool(null);
+                npc.classLoadoutInitialized = false;
+                npc.ensureWildProfile();
                 tickMelee(target, distanceSqr);
+                return;
+            }
+
+            ItemStack spellBook = npc.getMageSpellBook();
+            if (spellBook.isEmpty()) {
+                npc.classLoadoutInitialized = false;
+                npc.ensureWildProfile();
+                spellBook = npc.getMageSpellBook();
+
+                if (spellBook.isEmpty()) {
+                    mageCooldown = 40;
+                    moveForRangedSpacing(target, 12.0D);
+                    return;
+                }
+            }
+
+            if (IronSpellsCompat.hasActiveCast(npc)) {
+                npc.getNavigation().stop();
+                IronSpellsCompat.CastResult result =
+                        IronSpellsCompat.tickAttackSpell(npc, target, spellBook);
+
+                if (!result.success()) {
+                    npc.clearSpellCastingVisual();
+                    mageCooldown = 30;
+                    return;
+                }
+
+                npc.startMageCastingVisual(
+                        spellBook,
+                        result.spellId(),
+                        result.visualTicks(),
+                        result.castType()
+                );
+
+                if (!result.casting()) {
+                    int personalityAdjustment = switch (npc.getPersonality()) {
+                        case AGGRESSIVE -> -4;
+                        case CAUTIOUS -> 8;
+                        case TACTICAL -> -2;
+                        default -> 0;
+                    };
+
+                    mageCooldown = Math.max(
+                            12,
+                            result.cooldownTicks() + personalityAdjustment
+                    );
+                }
                 return;
             }
 
             if (mageCooldown > 0) {
                 mageCooldown--;
+                return;
             }
 
             if (!lineOfSight || distanceSqr > 324.0D) {
@@ -3471,22 +4074,38 @@ public class CyberNpcEntity extends PathfinderMob {
                 npc.getNavigation().stop();
             }
 
-            if (mageCooldown > 0) {
+            IronSpellsCompat.CastResult result =
+                    IronSpellsCompat.tickAttackSpell(npc, target, spellBook);
+
+            if (!result.success()) {
+                mageCooldown = 30;
+                moveForRangedSpacing(target, 12.0D);
                 return;
             }
 
-            int spellLevel = npc.getPersonality() == WildNpcPersonality.AGGRESSIVE ? 2 : 1;
-            IronSpellsCompat.CastResult result =
-                    IronSpellsCompat.castAttackSpell(npc, target, spellLevel);
+            npc.startMageCastingVisual(
+                    spellBook,
+                    result.spellId(),
+                    result.visualTicks(),
+                    result.castType()
+            );
 
-            if (result.success()) {
-                mageCooldown = result.cooldownTicks();
-            } else {
-                // Never fall back to CyberNpc-created magic. If Iron's cannot
-                // provide a valid spell, reposition and retry later.
-                mageCooldown = 30;
-                moveForRangedSpacing(target, 12.0D);
+            if (result.casting()) {
+                npc.getNavigation().stop();
+                return;
             }
+
+            int personalityAdjustment = switch (npc.getPersonality()) {
+                case AGGRESSIVE -> -4;
+                case CAUTIOUS -> 8;
+                case TACTICAL -> -2;
+                default -> 0;
+            };
+
+            mageCooldown = Math.max(
+                    12,
+                    result.cooldownTicks() + personalityAdjustment
+            );
         }
 
         private void tickBow(LivingEntity target, double distanceSqr) {

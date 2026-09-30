@@ -145,6 +145,13 @@ public final class DeveloperGlassesOverlay {
                         classColor(npc.getWildClass())
                 ));
                 lines.add(new DebugLine(
+                        "Gear: " + npc.getGearTierDisplayName()
+                                + (npc.getWildClass() == WildNpcClass.MAGE
+                                ? "    School: " + npc.getMageSchoolDisplayName()
+                                : ""),
+                        0xD7E8FF
+                ));
+                lines.add(new DebugLine(
                         String.format("Health: %.1f / %.1f", npc.getHealth(), npc.getMaxHealth()),
                         healthColor(npc)
                 ));
@@ -166,6 +173,19 @@ public final class DeveloperGlassesOverlay {
                         classColor(npc.getWildClass())
                 ));
                 lines.add(new DebugLine("Personality: " + npc.getPersonalityDisplayName(), 0xDADADA));
+                lines.add(new DebugLine(
+                        "Gear: " + npc.getGearTierDisplayName()
+                                + (npc.getWildClass() == WildNpcClass.MAGE
+                                ? "    School: " + npc.getMageSchoolDisplayName()
+                                : ""),
+                        0xD7E8FF
+                ));
+                lines.add(new DebugLine(
+                        npc.isSpellCastingVisual()
+                                ? "Casting: " + npc.getCastingSpellId()
+                                : "Casting: none",
+                        npc.isSpellCastingVisual() ? 0xFF8EF3 : 0x8F8F8F
+                ));
                 lines.add(new DebugLine("Aggression: " + npc.getAggressionLevel() + " / 80", 0xE8E8E8));
                 lines.add(new DebugLine("Target: " + npc.getDebugTarget(), 0xFFB866));
                 lines.add(new DebugLine("State: " + npc.getDebugActivity(), 0xFFFF77));
@@ -187,8 +207,12 @@ public final class DeveloperGlassesOverlay {
                 lines.add(new DebugLine("Claims: " + npc.getDebugClaims(), 0xB9E6B9));
                 lines.add(new DebugLine("Inventory: " + npc.getDebugInventory(), 0xD7E8FF));
                 lines.add(new DebugLine(
-                        "Class ID: " + npc.getWildClass().serializedName()
-                                + "    Personality ID: " + npc.getPersonality().serializedName(),
+                        "Class: " + npc.getWildClass().serializedName()
+                                + " | personality:" + npc.getPersonality().serializedName()
+                                + " | gear:" + npc.getGearTier().serializedName()
+                                + (npc.getWildClass() == WildNpcClass.MAGE
+                                ? " | school:" + npc.getMageSchool().serializedName()
+                                : ""),
                         0x8F8F8F
                 ));
             }

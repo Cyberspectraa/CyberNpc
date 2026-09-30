@@ -1,19 +1,36 @@
 # Changelog
 
+## 0.14.0
+
+- Added persistent Wild NPC gear tiers: Standard 70%, Fine 20%, Rare 8%, Elite 2%.
+- Added armor loadouts to every Wild NPC class, including Classless.
+- Added progressively stronger weapons, armor, enchantments and base-stat bonuses for rarer gear tiers.
+- Added class-specific Archer, Knight and Rogue equipment progression.
+- Added persistent Mage magic schools: Fire, Ice, Lightning, Nature, Holy, Ender, Blood and Evocation.
+- Added matching Iron's school armor for every Mage school.
+- Added real persistent Iron's spellbooks to Mage NPC inventories.
+- Added school-specific Iron's spellbooks where Iron's provides them, with generic Iron's books used for schools without dedicated books.
+- Added actual Iron's spell-container NBT with randomly selected school spells.
+- Gear tier now controls Mage spell count and starting spell level.
+- Reworked Iron's compatibility to follow the real MOB casting lifecycle, including MagicData, SyncedSpellData, pre-cast, cast ticks, cast and cast completion.
+- Added support for Iron's INSTANT and LONG spells.
+- Continuous Iron's spells remain excluded until safe repeated-channel support is implemented.
+- Added spellbook-in-offhand rendering while a Mage is casting.
+- Added separate instant-cast and long-cast player-model animations based on the real Iron's cast type/timing.
+- Added humanoid armor rendering to CyberNpc.
+- Developer Glasses now show gear tier, Mage school and current spell.
+- Curios support was not required for this implementation; the Mage's spellbook remains authoritative in the real NPC inventory.
+
 ## 0.13.1
-- Mage is no longer eligible to spawn unless Iron's Spells 'n Spellbooks is installed.
-- Saved Mage NPCs safely become Classless if Iron's is removed.
-- Removed CyberNpc's temporary fake Mage magic attack.
-- Added a soft Iron's Spells compatibility bridge with no hard class dependency.
-- Mage now casts real Iron's Spells through the Iron's spell registry and MOB cast source.
-- Initial Mage spell pool: Firebolt, Magic Missile and Icicle.
-- Mage verifies that a selected spell is enabled and instant before casting it.
-- Added Iron's as an optional AFTER dependency in mods.toml.
-- Developer Glasses now identify Mage combat as Iron's Spells casting.
+
+- Made Mage conditional on Iron's Spells 'n Spellbooks.
+- Removed fake CyberNpc Mage magic.
+- Added optional soft Iron's spell casting integration.
 
 ## 0.13.0
-- Added Wild NPC classes and personalities.
-- Added tabbed Developer Glasses HUD.
+
+- Added Wild NPC classes, personalities and tabbed Developer Glasses.
 
 ## 0.12.0
-- Added persistent 18-slot Wild NPC inventory.
+
+- Added the persistent 18-slot Wild NPC inventory.

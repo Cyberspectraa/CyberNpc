@@ -10,6 +10,7 @@ import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.MobRenderer;
+import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -26,6 +27,12 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
 
     public CyberNpcRenderer(EntityRendererProvider.Context context) {
         super(context, new CyberNpcPlayerModel(context.bakeLayer(ModelLayers.PLAYER), false), 0.5F);
+        addLayer(new HumanoidArmorLayer<>(
+                this,
+                new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
+                new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)),
+                context.getModelManager()
+        ));
         addLayer(new CyberNpcHeldItemLayer(this, context.getItemInHandRenderer()));
     }
 

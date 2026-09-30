@@ -127,6 +127,16 @@ final class WildNpcInventory {
         return !findFirst(predicate).isEmpty();
     }
 
+    void removeMatching(Predicate<ItemStack> predicate) {
+        for (int slot = 0; slot < size(); slot++) {
+            ItemStack stack = getItem(slot);
+            if (!stack.isEmpty() && predicate.test(stack)) {
+                setItem(slot, ItemStack.EMPTY);
+            }
+        }
+    }
+
+
     List<ItemStack> matching(Predicate<ItemStack> predicate) {
         List<ItemStack> result = new ArrayList<>();
 
