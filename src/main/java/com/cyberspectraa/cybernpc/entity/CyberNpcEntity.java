@@ -1959,7 +1959,9 @@ public class CyberNpcEntity extends PathfinderMob {
         return level().getEntitiesOfClass(
                 CyberNpcEntity.class,
                 getBoundingBox().inflate(48.0D),
-                npc -> npc.isAlive() && isSameParty(npc)
+                npc -> npc != this
+                        && npc.isAlive()
+                        && isSameParty(npc)
         ).size() + 1;
     }
 
