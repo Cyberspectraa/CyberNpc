@@ -256,6 +256,7 @@ public class CyberNpcEntity extends PathfinderMob {
     private boolean utilityItemActive;
     private boolean emergencyEating;
     private boolean zombieConversionStarted;
+    private boolean suppressDeathLootForZombieConversion;
 
     @Nullable
     private CyberNpcEntity suspiciousNpc;
@@ -4284,6 +4285,8 @@ public class CyberNpcEntity extends PathfinderMob {
                 null
         );
 
+        zombie.inheritFrom(this);
+
         if (getCustomName() != null) {
             zombie.setCustomName(getCustomName().copy());
             zombie.setCustomNameVisible(isCustomNameVisible());
@@ -4312,6 +4315,8 @@ public class CyberNpcEntity extends PathfinderMob {
                 null,
                 null
         );
+
+        zombie.inheritFrom(this);
 
         if (getCustomName() != null) {
             zombie.setCustomName(getCustomName().copy());
@@ -4426,6 +4431,10 @@ public class CyberNpcEntity extends PathfinderMob {
 
     @Override
     protected void dropEquipment() {
+        if (suppressDeathLootForZombieConversion) {
+            return;
+        }
+
         List<ItemStack> carried = new ArrayList<>(inventory.removeAll());
 
         for (ItemStack stack : carried) {
@@ -4457,6 +4466,10 @@ public class CyberNpcEntity extends PathfinderMob {
                 && source.getEntity() instanceof Zombie
                 && getRandom().nextFloat() < ZOMBIE_KILL_CONVERSION_CHANCE;
 
+        if (convertFromZombieKill) {
+            suppressDeathLootForZombieConversion = true;
+        }
+
         if (!level().isClientSide) {
             corralBrain.interrupt();
             sleepBrain.wakeUp();
@@ -4479,6 +4492,8 @@ public class CyberNpcEntity extends PathfinderMob {
             spawnZombieNpcAfterDeath();
             discard();
         }
+
+        suppressDeathLootForZombieConversion = false;
     }
 
     @Override
