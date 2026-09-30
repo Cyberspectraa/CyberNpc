@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.3
+
+- Fixed Mage spellbooks appearing empty and leaving Mages unable to cast.
+- Mage spellbooks are now populated through Iron's real 1.20.1 ISpellContainer API instead of relying on CyberNpc-written legacy NBT.
+- Mage AI reads the same real spell container that Iron's tooltips and spellbook systems read.
+- Added automatic reroll/repair when an existing Mage owns a book with no usable combat spells.
+- Kept compatibility reading for spellbooks created by earlier CyberNpc 0.14.x builds.
+- Mage death loot still drops the same Iron's spellbook type empty; only the death copy is emptied.
+
 ## 0.14.2
 
 - Mage NPC spellbooks remain populated with a randomized set of usable spells while the NPC is alive.

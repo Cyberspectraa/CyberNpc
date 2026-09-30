@@ -4019,12 +4019,16 @@ public class CyberNpcEntity extends PathfinderMob {
             }
 
             ItemStack spellBook = npc.getMageSpellBook();
-            if (spellBook.isEmpty()) {
+            if (spellBook.isEmpty()
+                    || !IronSpellsCompat.hasUsableCombatSpells(spellBook)) {
+                // Repair old/invalid Mage books instead of letting an NPC keep
+                // an empty spellbook forever.
                 npc.classLoadoutInitialized = false;
                 npc.ensureWildProfile();
                 spellBook = npc.getMageSpellBook();
 
-                if (spellBook.isEmpty()) {
+                if (spellBook.isEmpty()
+                        || !IronSpellsCompat.hasUsableCombatSpells(spellBook)) {
                     mageCooldown = 40;
                     moveForRangedSpacing(target, 12.0D);
                     return;

@@ -53,6 +53,20 @@ public final class IronSpellsCompat {
     private static Method onServerCastComplete;
     private static Method magicInitiateCast;
     private static Method magicSetSyncedData;
+
+    // Iron's real 1.20.1 spell-container API. Keeping this reflective preserves
+    // CyberNpc's soft/optional dependency on Iron's.
+    private static Method spellContainerCreate;
+    private static Method spellContainerGet;
+    private static Method spellContainerSet;
+    private static Method spellContainerMutableCopy;
+    private static Method spellContainerGetActiveSpells;
+    private static Method mutableAddSpell;
+    private static Method mutableToImmutable;
+    private static Method spellSlotGetSpell;
+    private static Method spellSlotGetLevel;
+    private static Method abstractSpellGetSpellId;
+
     private static Constructor<?> magicDataConstructor;
     private static Constructor<?> syncedSpellDataConstructor;
     private static Object mobCastSource;
@@ -144,28 +158,55 @@ public final class IronSpellsCompat {
             case ELITE -> 4;
         };
 
-        CompoundTag root = new CompoundTag();
-        root.putInt("maxSpells", maxSlots);
-        root.putBoolean("mustEquip", true);
-        root.putBoolean("spellWheel", true);
-
-        ListTag data = new ListTag();
-        for (int i = 0; i < spellCount; i++) {
-            CompoundTag slot = new CompoundTag();
-            slot.putString("id", available.get(i));
-            slot.putInt(
-                    "level",
-                    Math.max(1, baseLevel + (random.nextFloat() < 0.20F ? 1 : 0))
-            );
-            slot.putBoolean("locked", false);
-            slot.putInt("index", i);
-            data.add(slot);
+        if (!initialize()) {
+            return ItemStack.EMPTY;
         }
 
-        root.put(SPELL_DATA, data);
-        book.addTagElement(SPELL_CONTAINER, root);
-        book.getOrCreateTag().putBoolean("CyberNpcMageSpellbook", true);
-        return book;
+        try {
+            Object immutableContainer = spellContainerCreate.invoke(
+                    null,
+                    maxSlots,
+                    true,
+                    true
+            );
+            Object mutableContainer = spellContainerMutableCopy.invoke(
+                    immutableContainer
+            );
+
+            int added = 0;
+            for (int i = 0; i < spellCount; i++) {
+                Object spell = getSpell.invoke(null, available.get(i));
+                if (!isSupportedSpellObject(spell)) {
+                    continue;
+                }
+
+                int level = Math.max(
+                        1,
+                        baseLevel + (random.nextFloat() < 0.20F ? 1 : 0)
+                );
+
+                boolean success = (Boolean) mutableAddSpell.invoke(
+                        mutableContainer,
+                        spell,
+                        level,
+                        false
+                );
+                if (success) {
+                    added++;
+                }
+            }
+
+            if (added <= 0) {
+                return ItemStack.EMPTY;
+            }
+
+            Object finalContainer = mutableToImmutable.invoke(mutableContainer);
+            spellContainerSet.invoke(null, book, finalContainer);
+            book.getOrCreateTag().putBoolean("CyberNpcMageSpellbook", true);
+            return book;
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return ItemStack.EMPTY;
+        }
     }
 
     /**
@@ -180,13 +221,19 @@ public final class IronSpellsCompat {
             return ItemStack.EMPTY;
         }
 
-        ItemStack droppedBook = npcSpellBook.copy();
-        CompoundTag tag = droppedBook.getTag();
+        // Constructing a fresh stack of the same Iron's book gives us its normal
+        // empty spell container without carrying over the NPC's rolled spells.
+        ItemStack droppedBook = new ItemStack(
+                npcSpellBook.getItem(),
+                npcSpellBook.getCount()
+        );
 
-        if (tag != null) {
-            tag.remove(SPELL_CONTAINER);
-            tag.remove("CyberNpcMageSpellbook");
-            tag.remove("CyberNpcMageSchool");
+        CompoundTag sourceTag = npcSpellBook.getTag();
+        if (sourceTag != null && sourceTag.contains("display")) {
+            droppedBook.getOrCreateTag().put(
+                    "display",
+                    sourceTag.getCompound("display").copy()
+            );
         }
 
         return droppedBook;
@@ -194,10 +241,42 @@ public final class IronSpellsCompat {
 
     public static List<SpellEntry> getBookSpells(ItemStack spellBook) {
         List<SpellEntry> result = new ArrayList<>();
-        if (spellBook == null || spellBook.isEmpty()) {
+        if (spellBook == null || spellBook.isEmpty() || !initialize()) {
             return result;
         }
 
+        // First use Iron's real container API. This is what its tooltip, spell
+        // wheel and other systems use in current 1.20.1 builds.
+        try {
+            Object container = spellContainerGet.invoke(null, spellBook);
+            if (container != null) {
+                @SuppressWarnings("unchecked")
+                List<Object> activeSpells =
+                        (List<Object>) spellContainerGetActiveSpells.invoke(container);
+
+                for (Object slot : activeSpells) {
+                    Object spell = spellSlotGetSpell.invoke(slot);
+                    int level = Math.max(
+                            1,
+                            ((Number) spellSlotGetLevel.invoke(slot)).intValue()
+                    );
+                    String id = String.valueOf(
+                            abstractSpellGetSpellId.invoke(spell)
+                    );
+
+                    if (!id.isBlank()) {
+                        result.add(new SpellEntry(id, level));
+                    }
+                }
+
+                if (!result.isEmpty()) {
+                    return result;
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+        }
+
+        // Compatibility fallback for NPC books created by early 0.14.x builds.
         CompoundTag root = spellBook.getTagElement(SPELL_CONTAINER);
         if (root == null) {
             return result;
@@ -215,6 +294,16 @@ public final class IronSpellsCompat {
         }
 
         return result;
+    }
+
+    public static boolean hasUsableCombatSpells(ItemStack spellBook) {
+        for (SpellEntry entry : getBookSpells(spellBook)) {
+            if (!isExplicitlyUnsafeMobSpell(entry.spellId())
+                    && isSupportedCombatSpell(entry.spellId())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static boolean hasActiveCast(CyberNpcEntity caster) {
@@ -518,6 +607,15 @@ public final class IronSpellsCompat {
             Class<?> syncedSpellDataClass = Class.forName(
                     "io.redspace.ironsspellbooks.capabilities.magic.SyncedSpellData"
             );
+            Class<?> spellContainerClass = Class.forName(
+                    "io.redspace.ironsspellbooks.api.spells.ISpellContainer"
+            );
+            Class<?> mutableSpellContainerClass = Class.forName(
+                    "io.redspace.ironsspellbooks.api.spells.ISpellContainerMutable"
+            );
+            Class<?> spellSlotClass = Class.forName(
+                    "io.redspace.ironsspellbooks.api.spells.SpellSlot"
+            );
 
             getSpell = spellRegistryClass.getMethod("getSpell", String.class);
             isEnabled = abstractSpellClass.getMethod("isEnabled");
@@ -577,6 +675,40 @@ public final class IronSpellsCompat {
                     "setSyncedData",
                     syncedSpellDataClass
             );
+
+            spellContainerCreate = spellContainerClass.getMethod(
+                    "create",
+                    int.class,
+                    boolean.class,
+                    boolean.class
+            );
+            spellContainerGet = spellContainerClass.getMethod(
+                    "get",
+                    ItemStack.class
+            );
+            spellContainerSet = spellContainerClass.getMethod(
+                    "set",
+                    ItemStack.class,
+                    spellContainerClass
+            );
+            spellContainerMutableCopy = spellContainerClass.getMethod(
+                    "mutableCopy"
+            );
+            spellContainerGetActiveSpells = spellContainerClass.getMethod(
+                    "getActiveSpells"
+            );
+            mutableAddSpell = mutableSpellContainerClass.getMethod(
+                    "addSpell",
+                    abstractSpellClass,
+                    int.class,
+                    boolean.class
+            );
+            mutableToImmutable = mutableSpellContainerClass.getMethod(
+                    "toImmutable"
+            );
+            spellSlotGetSpell = spellSlotClass.getMethod("getSpell");
+            spellSlotGetLevel = spellSlotClass.getMethod("getLevel");
+            abstractSpellGetSpellId = abstractSpellClass.getMethod("getSpellId");
 
             magicDataConstructor = magicDataClass.getConstructor(boolean.class);
             syncedSpellDataConstructor =
