@@ -967,6 +967,7 @@ public class CyberNpcEntity extends PathfinderMob {
             case KNIGHT -> initializeKnightLoadout();
             case ROGUE -> initializeRogueLoadout();
             case BERSERKER -> initializeBerserkerLoadout();
+            case BEAST_TAMER -> initializeBeastTamerLoadout();
             case MAGE -> initializeMageLoadout();
             case CLERIC -> initializeClericLoadout();
             case SPELLBLADE -> initializeSpellbladeLoadout();
@@ -1170,6 +1171,55 @@ public class CyberNpcEntity extends PathfinderMob {
         inventory.add(axe);
 
         // Berserkers trade protection for mobility and damage.
+        switch (tier) {
+            case STANDARD -> equipArmorSet(
+                    Items.LEATHER_HELMET,
+                    Items.LEATHER_CHESTPLATE,
+                    Items.LEATHER_LEGGINGS,
+                    Items.LEATHER_BOOTS
+            );
+            case FINE -> equipArmorSet(
+                    Items.CHAINMAIL_HELMET,
+                    Items.CHAINMAIL_CHESTPLATE,
+                    Items.CHAINMAIL_LEGGINGS,
+                    Items.CHAINMAIL_BOOTS
+            );
+            case RARE -> equipArmorSet(
+                    Items.IRON_HELMET,
+                    Items.IRON_CHESTPLATE,
+                    Items.IRON_LEGGINGS,
+                    Items.IRON_BOOTS
+            );
+            case ELITE -> equipArmorSet(
+                    Items.DIAMOND_HELMET,
+                    Items.DIAMOND_CHESTPLATE,
+                    Items.DIAMOND_LEGGINGS,
+                    Items.DIAMOND_BOOTS
+            );
+        }
+    }
+
+    private void initializeBeastTamerLoadout() {
+        WildNpcGearTier tier = getGearTier();
+
+        ItemStack sword = switch (tier) {
+            case STANDARD -> new ItemStack(Items.STONE_SWORD);
+            case FINE -> new ItemStack(Items.IRON_SWORD);
+            case RARE -> new ItemStack(Items.DIAMOND_SWORD);
+            case ELITE -> new ItemStack(Items.NETHERITE_SWORD);
+        };
+
+        applyWeaponEnchantments(sword, tier);
+        inventory.add(sword);
+
+        // Bones are part of the class fantasy and make the inventory/debug view
+        // communicate what this NPC is trying to do, even though taming is
+        // driven by AI rather than vanilla right-click interaction.
+        inventory.add(new ItemStack(
+                Items.BONE,
+                8 + getRandom().nextInt(9)
+        ));
+
         switch (tier) {
             case STANDARD -> equipArmorSet(
                     Items.LEATHER_HELMET,
@@ -1435,6 +1485,12 @@ public class CyberNpcEntity extends PathfinderMob {
                 movementSpeed = 0.440D;
                 armor = 0.5D;
                 attackDamage = 4.0D;
+            }
+            case BEAST_TAMER -> {
+                maxHealth = 22.0D;
+                movementSpeed = 0.440D;
+                armor = 0.5D;
+                attackDamage = 2.8D;
             }
             case MAGE -> {
                 maxHealth = 22.0D;
