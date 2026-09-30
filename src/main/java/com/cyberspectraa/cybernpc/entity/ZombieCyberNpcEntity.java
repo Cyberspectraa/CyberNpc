@@ -1,6 +1,5 @@
 package com.cyberspectraa.cybernpc.entity;
 
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.level.Level;
@@ -8,12 +7,5 @@ import net.minecraft.world.level.Level;
 public final class ZombieCyberNpcEntity extends Zombie {
     public ZombieCyberNpcEntity(EntityType<? extends Zombie> entityType, Level level) {
         super(entityType, level);
-    }
-
-    @Override
-    public ResourceLocation getLootTable() {
-        // Behave like a normal vanilla zombie instead of looking for a separate
-        // empty CyberNpc loot table.
-        return EntityType.ZOMBIE.getDefaultLootTable();
     }
 }
