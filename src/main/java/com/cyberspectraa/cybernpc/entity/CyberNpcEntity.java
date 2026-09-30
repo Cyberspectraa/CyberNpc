@@ -5695,6 +5695,15 @@ public class CyberNpcEntity extends PathfinderMob {
         if (isSleeping()) {
             return "Sleeping";
         }
+        if (getVehicle() instanceof AbstractHorse horse) {
+            return "Riding horse — " + horse.getName().getString();
+        }
+        if (horseTargetId != null) {
+            return "Approaching horse";
+        }
+        if (beastTamerWolfTargetId != null) {
+            return "Taming wolf";
+        }
         if (sculkSneaking) {
             return "Sneaking near visible sculk sensor";
         }
@@ -5830,6 +5839,9 @@ public class CyberNpcEntity extends PathfinderMob {
                 || foodChestTarget != null
                 || emergencyEating
                 || socialConversationHoldTicks > 0
+                || horseTargetId != null
+                || getVehicle() instanceof AbstractHorse
+                || beastTamerWolfTargetId != null
                 || (suspiciousNpc != null && infectionAvoidTicks > 0);
     }
 
