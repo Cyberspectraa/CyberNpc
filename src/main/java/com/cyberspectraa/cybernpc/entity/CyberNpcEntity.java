@@ -7,6 +7,7 @@ import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.cyberspectraa.cybernpc.world.CyberNpcWorldClaims;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -174,6 +175,18 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> DATA_MAGE_SCHOOL =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
 
+    private static final EntityDataAccessor<String> DATA_APPEARANCE_GENDER =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
+    private static final EntityDataAccessor<Integer> DATA_APPEARANCE_SKIN_TONE =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.INT);
+
+    private static final EntityDataAccessor<Integer> DATA_APPEARANCE_EYES =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.INT);
+
+    private static final EntityDataAccessor<Integer> DATA_APPEARANCE_HAIR =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.INT);
+
     private static final EntityDataAccessor<Integer> DATA_SPELL_CAST_TICKS =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.INT);
 
@@ -330,6 +343,10 @@ public class CyberNpcEntity extends PathfinderMob {
         entityData.define(DATA_PERSONALITY, "");
         entityData.define(DATA_GEAR_TIER, "");
         entityData.define(DATA_MAGE_SCHOOL, "");
+        entityData.define(DATA_APPEARANCE_GENDER, "");
+        entityData.define(DATA_APPEARANCE_SKIN_TONE, -1);
+        entityData.define(DATA_APPEARANCE_EYES, -1);
+        entityData.define(DATA_APPEARANCE_HAIR, -1);
         entityData.define(DATA_SPELL_CAST_TICKS, 0);
         entityData.define(DATA_SPELL_CAST_MODE, SPELL_CAST_MODE_NONE);
         entityData.define(DATA_CASTING_SPELL, "");
@@ -444,6 +461,84 @@ public class CyberNpcEntity extends PathfinderMob {
                 DATA_MAGE_SCHOOL,
                 school == null ? "" : school.serializedName()
         );
+    }
+
+    public NpcAppearance.Gender getAppearanceGender() {
+        return NpcAppearance.Gender.fromSerializedName(
+                entityData.get(DATA_APPEARANCE_GENDER)
+        );
+    }
+
+    public boolean isSlimModel() {
+        return getAppearanceGender().slim();
+    }
+
+    public int getSkinToneIndex() {
+        return NpcAppearance.sanitizeSkinTone(
+                entityData.get(DATA_APPEARANCE_SKIN_TONE)
+        );
+    }
+
+    public int getEyeStyleIndex() {
+        return NpcAppearance.sanitizeEyeStyle(
+                entityData.get(DATA_APPEARANCE_EYES)
+        );
+    }
+
+    public int getHairStyleIndex() {
+        return NpcAppearance.sanitizeHairStyle(
+                entityData.get(DATA_APPEARANCE_HAIR)
+        );
+    }
+
+    public String getSkinToneDisplayName() {
+        return NpcAppearance.skinToneDisplayName(getSkinToneIndex());
+    }
+
+    public String getEyeStyleDisplayName() {
+        return NpcAppearance.eyeStyleDisplayName(getEyeStyleIndex());
+    }
+
+    public String getHairStyleDisplayName() {
+        return NpcAppearance.hairStyleDisplayName(getHairStyleIndex());
+    }
+
+    private void ensureAppearance() {
+        if (entityData.get(DATA_APPEARANCE_GENDER).isBlank()) {
+            entityData.set(
+                    DATA_APPEARANCE_GENDER,
+                    NpcAppearance.Gender.random(getRandom()).serializedName()
+            );
+        }
+
+        if (entityData.get(DATA_APPEARANCE_SKIN_TONE) < 0) {
+            entityData.set(
+                    DATA_APPEARANCE_SKIN_TONE,
+                    getRandom().nextInt(NpcAppearance.skinToneCount())
+            );
+        }
+
+        if (entityData.get(DATA_APPEARANCE_EYES) < 0) {
+            entityData.set(
+                    DATA_APPEARANCE_EYES,
+                    getRandom().nextInt(NpcAppearance.eyeStyleCount())
+            );
+        }
+
+        if (entityData.get(DATA_APPEARANCE_HAIR) < 0) {
+            entityData.set(
+                    DATA_APPEARANCE_HAIR,
+                    getRandom().nextInt(NpcAppearance.hairStyleCount())
+            );
+        }
+    }
+
+    ListTag saveInventoryForZombieConversion() {
+        return inventory.save();
+    }
+
+    ItemStack copyActiveFoodForZombieConversion() {
+        return foodToEat.copy();
     }
 
     public boolean isSpellCastingVisual() {
@@ -1508,6 +1603,8 @@ public class CyberNpcEntity extends PathfinderMob {
             @Nullable CompoundTag dataTag
     ) {
         SpawnGroupData result = super.finalizeSpawn(level, difficulty, spawnType, spawnGroupData, dataTag);
+
+        ensureAppearance();
 
         if (spawnType == MobSpawnType.NATURAL || spawnType == MobSpawnType.CHUNK_GENERATION) {
             setNpcType(NpcType.WILD);
@@ -4414,6 +4511,15 @@ public class CyberNpcEntity extends PathfinderMob {
         tag.putBoolean("CyberNpcCanWander", canWander());
         tag.putString("CyberNpcType", getNpcType().serializedName());
 
+        ensureAppearance();
+        tag.putString(
+                "CyberNpcAppearanceGender",
+                getAppearanceGender().serializedName()
+        );
+        tag.putInt("CyberNpcAppearanceSkinTone", getSkinToneIndex());
+        tag.putInt("CyberNpcAppearanceEyes", getEyeStyleIndex());
+        tag.putInt("CyberNpcAppearanceHair", getHairStyleIndex());
+
         if (getNpcType() == NpcType.WILD) {
             tag.putString("CyberNpcWildClass", getWildClass().serializedName());
             tag.putString("CyberNpcPersonality", getPersonality().serializedName());
@@ -4472,6 +4578,44 @@ public class CyberNpcEntity extends PathfinderMob {
         } else {
             setNpcType(NpcType.MAIN);
         }
+
+        if (tag.contains("CyberNpcAppearanceGender")) {
+            entityData.set(
+                    DATA_APPEARANCE_GENDER,
+                    NpcAppearance.Gender.fromSerializedName(
+                            tag.getString("CyberNpcAppearanceGender")
+                    ).serializedName()
+            );
+        }
+
+        if (tag.contains("CyberNpcAppearanceSkinTone")) {
+            entityData.set(
+                    DATA_APPEARANCE_SKIN_TONE,
+                    NpcAppearance.sanitizeSkinTone(
+                            tag.getInt("CyberNpcAppearanceSkinTone")
+                    )
+            );
+        }
+
+        if (tag.contains("CyberNpcAppearanceEyes")) {
+            entityData.set(
+                    DATA_APPEARANCE_EYES,
+                    NpcAppearance.sanitizeEyeStyle(
+                            tag.getInt("CyberNpcAppearanceEyes")
+                    )
+            );
+        }
+
+        if (tag.contains("CyberNpcAppearanceHair")) {
+            entityData.set(
+                    DATA_APPEARANCE_HAIR,
+                    NpcAppearance.sanitizeHairStyle(
+                            tag.getInt("CyberNpcAppearanceHair")
+                    )
+            );
+        }
+
+        ensureAppearance();
 
         if (getNpcType() == NpcType.WILD) {
             WildNpcClass loadedClass = tag.contains("CyberNpcWildClass")
