@@ -8,6 +8,8 @@ public enum NpcReactionIcon {
     THINKING("...", 1),
     CONFUSED("?", 2),
     FRIENDLY("<3", 2),
+    GROUP_INVITE("+?", 3),
+    GROUP_ACCEPT("+!", 3),
     SURPRISED("!", 3),
     SAD(":(", 3),
     ANNOYED("-_-", 4),
