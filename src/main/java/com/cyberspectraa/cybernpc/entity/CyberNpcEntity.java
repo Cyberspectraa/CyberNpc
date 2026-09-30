@@ -124,9 +124,16 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final int PARTY_MAX_SIZE = 4;
     private static final int SOCIAL_SCAN_INTERVAL = 60;
     private static final double SOCIAL_RADIUS = 10.0D;
+    private static final float SOCIAL_CONVERSATION_CHANCE = 0.34F;
+    private static final int SOCIAL_CONVERSATION_COOLDOWN = 100;
+    private static final float PARTY_INVITE_CHANCE = 0.38F;
+    private static final int PARTY_INVITE_RESPONSE_TICKS = 28;
+    private static final int PARTY_INVITE_COOLDOWN_TICKS = 500;
+    private static final double NATURAL_SOCIAL_SEED_RADIUS = 16.0D;
+    private static final float NATURAL_FRIEND_SEED_CHANCE = 0.55F;
+    private static final float NATURAL_PARTY_SEED_CHANCE = 0.65F;
     private static final double PARTY_FOLLOW_DISTANCE = 8.0D;
     private static final double PARTY_FOLLOW_LIMIT = 40.0D;
-    private static final int PARTY_FORM_SUPPORT_SCORE = 5;
     private static final double FIGHT_CONFIDENCE = 55.0D;
     private static final double HELP_CONFIDENCE = 35.0D;
     private static final double FLEE_CONFIDENCE = 22.0D;
@@ -262,6 +269,13 @@ public class CyberNpcEntity extends PathfinderMob {
     private final NpcSocialMemory socialMemory = new NpcSocialMemory();
 
     private int socialTickCooldown;
+    private int socialConversationCooldown;
+    private int partyInviteCooldown;
+    private int pendingPartyInviteTicks;
+
+    @Nullable
+    private UUID pendingPartyInviteFrom;
+
     private boolean regroupingWithParty;
 
     private boolean huntingTarget;
@@ -1738,6 +1752,11 @@ public class CyberNpcEntity extends PathfinderMob {
             setHunger(MAX_HUNGER);
             ensureWildProfile();
             stowWeapons();
+
+            if (spawnType == MobSpawnType.NATURAL
+                    || spawnType == MobSpawnType.CHUNK_GENERATION) {
+                seedNaturalSpawnSocialContext();
+            }
         }
 
         return result;
@@ -1832,6 +1851,15 @@ public class CyberNpcEntity extends PathfinderMob {
     private void tickSocialLife() {
         regroupingWithParty = false;
 
+        if (socialConversationCooldown > 0) {
+            socialConversationCooldown--;
+        }
+        if (partyInviteCooldown > 0) {
+            partyInviteCooldown--;
+        }
+
+        tickPendingPartyInvite();
+
         if (isCombatActive()
                 || fleeingThreat != null
                 || isSleeping()
@@ -1854,7 +1882,11 @@ public class CyberNpcEntity extends PathfinderMob {
     private void updateNearbySocialBonds() {
         List<CyberNpcEntity> nearby = level().getEntitiesOfClass(
                         CyberNpcEntity.class,
-                        getBoundingBox().inflate(SOCIAL_RADIUS, 4.0D, SOCIAL_RADIUS),
+                        getBoundingBox().inflate(
+                                SOCIAL_RADIUS,
+                                4.0D,
+                                SOCIAL_RADIUS
+                        ),
                         npc -> npc != this
                                 && npc.isAlive()
                                 && npc.getNpcType() == NpcType.WILD
@@ -1868,39 +1900,84 @@ public class CyberNpcEntity extends PathfinderMob {
                 .toList();
 
         for (CyberNpcEntity other : nearby) {
-            // Only one side performs the mutual update so two NPC ticks do not
-            // double the same social interaction.
+            // One side owns a conversation attempt so the pair cannot trigger
+            // two simultaneous exchanges from the same server tick.
             if (getUUID().compareTo(other.getUUID()) >= 0) {
                 continue;
             }
 
-            strengthenPeacefulBond(this, other);
-            strengthenPeacefulBond(other, this);
-            tryBuildPartyWith(other);
-
-            maybeShowSocialReaction(other);
+            if (trySocialConversation(other)) {
+                break;
+            }
         }
     }
 
-    private void maybeShowSocialReaction(CyberNpcEntity other) {
+    private boolean trySocialConversation(CyberNpcEntity other) {
         if (other == null
-                || getRandom().nextFloat() >= 0.08F
+                || socialConversationCooldown > 0
+                || other.socialConversationCooldown > 0
+                || pendingPartyInviteFrom != null
+                || other.pendingPartyInviteFrom != null
                 || hasActiveReaction()
-                || other.hasActiveReaction()) {
-            return;
+                || other.hasActiveReaction()
+                || getRandom().nextFloat() >= SOCIAL_CONVERSATION_CHANCE) {
+            return false;
         }
 
+        socialConversationCooldown = SOCIAL_CONVERSATION_COOLDOWN;
+        other.socialConversationCooldown = SOCIAL_CONVERSATION_COOLDOWN;
+
+        strengthenPeacefulBond(this, other);
+        strengthenPeacefulBond(other, this);
+
+        boolean becameFriends = promoteFriendshipIfReady(other);
+
+        if (!becameFriends) {
+            showConversationReactionPair(other);
+        }
+
+        if (areMutualFriends(other)) {
+            considerPartyInvitation(other);
+        }
+
+        return true;
+    }
+
+    private boolean promoteFriendshipIfReady(CyberNpcEntity other) {
+        boolean thisReady = socialMemory.canBecomeFriends(other.getUUID())
+                || socialMemory.isFriend(other.getUUID());
+        boolean otherReady = other.socialMemory.canBecomeFriends(getUUID())
+                || other.socialMemory.isFriend(getUUID());
+
+        if (!thisReady || !otherReady) {
+            return false;
+        }
+
+        boolean changed = socialMemory.markFriends(other.getUUID());
+        changed |= other.socialMemory.markFriends(getUUID());
+
+        if (changed) {
+            showReaction(NpcReactionIcon.FRIENDLY, 70);
+            other.showReaction(NpcReactionIcon.FRIENDLY, 70);
+        }
+
+        return changed;
+    }
+
+    private void showConversationReactionPair(CyberNpcEntity other) {
         int thisSupport = socialMemory.supportScore(other.getUUID());
         int otherSupport = other.socialMemory.supportScore(getUUID());
 
         NpcReactionIcon mine;
         NpcReactionIcon theirs;
 
-        if (thisSupport >= 35 && otherSupport >= 35) {
+        if (thisSupport >= 20 && otherSupport >= 20) {
             mine = getRandom().nextBoolean()
-                    ? NpcReactionIcon.FRIENDLY
-                    : NpcReactionIcon.HAPPY;
-            theirs = NpcReactionIcon.HAPPY;
+                    ? NpcReactionIcon.HAPPY
+                    : NpcReactionIcon.FRIENDLY;
+            theirs = getRandom().nextBoolean()
+                    ? NpcReactionIcon.HAPPY
+                    : NpcReactionIcon.FRIENDLY;
         } else if (thisSupport <= -15 || otherSupport <= -15) {
             mine = NpcReactionIcon.ANNOYED;
             theirs = getRandom().nextBoolean()
@@ -1915,29 +1992,31 @@ public class CyberNpcEntity extends PathfinderMob {
                     : NpcReactionIcon.THINKING;
         }
 
-        showReaction(mine, 42);
-        other.showReaction(theirs, 42);
+        showReaction(mine, 46);
+        other.showReaction(theirs, 46);
     }
 
     private static void strengthenPeacefulBond(
             CyberNpcEntity source,
             CyberNpcEntity target
     ) {
-        int friendship = source.getPersonality() == WildNpcPersonality.SKITTISH
-                ? 0
-                : 1;
-        int trust = 1;
+        int friendship = source.getPersonality()
+                == WildNpcPersonality.SKITTISH ? 1 : 2;
+        int trust = 2;
         int respect = 0;
 
         if (source.getPersonality() == WildNpcPersonality.LOYAL
-                || source.getPersonality() == WildNpcPersonality.PROTECTIVE) {
+                || source.getPersonality()
+                == WildNpcPersonality.PROTECTIVE) {
             friendship++;
             trust++;
         }
 
         if (source.getPersonality() == WildNpcPersonality.BRAVE
-                || source.getPersonality() == WildNpcPersonality.TACTICAL
-                || source.getPersonality() == WildNpcPersonality.STUBBORN) {
+                || source.getPersonality()
+                == WildNpcPersonality.TACTICAL
+                || source.getPersonality()
+                == WildNpcPersonality.STUBBORN) {
             respect++;
         }
 
@@ -1951,61 +2030,171 @@ public class CyberNpcEntity extends PathfinderMob {
         );
     }
 
-    private void tryBuildPartyWith(CyberNpcEntity other) {
-        if (other == null || other == this || isSameParty(other)) {
+    private boolean areMutualFriends(CyberNpcEntity other) {
+        return other != null
+                && socialMemory.isFriend(other.getUUID())
+                && other.socialMemory.isFriend(getUUID());
+    }
+
+    private void considerPartyInvitation(CyberNpcEntity other) {
+        if (!areMutualFriends(other)
+                || isSameParty(other)
+                || partyInviteCooldown > 0
+                || other.partyInviteCooldown > 0
+                || getRandom().nextFloat() >= PARTY_INVITE_CHANCE) {
             return;
         }
 
-        int thisSupport = socialMemory.supportScore(other.getUUID());
-        int otherSupport = other.socialMemory.supportScore(getUUID());
-
-        if (thisSupport < PARTY_FORM_SUPPORT_SCORE
-                || otherSupport < PARTY_FORM_SUPPORT_SCORE) {
+        CyberNpcEntity inviter = choosePartyInviter(this, other);
+        if (inviter == null) {
             return;
         }
 
-        boolean thisHasParty = socialMemory.hasParty();
-        boolean otherHasParty = other.socialMemory.hasParty();
+        CyberNpcEntity invitee = inviter == this ? other : this;
 
-        if (!thisHasParty && !otherHasParty) {
-            UUID newPartyId = UUID.randomUUID();
-            CyberNpcEntity leader = partyLeadershipScore() >= other.partyLeadershipScore()
-                    ? this
-                    : other;
-
-            setParty(newPartyId, leader.getUUID());
-            other.setParty(newPartyId, leader.getUUID());
-            reinforcePartyBond(other);
-            showReaction(NpcReactionIcon.FRIENDLY, 60);
-            other.showReaction(NpcReactionIcon.FRIENDLY, 60);
+        if (!canInviteToParty(inviter, invitee)) {
             return;
         }
 
-        if (thisHasParty && !otherHasParty
-                && getLoadedPartySize() < PARTY_MAX_SIZE) {
-            other.setParty(
-                    socialMemory.partyId(),
-                    socialMemory.partyLeaderId()
-            );
-            reinforcePartyBond(other);
-            showReaction(NpcReactionIcon.HAPPY, 50);
-            other.showReaction(NpcReactionIcon.FRIENDLY, 60);
+        inviter.partyInviteCooldown = PARTY_INVITE_COOLDOWN_TICKS;
+        invitee.partyInviteCooldown = PARTY_INVITE_COOLDOWN_TICKS;
+        invitee.pendingPartyInviteFrom = inviter.getUUID();
+        invitee.pendingPartyInviteTicks = PARTY_INVITE_RESPONSE_TICKS;
+
+        inviter.showReaction(NpcReactionIcon.GROUP_INVITE, 60);
+        invitee.showReaction(NpcReactionIcon.THINKING, 30);
+    }
+
+    @Nullable
+    private static CyberNpcEntity choosePartyInviter(
+            CyberNpcEntity first,
+            CyberNpcEntity second
+    ) {
+        boolean firstParty = first.socialMemory.hasParty();
+        boolean secondParty = second.socialMemory.hasParty();
+
+        if (firstParty && secondParty) {
+            return null;
+        }
+
+        if (firstParty) {
+            return first.socialMemory.isPartyLeader(first.getUUID())
+                    ? first
+                    : null;
+        }
+
+        if (secondParty) {
+            return second.socialMemory.isPartyLeader(second.getUUID())
+                    ? second
+                    : null;
+        }
+
+        return first.partyLeadershipScore()
+                >= second.partyLeadershipScore()
+                ? first
+                : second;
+    }
+
+    private static boolean canInviteToParty(
+            CyberNpcEntity inviter,
+            CyberNpcEntity invitee
+    ) {
+        if (inviter == null
+                || invitee == null
+                || inviter == invitee
+                || !inviter.areMutualFriends(invitee)
+                || inviter.isSameParty(invitee)) {
+            return false;
+        }
+
+        if (invitee.socialMemory.hasParty()) {
+            return false;
+        }
+
+        if (!inviter.socialMemory.hasParty()) {
+            return true;
+        }
+
+        return inviter.socialMemory.isPartyLeader(inviter.getUUID())
+                && inviter.getLoadedPartySize() < PARTY_MAX_SIZE;
+    }
+
+    private void tickPendingPartyInvite() {
+        if (pendingPartyInviteFrom == null) {
             return;
         }
 
-        if (!thisHasParty && otherHasParty
-                && other.getLoadedPartySize() < PARTY_MAX_SIZE) {
+        if (isCombatActive()
+                || fleeingThreat != null
+                || isZombifying()) {
+            clearPendingPartyInvite();
+            return;
+        }
+
+        if (pendingPartyInviteTicks > 0) {
+            pendingPartyInviteTicks--;
+            return;
+        }
+
+        CyberNpcEntity inviter = findLoadedWildNpc(
+                pendingPartyInviteFrom
+        );
+
+        if (inviter == null || !canInviteToParty(inviter, this)) {
+            showReaction(NpcReactionIcon.CONFUSED, 35);
+            clearPendingPartyInvite();
+            return;
+        }
+
+        acceptPartyInvite(inviter);
+        clearPendingPartyInvite();
+    }
+
+    private void acceptPartyInvite(CyberNpcEntity inviter) {
+        if (inviter.socialMemory.hasParty()) {
             setParty(
-                    other.socialMemory.partyId(),
-                    other.socialMemory.partyLeaderId()
+                    inviter.socialMemory.partyId(),
+                    inviter.socialMemory.partyLeaderId()
             );
-            reinforcePartyBond(other);
-            showReaction(NpcReactionIcon.FRIENDLY, 60);
-            other.showReaction(NpcReactionIcon.HAPPY, 50);
+        } else {
+            UUID partyId = UUID.randomUUID();
+            CyberNpcEntity leader = inviter.partyLeadershipScore()
+                    >= partyLeadershipScore()
+                    ? inviter
+                    : this;
+
+            inviter.setParty(partyId, leader.getUUID());
+            setParty(partyId, leader.getUUID());
         }
+
+        reinforcePartyBond(inviter);
+        showReaction(NpcReactionIcon.GROUP_ACCEPT, 65);
+        inviter.showReaction(NpcReactionIcon.HAPPY, 65);
+    }
+
+    private void clearPendingPartyInvite() {
+        pendingPartyInviteFrom = null;
+        pendingPartyInviteTicks = 0;
+    }
+
+    @Nullable
+    private CyberNpcEntity findLoadedWildNpc(UUID id) {
+        if (id == null || !(level() instanceof ServerLevel serverLevel)) {
+            return null;
+        }
+
+        var entity = serverLevel.getEntity(id);
+        return entity instanceof CyberNpcEntity npc
+                && npc.isAlive()
+                && npc.getNpcType() == NpcType.WILD
+                ? npc
+                : null;
     }
 
     private void reinforcePartyBond(CyberNpcEntity other) {
+        socialMemory.markFriends(other.getUUID());
+        other.socialMemory.markFriends(getUUID());
+
         socialMemory.adjustRelationship(
                 other.getUUID(),
                 4,
@@ -2022,6 +2211,96 @@ public class CyberNpcEntity extends PathfinderMob {
                 -3,
                 -3
         );
+    }
+
+    private void seedNaturalSpawnSocialContext() {
+        if (!(level() instanceof ServerLevel serverLevel)
+                || getRandom().nextFloat()
+                >= NATURAL_FRIEND_SEED_CHANCE) {
+            return;
+        }
+
+        List<CyberNpcEntity> nearby = serverLevel.getEntitiesOfClass(
+                        CyberNpcEntity.class,
+                        getBoundingBox().inflate(
+                                NATURAL_SOCIAL_SEED_RADIUS,
+                                6.0D,
+                                NATURAL_SOCIAL_SEED_RADIUS
+                        ),
+                        npc -> npc != this
+                                && npc.isAlive()
+                                && npc.getNpcType() == NpcType.WILD
+                                && !npc.isZombifying()
+                ).stream()
+                .sorted(Comparator.comparingDouble(this::distanceToSqr))
+                .limit(PARTY_MAX_SIZE)
+                .toList();
+
+        if (nearby.isEmpty()) {
+            return;
+        }
+
+        CyberNpcEntity primary = nearby.get(0);
+        seedPreExistingFriendship(primary);
+
+        // Some natural NPCs arrive with more than one prior acquaintance.
+        if (nearby.size() > 1 && getRandom().nextFloat() < 0.35F) {
+            seedPreExistingFriendship(nearby.get(1));
+        }
+
+        if (getRandom().nextFloat() < NATURAL_PARTY_SEED_CHANCE) {
+            seedPreExistingParty(primary);
+        }
+    }
+
+    private void seedPreExistingFriendship(CyberNpcEntity other) {
+        int friendship = 36 + getRandom().nextInt(25);
+        int trust = 30 + getRandom().nextInt(26);
+        int respect = 8 + getRandom().nextInt(28);
+
+        socialMemory.seedFriendship(
+                other.getUUID(),
+                friendship,
+                trust,
+                respect
+        );
+        other.socialMemory.seedFriendship(
+                getUUID(),
+                friendship,
+                trust,
+                respect
+        );
+    }
+
+    private void seedPreExistingParty(CyberNpcEntity other) {
+        if (!areMutualFriends(other) || isSameParty(other)) {
+            return;
+        }
+
+        if (other.socialMemory.hasParty()) {
+            if (other.getLoadedPartySize() < PARTY_MAX_SIZE) {
+                setParty(
+                        other.socialMemory.partyId(),
+                        other.socialMemory.partyLeaderId()
+                );
+                reinforcePartyBond(other);
+            }
+            return;
+        }
+
+        if (socialMemory.hasParty()) {
+            return;
+        }
+
+        UUID partyId = UUID.randomUUID();
+        CyberNpcEntity leader = partyLeadershipScore()
+                >= other.partyLeadershipScore()
+                ? this
+                : other;
+
+        setParty(partyId, leader.getUUID());
+        other.setParty(partyId, leader.getUUID());
+        reinforcePartyBond(other);
     }
 
     private int partyLeadershipScore() {
@@ -4521,6 +4800,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
                 lines.add(
                         "NPC " + name
+                                + (relation.friend() ? " [Friend]" : "")
                                 + " | F:" + relation.friendship()
                                 + " T:" + relation.trust()
                                 + " R:" + relation.respect()
@@ -5512,6 +5792,10 @@ public class CyberNpcEntity extends PathfinderMob {
         huntTargetRecheckCooldown = 0;
         threatScanCooldown = 0;
         socialTickCooldown = 0;
+        socialConversationCooldown = 0;
+        partyInviteCooldown = 0;
+        pendingPartyInviteTicks = 0;
+        pendingPartyInviteFrom = null;
         regroupingWithParty = false;
         fleeingThreat = null;
         fleeSafeTicks = 0;
