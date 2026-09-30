@@ -79,6 +79,8 @@ final class WildNpcSleepBrain {
                 busy = false;
                 return false;
             }
+
+            npc.showReaction(NpcReactionIcon.SLEEP, 50);
         }
 
         if (isBedOccupied(level, claimedBed)) {
