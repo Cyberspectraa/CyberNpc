@@ -2,61 +2,44 @@
 
 CyberNpc is a custom NPC framework for Minecraft 1.20.1 Forge, built for the CyberSpectra modpack.
 
-## Current release: 0.11.0
+## Current release: 0.12.0
 
-### Emergency healing
+### Proper Wild NPC inventory
 
-Wild NPCs now treat low health as an emergency instead of continuing a normal damage trade.
+Wild NPCs now own a real persistent **18-slot inventory** instead of separate hard-coded sword, ranged-weapon, raw-food, and ready-food variables.
 
-- At 8 health or lower, an NPC prioritizes retreating from an active hostile.
-- Once it has created enough distance, it stops and visibly eats a carried edible item.
-- Food consumption now uses Minecraft's real item-finish path, so special foods apply their actual effects.
-- Golden apples therefore apply their vanilla regeneration/absorption effects.
-- Emergency eating also restores a small amount of immediate health based on the food's nutrition so ordinary food can help recovery too.
-- Food pulled from a storage chest is ranked so high-value recovery items such as golden apples are preferred over ordinary food.
+- Sword, bow/crossbow, raw meat, cooked/edible food, golden apples, and future carried items now live in the same inventory.
+- Slot positions persist across save/reload.
+- Existing v0.11.0 NPCs automatically migrate their old stored weapon/food fields into inventory slots when loaded.
+- The first two weapon types are no longer fixed variables: combat searches the inventory for a valid sword and ranged weapon.
+- New Wild NPCs still receive their normal starting sword and bow/crossbow, but those are inserted into inventory like ordinary owned items.
+- Combat equips a temporary hand copy for rendering/use while the authoritative item remains in the inventory, preventing accidental loss during animation/state changes.
+- Death drops every inventory slot at 100%, plus any item currently being consumed and genuine equipped armor/items.
 
-### Full inventory drops on death
+### Food and cooking now use inventory
 
-Wild NPC deaths now drop their complete internal inventory instead of only normal mob equipment chances.
+- Hunting drops and useful ground food are inserted into available inventory slots and can stack naturally.
+- NPCs can carry multiple different food types at once rather than one raw stack and one ready stack.
+- Cooking searches the inventory for raw food and consumes one item from its real stack when placing it in a furnace/smoker/campfire.
+- Hungry NPCs choose among available edible inventory items.
+- Ordinary hunger tries to preserve golden/enhanced apples when normal food is available.
+- Emergency low-health eating chooses the strongest recovery food in the inventory.
+- Food chest storage now transfers food between the NPC inventory and chest slots instead of copying special food variables.
+- Retrieved chest food is inserted into available inventory space and respects stack limits.
 
-Guaranteed carried drops include:
+### Developer Glasses
 
-- Stored sword.
-- Stored bow/crossbow.
-- Raw food.
-- Ready-to-eat food.
-- Food currently being eaten.
-- Any actual equipped item still present.
+The Developer Glasses inventory line now reports the real inventory:
 
-The weapon copy used only for rendering/combat is stowed before death so it cannot duplicate the stored weapon.
-
-### Zombification
-
-A new harmful effect named **Zombification** has been added.
-
-- Duration: exactly **2 minutes (2400 ticks)**.
-- Each successful zombie-family melee hit has a **1%** chance to infect a Wild NPC if it is not already infected.
-- An infected NPC is no longer treated as a valid target by hostile mobs, and nearby hostiles already targeting it are cleared.
-- The effect displays normal status-effect particles/icon.
-- When the timer reaches its end, the NPC converts into a Zombie NPC.
-- Nearby healthy Wild NPCs periodically notice infected NPCs. The closer the infection is to completion, the higher the chance they become suspicious and move away.
-- Developer Glasses report the remaining zombification time while inspecting an infected NPC.
-
-### Zombie NPCs
-
-Zombie NPCs are real Zombie-derived entities rather than Wild NPCs pretending to be zombies.
-
-- They inherit normal vanilla zombie AI, sounds, movement, daylight burning, combat behavior, drowning conversion, reinforcement behavior, and player/villager targeting.
-- They use the vanilla zombie appearance, matching the zombie version of the current Steve-based Wild NPC skin.
-- They use the normal vanilla zombie loot table.
-- Their original NPC name is preserved through conversion.
-- Zombie NPC attacks can apply Zombification because they are true Zombie subclasses.
-
-There is also a separate **5%** chance that a Wild NPC killed directly by a zombie-family mob immediately rises as a Zombie NPC. The original NPC still drops its full inventory first, and all of its bed/pen/cooking claims are released.
+- Used slots out of 18.
+- Actual carried item names and stack counts.
+- The actively-used/eaten item is shown separately while it is temporarily out of the inventory.
 
 ### Existing systems
 
-CyberNpc also retains improved sword spacing/group combat, retreat AI, food chest storage, hunger/starvation, real cooking, full-pen ownership, livestock breeding/harvesting, safe leash transfer and gate realignment, persistent beds, player-style animations, Developer Glasses, and natural Wild NPC spawning.
+v0.12.0 otherwise keeps the v0.11.0 behavior: emergency healing, zombie/Zombification system, combat spacing and group help, food storage, hunger/starvation, real cooking, persistent beds/cooking claims/pen claims, livestock management, player-style animations, and Developer Glasses.
+
+No farming, social AI, or additional gameplay system has been added in this release.
 
 Building and mining remain intentionally excluded.
 

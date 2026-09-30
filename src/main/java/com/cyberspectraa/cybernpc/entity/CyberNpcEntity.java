@@ -162,10 +162,7 @@ public class CyberNpcEntity extends PathfinderMob {
     private int outOfRangeTicks;
     private int hungerDecayTimer;
 
-    private ItemStack storedSword = ItemStack.EMPTY;
-    private ItemStack storedRangedWeapon = ItemStack.EMPTY;
-    private ItemStack carriedRawFood = ItemStack.EMPTY;
-    private ItemStack carriedReadyFood = ItemStack.EMPTY;
+    private final WildNpcInventory inventory = new WildNpcInventory();
 
     private boolean huntingTarget;
     private int huntSearchCooldown;
@@ -450,12 +447,12 @@ public class CyberNpcEntity extends PathfinderMob {
             entityData.set(DATA_AGGRESSION, aggressionLevel);
         }
 
-        if (storedSword.isEmpty()) {
-            storedSword = CyberNpcWeaponPool.randomWildSword(getRandom());
+        if (getStoredSword().isEmpty()) {
+            inventory.add(CyberNpcWeaponPool.randomWildSword(getRandom()));
         }
 
-        if (storedRangedWeapon.isEmpty()) {
-            storedRangedWeapon = CyberNpcWeaponPool.randomWildRangedWeapon(getRandom());
+        if (getStoredRangedWeapon().isEmpty()) {
+            inventory.add(CyberNpcWeaponPool.randomWildRangedWeapon(getRandom()));
         }
 
         if (!isCombatActive() && !utilityItemActive && !getMainHandItem().isEmpty()) {
@@ -464,14 +461,66 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     public ItemStack getStoredSword() {
-        return storedSword;
+        return inventory.findFirst(this::isSwordStack);
     }
 
     public ItemStack getStoredRangedWeapon() {
-        return storedRangedWeapon;
+        return inventory.findFirst(this::isRangedWeaponStack);
+    }
+
+    private boolean isSwordStack(ItemStack stack) {
+        return !stack.isEmpty()
+                && (stack.is(CyberNpcWeaponPool.WILD_NPC_SWORDS)
+                || stack.getItem() instanceof SwordItem);
+    }
+
+    private boolean isRangedWeaponStack(ItemStack stack) {
+        return !stack.isEmpty()
+                && (stack.is(CyberNpcWeaponPool.WILD_NPC_RANGED_WEAPONS)
+                || stack.is(Items.BOW)
+                || stack.is(Items.CROSSBOW));
+    }
+
+    private boolean isRawFoodStack(ItemStack stack) {
+        return CyberNpcHuntingData.isRawFood(stack);
+    }
+
+    private boolean isReadyFoodStack(ItemStack stack) {
+        return !stack.isEmpty()
+                && stack.isEdible()
+                && !CyberNpcHuntingData.isRawFood(stack);
+    }
+
+    private ItemStack getRawFoodStack() {
+        return inventory.findFirst(this::isRawFoodStack);
+    }
+
+    private ItemStack getBestReadyFoodStack() {
+        return inventory.findBest(this::isReadyFoodStack, this::emergencyFoodScore);
+    }
+
+    private boolean hasReadyFood() {
+        return inventory.contains(this::isReadyFoodStack);
+    }
+
+    private ItemStack takeOneReadyFood() {
+        return inventory.takeOneBest(this::isReadyFoodStack, this::normalFoodScore);
+    }
+
+    private ItemStack takeOneEmergencyFood() {
+        return inventory.takeOneBest(this::isReadyFoodStack, this::emergencyFoodScore);
+    }
+
+    private ItemStack takeOneRawFood() {
+        return inventory.takeOne(this::isRawFoodStack);
+    }
+
+    private ItemStack addToInventory(ItemStack stack) {
+        return inventory.add(stack);
     }
 
     private void equipSword() {
+        ItemStack storedSword = getStoredSword();
         if (getNpcType() != NpcType.WILD || storedSword.isEmpty()) {
             return;
         }
@@ -481,11 +530,14 @@ public class CyberNpcEntity extends PathfinderMob {
         if (!ItemStack.isSameItemSameTags(held, storedSword)) {
             stopUsingItem();
             setRangedState(RANGED_STATE_NONE);
-            setItemSlot(EquipmentSlot.MAINHAND, storedSword.copy());
+            ItemStack copy = storedSword.copy();
+            copy.setCount(1);
+            setItemSlot(EquipmentSlot.MAINHAND, copy);
         }
     }
 
     private void equipRangedWeapon() {
+        ItemStack storedRangedWeapon = getStoredRangedWeapon();
         if (getNpcType() != NpcType.WILD || storedRangedWeapon.isEmpty()) {
             return;
         }
@@ -496,6 +548,7 @@ public class CyberNpcEntity extends PathfinderMob {
             stopUsingItem();
             setRangedState(RANGED_STATE_NONE);
             ItemStack copy = storedRangedWeapon.copy();
+            copy.setCount(1);
             if (copy.is(Items.CROSSBOW)) {
                 CrossbowItem.setCharged(copy, false);
             }
@@ -538,7 +591,7 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     boolean hasCollectedRawFood() {
-        return !carriedRawFood.isEmpty();
+        return !getRawFoodStack().isEmpty();
     }
 
     void beginCorralHunt(LivingEntity target) {
@@ -700,11 +753,12 @@ public class CyberNpcEntity extends PathfinderMob {
             return true;
         }
 
+        ItemStack recoveryFood = getBestReadyFoodStack();
+
         if (getHealth() > EMERGENCY_HEALTH_THRESHOLD
                 || isCombatActive()
                 || fleeingThreat != null
-                || carriedReadyFood.isEmpty()
-                || !carriedReadyFood.isEdible()) {
+                || recoveryFood.isEmpty()) {
             return false;
         }
 
@@ -817,7 +871,8 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void beginEmergencyEating() {
-        if (carriedReadyFood.isEmpty() || !carriedReadyFood.isEdible()) {
+        ItemStack one = takeOneEmergencyFood();
+        if (one.isEmpty()) {
             return;
         }
 
@@ -830,13 +885,30 @@ public class CyberNpcEntity extends PathfinderMob {
         setSprinting(false);
         setShiftKeyDown(false);
 
-        ItemStack one = carriedReadyFood.split(1);
-        if (carriedReadyFood.isEmpty()) {
-            carriedReadyFood = ItemStack.EMPTY;
-        }
-
         emergencyEating = true;
         beginEating(one);
+    }
+
+    private int normalFoodScore(ItemStack stack) {
+        if (stack.isEmpty() || !stack.isEdible()) {
+            return Integer.MIN_VALUE;
+        }
+
+        // Preserve rare recovery foods during ordinary hunger whenever possible.
+        if (stack.is(Items.ENCHANTED_GOLDEN_APPLE)) {
+            return -20_000;
+        }
+        if (stack.is(Items.GOLDEN_APPLE)) {
+            return -10_000;
+        }
+
+        var food = stack.getItem().getFoodProperties();
+        if (food == null) {
+            return 0;
+        }
+
+        return food.getNutrition() * 100
+                + Math.round(food.getSaturationModifier() * 100.0F);
     }
 
     private int emergencyFoodScore(ItemStack stack) {
@@ -975,13 +1047,12 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
-        if (!carriedReadyFood.isEmpty() && getHunger() < STOP_EATING_HUNGER) {
-            ItemStack one = carriedReadyFood.split(1);
-            if (carriedReadyFood.isEmpty()) {
-                carriedReadyFood = ItemStack.EMPTY;
+        if (hasReadyFood() && getHunger() < STOP_EATING_HUNGER) {
+            ItemStack one = takeOneReadyFood();
+            if (!one.isEmpty()) {
+                beginEating(one);
+                return;
             }
-            beginEating(one);
-            return;
         }
 
         if (cookingMode != COOK_MODE_NONE) {
@@ -989,7 +1060,7 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
-        if (!carriedRawFood.isEmpty() && getHunger() < STOP_EATING_HUNGER) {
+        if (!getRawFoodStack().isEmpty() && getHunger() < STOP_EATING_HUNGER) {
             tickCooking();
             return;
         }
@@ -1096,12 +1167,14 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private boolean tickFoodStorage() {
-        boolean wantsStore = getHunger() >= STOP_EATING_HUNGER
-                && (!carriedRawFood.isEmpty() || !carriedReadyFood.isEmpty());
+        boolean hasCarriedFood = inventory.contains(stack ->
+                isRawFoodStack(stack) || isReadyFoodStack(stack));
+
+        boolean wantsStore = getHunger() >= STOP_EATING_HUNGER && hasCarriedFood;
 
         boolean wantsRetrieve = getHunger() <= HUNT_HUNGER_THRESHOLD
-                && carriedRawFood.isEmpty()
-                && carriedReadyFood.isEmpty()
+                && getRawFoodStack().isEmpty()
+                && !hasReadyFood()
                 && foodToEat.isEmpty()
                 && cookingMode == COOK_MODE_NONE;
 
@@ -1156,16 +1229,19 @@ public class CyberNpcEntity extends PathfinderMob {
         if (wantsStore) {
             boolean changed = false;
 
-            if (!carriedReadyFood.isEmpty()) {
-                ItemStack remaining = insertIntoContainer(chest, carriedReadyFood);
-                changed |= remaining.getCount() != carriedReadyFood.getCount();
-                carriedReadyFood = remaining;
-            }
+            for (int slot = 0; slot < inventory.size(); slot++) {
+                ItemStack stack = inventory.getItem(slot);
+                if (stack.isEmpty()
+                        || (!isRawFoodStack(stack) && !isReadyFoodStack(stack))) {
+                    continue;
+                }
 
-            if (!carriedRawFood.isEmpty()) {
-                ItemStack remaining = insertIntoContainer(chest, carriedRawFood);
-                changed |= remaining.getCount() != carriedRawFood.getCount();
-                carriedRawFood = remaining;
+                int before = stack.getCount();
+                ItemStack remaining = insertIntoContainer(chest, stack);
+                if (remaining.getCount() != before) {
+                    inventory.setItem(slot, remaining);
+                    changed = true;
+                }
             }
 
             if (changed) {
@@ -1228,8 +1304,16 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private boolean canStoreAnyFood(Container chest) {
-        return (!carriedReadyFood.isEmpty() && canInsertIntoContainer(chest, carriedReadyFood))
-                || (!carriedRawFood.isEmpty() && canInsertIntoContainer(chest, carriedRawFood));
+        for (int slot = 0; slot < inventory.size(); slot++) {
+            ItemStack stack = inventory.getItem(slot);
+            if (!stack.isEmpty()
+                    && (isRawFoodStack(stack) || isReadyFoodStack(stack))
+                    && canInsertIntoContainer(chest, stack)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private boolean canInsertIntoContainer(Container container, ItemStack stack) {
@@ -1295,7 +1379,7 @@ public class CyberNpcEntity extends PathfinderMob {
     private boolean containerHasUsableFood(Container container) {
         for (int slot = 0; slot < container.getContainerSize(); slot++) {
             ItemStack stack = container.getItem(slot);
-            if (isUsefulGroundFood(stack)) {
+            if (isUsefulGroundFood(stack) && inventory.canAdd(stack)) {
                 return true;
             }
         }
@@ -1304,8 +1388,6 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void retrieveFoodFromContainer(Container container) {
-        // Prefer the strongest ready-to-eat recovery item, then fall back to raw
-        // food that can enter the existing cooking workflow.
         int readySlot = -1;
         int readyScore = Integer.MIN_VALUE;
         int rawSlot = -1;
@@ -1313,21 +1395,21 @@ public class CyberNpcEntity extends PathfinderMob {
         for (int slot = 0; slot < container.getContainerSize(); slot++) {
             ItemStack stack = container.getItem(slot);
 
-            if (stack.isEmpty()) {
+            if (stack.isEmpty() || !inventory.canAdd(stack)) {
                 continue;
             }
 
-            if (!CyberNpcHuntingData.isRawFood(stack)
-                    && stack.isEdible()
-                    && CyberNpcHuntingData.hungerRestored(stack) > 0) {
-                int score = emergencyFoodScore(stack);
+            if (isReadyFoodStack(stack)) {
+                int score = getHealth() <= EMERGENCY_HEALTH_THRESHOLD
+                        ? emergencyFoodScore(stack)
+                        : normalFoodScore(stack);
                 if (score > readyScore) {
                     readyScore = score;
                     readySlot = slot;
                 }
             }
 
-            if (rawSlot < 0 && CyberNpcHuntingData.isRawFood(stack)) {
+            if (rawSlot < 0 && isRawFoodStack(stack)) {
                 rawSlot = slot;
             }
         }
@@ -1345,11 +1427,18 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
-        if (CyberNpcHuntingData.isRawFood(taken)) {
-            carriedRawFood = taken;
+        boolean raw = isRawFoodStack(taken);
+        ItemStack remainder = addToInventory(taken);
+
+        if (!remainder.isEmpty()) {
+            ItemStack chestRemainder = insertIntoContainer(container, remainder);
+            if (!chestRemainder.isEmpty()) {
+                spawnAtLocation(chestRemainder);
+            }
+        }
+
+        if (raw) {
             resetCookingSearch();
-        } else {
-            carriedReadyFood = taken;
         }
 
         container.setChanged();
@@ -1366,8 +1455,6 @@ public class CyberNpcEntity extends PathfinderMob {
     private boolean tickGroundFoodPickup() {
         if (!(level() instanceof net.minecraft.server.level.ServerLevel serverLevel)
                 || getHunger() >= STOP_EATING_HUNGER
-                || !carriedRawFood.isEmpty()
-                || !carriedReadyFood.isEmpty()
                 || !foodToEat.isEmpty()
                 || cookingMode != COOK_MODE_NONE) {
             groundFoodTargetId = null;
@@ -1379,7 +1466,8 @@ public class CyberNpcEntity extends PathfinderMob {
             var entity = serverLevel.getEntity(groundFoodTargetId);
             if (entity instanceof ItemEntity item
                     && item.isAlive()
-                    && isUsefulGroundFood(item.getItem())) {
+                    && isUsefulGroundFood(item.getItem())
+                    && inventory.canAdd(item.getItem())) {
                 targetFood = item;
             } else {
                 groundFoodTargetId = null;
@@ -1399,6 +1487,7 @@ public class CyberNpcEntity extends PathfinderMob {
                             item -> item.isAlive()
                                     && !item.hasPickUpDelay()
                                     && isUsefulGroundFood(item.getItem())
+                                    && inventory.canAdd(item.getItem())
                     ).stream()
                     .min(Comparator.comparingDouble(this::distanceToSqr))
                     .orElse(null);
@@ -1419,35 +1508,17 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         ItemStack stack = targetFood.getItem();
+        boolean raw = isRawFoodStack(stack);
+        ItemStack remaining = addToInventory(stack);
 
-        if (CyberNpcHuntingData.isRawFood(stack)) {
-            if (carriedRawFood.isEmpty()) {
-                carriedRawFood = stack.copy();
-                targetFood.discard();
-            } else if (ItemStack.isSameItemSameTags(carriedRawFood, stack)) {
-                carriedRawFood.grow(stack.getCount());
-                targetFood.discard();
-            }
-
-            resetCookingSearch();
+        if (remaining.isEmpty()) {
+            targetFood.discard();
         } else {
-            if (carriedReadyFood.isEmpty()) {
-                carriedReadyFood = stack.copy();
-                targetFood.discard();
-            } else if (ItemStack.isSameItemSameTags(carriedReadyFood, stack)) {
-                carriedReadyFood.grow(stack.getCount());
-                targetFood.discard();
-            } else {
-                ItemStack one = stack.copy();
-                one.setCount(1);
-                stack.shrink(1);
+            targetFood.setItem(remaining);
+        }
 
-                if (stack.isEmpty()) {
-                    targetFood.discard();
-                }
-
-                beginEating(one);
-            }
+        if (raw && remaining.getCount() != stack.getCount()) {
+            resetCookingSearch();
         }
 
         groundFoodTargetId = null;
@@ -1471,7 +1542,9 @@ public class CyberNpcEntity extends PathfinderMob {
         ItemEntity food = level().getEntitiesOfClass(
                         ItemEntity.class,
                         searchBox,
-                        item -> item.isAlive() && CyberNpcHuntingData.isRawFood(item.getItem())
+                        item -> item.isAlive()
+                                && isRawFoodStack(item.getItem())
+                                && inventory.canAdd(item.getItem())
                 ).stream()
                 .min(Comparator.comparingDouble(this::distanceToSqr))
                 .orElse(null);
@@ -1489,22 +1562,22 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (distanceToSqr(food) <= 2.25D) {
             ItemStack found = food.getItem();
+            int before = found.getCount();
+            ItemStack remaining = addToInventory(found);
 
-            if (carriedRawFood.isEmpty()) {
-                carriedRawFood = found.copy();
-                food.discard();
-            } else if (ItemStack.isSameItemSameTags(carriedRawFood, found)) {
-                carriedRawFood.grow(found.getCount());
+            if (remaining.isEmpty()) {
                 food.discard();
             } else {
-                return;
+                food.setItem(remaining);
             }
 
-            setSprinting(false);
-            dropSearchTicks = 0;
-            lastHuntKillPos = null;
-            resetCookingSearch();
-            getNavigation().stop();
+            if (remaining.getCount() < before) {
+                setSprinting(false);
+                dropSearchTicks = 0;
+                lastHuntKillPos = null;
+                resetCookingSearch();
+                getNavigation().stop();
+            }
         }
     }
 
@@ -1522,7 +1595,7 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
-        if (carriedRawFood.isEmpty() || getHunger() >= STOP_EATING_HUNGER) {
+        if (getRawFoodStack().isEmpty() || getHunger() >= STOP_EATING_HUNGER) {
             resetCookingSearch();
             return;
         }
@@ -1593,7 +1666,12 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private boolean depositFoodIntoCookingStation(BlockPos pos) {
-        ItemStack expected = CyberNpcHuntingData.cookOne(carriedRawFood);
+        ItemStack rawFood = getRawFoodStack();
+        if (rawFood.isEmpty()) {
+            return false;
+        }
+
+        ItemStack expected = CyberNpcHuntingData.cookOne(rawFood);
         if (expected.isEmpty()) {
             return false;
         }
@@ -1605,7 +1683,7 @@ public class CyberNpcEntity extends PathfinderMob {
             ItemStack output = furnace.getItem(2);
 
             if ((!input.isEmpty()
-                    && (!ItemStack.isSameItemSameTags(input, carriedRawFood)
+                    && (!ItemStack.isSameItemSameTags(input, rawFood)
                     || input.getCount() >= input.getMaxStackSize()))
                     || (!output.isEmpty() && !ItemStack.isSameItemSameTags(output, expected))) {
                 return false;
@@ -1622,7 +1700,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
             cookingOutputBaseline = output.isEmpty() ? 0 : output.getCount();
 
-            ItemStack oneRaw = carriedRawFood.copy();
+            ItemStack oneRaw = rawFood.copy();
             oneRaw.setCount(1);
 
             if (input.isEmpty()) {
@@ -1633,12 +1711,9 @@ public class CyberNpcEntity extends PathfinderMob {
                 furnace.setItem(0, updated);
             }
 
-            carriedRawFood.shrink(1);
-            if (carriedRawFood.isEmpty()) {
-                carriedRawFood = ItemStack.EMPTY;
-            }
-
+            rawFood.shrink(1);
             furnace.setChanged();
+
             expectedCookedFood = expected.copy();
             expectedCookedFood.setCount(1);
             cookingMode = COOK_MODE_FURNACE;
@@ -1654,22 +1729,19 @@ public class CyberNpcEntity extends PathfinderMob {
                 return false;
             }
 
-            var recipe = campfire.getCookableRecipe(carriedRawFood);
+            var recipe = campfire.getCookableRecipe(rawFood);
             if (recipe.isEmpty()) {
                 return false;
             }
 
-            ItemStack oneRaw = carriedRawFood.copy();
+            ItemStack oneRaw = rawFood.copy();
             oneRaw.setCount(1);
 
             if (!campfire.placeFood(this, oneRaw, recipe.get().getCookingTime())) {
                 return false;
             }
 
-            carriedRawFood.shrink(1);
-            if (carriedRawFood.isEmpty()) {
-                carriedRawFood = ItemStack.EMPTY;
-            }
+            rawFood.shrink(1);
 
             expectedCookedFood = expected.copy();
             expectedCookedFood.setCount(1);
@@ -1893,11 +1965,12 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private boolean isUsableCookingStation(BlockPos pos) {
-        if (carriedRawFood.isEmpty()) {
+        ItemStack rawFood = getRawFoodStack();
+        if (rawFood.isEmpty()) {
             return false;
         }
 
-        ItemStack expected = CyberNpcHuntingData.cookOne(carriedRawFood);
+        ItemStack expected = CyberNpcHuntingData.cookOne(rawFood);
         if (expected.isEmpty()) {
             return false;
         }
@@ -1909,7 +1982,7 @@ public class CyberNpcEntity extends PathfinderMob {
             return state.hasProperty(BlockStateProperties.LIT)
                     && state.getValue(BlockStateProperties.LIT)
                     && campfire.getItems().stream().anyMatch(ItemStack::isEmpty)
-                    && campfire.getCookableRecipe(carriedRawFood).isPresent();
+                    && campfire.getCookableRecipe(rawFood).isPresent();
         }
 
         if (blockEntity instanceof AbstractFurnaceBlockEntity furnace) {
@@ -1922,7 +1995,7 @@ public class CyberNpcEntity extends PathfinderMob {
                     && state.getValue(BlockStateProperties.LIT);
 
             boolean inputAccepts = input.isEmpty()
-                    || (ItemStack.isSameItemSameTags(input, carriedRawFood)
+                    || (ItemStack.isSameItemSameTags(input, rawFood)
                     && input.getCount() < input.getMaxStackSize());
 
             boolean outputAccepts = output.isEmpty()
@@ -1930,7 +2003,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
             return inputAccepts
                     && outputAccepts
-                    && furnace.canPlaceItem(0, carriedRawFood)
+                    && furnace.canPlaceItem(0, rawFood)
                     && (burning || (!fuel.isEmpty() && AbstractFurnaceBlockEntity.isFuel(fuel)));
         }
 
@@ -1964,8 +2037,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (fleeingThreat != null) {
             if (getHealth() <= EMERGENCY_HEALTH_THRESHOLD
-                    && !carriedReadyFood.isEmpty()
-                    && carriedReadyFood.isEdible()
+                    && hasReadyFood()
                     && (!fleeingThreat.isAlive()
                     || distanceToSqr(fleeingThreat) >= EMERGENCY_EAT_SAFE_DISTANCE_SQR)) {
                 beginEmergencyEating();
@@ -2019,8 +2091,7 @@ public class CyberNpcEntity extends PathfinderMob {
         if (getHealth() <= EMERGENCY_HEALTH_THRESHOLD) {
             startFleeingFrom(threat);
 
-            if (!carriedReadyFood.isEmpty()
-                    && carriedReadyFood.isEdible()
+            if (hasReadyFood()
                     && distanceToSqr(threat) >= EMERGENCY_EAT_SAFE_DISTANCE_SQR) {
                 beginEmergencyEating();
                 if (emergencyEating) {
@@ -2066,8 +2137,8 @@ public class CyberNpcEntity extends PathfinderMob {
         double attackDamage = attackAttribute == null ? 4.0D : attackAttribute.getValue();
         double threatPower = threat.getHealth() + attackDamage * 2.5D;
         double npcPower = getHealth()
-                + (storedSword.isEmpty() ? 0.0D : 8.0D)
-                + (storedRangedWeapon.isEmpty() ? 0.0D : 8.0D);
+                + (getStoredSword().isEmpty() ? 0.0D : 8.0D)
+                + (getStoredRangedWeapon().isEmpty() ? 0.0D : 8.0D);
 
         return npcPower >= threatPower * 0.95D;
     }
@@ -2232,11 +2303,10 @@ public class CyberNpcEntity extends PathfinderMob {
 
         entityData.set(
                 DATA_DEBUG_INVENTORY,
-                "sword:" + stackDebug(storedSword)
-                        + " | ranged:" + stackDebug(storedRangedWeapon)
-                        + " | raw:" + stackDebug(carriedRawFood)
-                        + " | ready:" + stackDebug(carriedReadyFood)
-                        + " | eating:" + stackDebug(foodToEat)
+                inventory.debugSummary()
+                        + (foodToEat.isEmpty()
+                        ? ""
+                        : " | using:" + stackDebug(foodToEat))
         );
     }
 
@@ -2269,7 +2339,7 @@ public class CyberNpcEntity extends PathfinderMob {
         if (cookingMode == COOK_MODE_CAMPFIRE) {
             return "Waiting for campfire";
         }
-        if (!carriedRawFood.isEmpty()) {
+        if (!getRawFoodStack().isEmpty()) {
             return claimedCookingStation == null ? "Looking for cooking station" : "Returning to cooking station";
         }
         if (foodChestTarget != null) {
@@ -2308,7 +2378,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
     private boolean isBusyWithNeeds() {
         return getHunger() <= HUNT_HUNGER_THRESHOLD
-                || (!carriedRawFood.isEmpty() && getHunger() < STOP_EATING_HUNGER)
+                || (!getRawFoodStack().isEmpty() && getHunger() < STOP_EATING_HUNGER)
                 || !foodToEat.isEmpty()
                 || cookingMode != COOK_MODE_NONE
                 || dropSearchTicks > 0
@@ -2540,20 +2610,13 @@ public class CyberNpcEntity extends PathfinderMob {
 
     @Override
     protected void dropEquipment() {
-        // Wild NPC inventory is represented by the stored weapon/food stacks.
-        // Drop every one of those stacks at 100%, then drop any actual equipped
-        // items as well. The held weapon is stowed before death so it cannot
-        // duplicate its stored copy.
-        dropOwnedStack(storedSword);
-        dropOwnedStack(storedRangedWeapon);
-        dropOwnedStack(carriedRawFood);
-        dropOwnedStack(carriedReadyFood);
-        dropOwnedStack(foodToEat);
+        // The 18-slot Wild NPC inventory is authoritative. Combat/utility hand
+        // items are only presentation copies, so stow them before this runs.
+        for (ItemStack stack : inventory.removeAll()) {
+            dropOwnedStack(stack);
+        }
 
-        storedSword = ItemStack.EMPTY;
-        storedRangedWeapon = ItemStack.EMPTY;
-        carriedRawFood = ItemStack.EMPTY;
-        carriedReadyFood = ItemStack.EMPTY;
+        dropOwnedStack(foodToEat);
         foodToEat = ItemStack.EMPTY;
 
         for (EquipmentSlot slot : EquipmentSlot.values()) {
@@ -2629,22 +2692,7 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         tag.putInt("CyberNpcHunger", getHunger());
-
-        if (!storedSword.isEmpty()) {
-            tag.put("CyberNpcSword", storedSword.save(new CompoundTag()));
-        }
-
-        if (!storedRangedWeapon.isEmpty()) {
-            tag.put("CyberNpcRangedWeapon", storedRangedWeapon.save(new CompoundTag()));
-        }
-
-        if (!carriedRawFood.isEmpty()) {
-            tag.put("CyberNpcRawFood", carriedRawFood.save(new CompoundTag()));
-        }
-
-        if (!carriedReadyFood.isEmpty()) {
-            tag.put("CyberNpcReadyFood", carriedReadyFood.save(new CompoundTag()));
-        }
+        tag.put("CyberNpcInventory", inventory.save());
 
         if (!foodToEat.isEmpty()) {
             tag.put("CyberNpcCookedFood", foodToEat.save(new CompoundTag()));
@@ -2700,21 +2748,27 @@ public class CyberNpcEntity extends PathfinderMob {
 
         setHunger(tag.contains("CyberNpcHunger") ? tag.getInt("CyberNpcHunger") : MAX_HUNGER);
 
-        storedSword = tag.contains("CyberNpcSword")
-                ? ItemStack.of(tag.getCompound("CyberNpcSword"))
-                : ItemStack.EMPTY;
+        inventory.load(tag.getList("CyberNpcInventory", net.minecraft.nbt.Tag.TAG_COMPOUND));
 
-        storedRangedWeapon = tag.contains("CyberNpcRangedWeapon")
-                ? ItemStack.of(tag.getCompound("CyberNpcRangedWeapon"))
-                : ItemStack.EMPTY;
-
-        carriedRawFood = tag.contains("CyberNpcRawFood")
-                ? ItemStack.of(tag.getCompound("CyberNpcRawFood"))
-                : ItemStack.EMPTY;
-
-        carriedReadyFood = tag.contains("CyberNpcReadyFood")
-                ? ItemStack.of(tag.getCompound("CyberNpcReadyFood"))
-                : ItemStack.EMPTY;
+        // One-time migration for worlds/NPCs created before v0.12.0.
+        if (tag.contains("CyberNpcSword")) {
+            addToInventory(ItemStack.of(tag.getCompound("CyberNpcSword")));
+        }
+        if (tag.contains("CyberNpcRangedWeapon")) {
+            addToInventory(ItemStack.of(tag.getCompound("CyberNpcRangedWeapon")));
+        }
+        if (tag.contains("CyberNpcRawFood")) {
+            addToInventory(ItemStack.of(tag.getCompound("CyberNpcRawFood")));
+        }
+        if (tag.contains("CyberNpcReadyFood")) {
+            addToInventory(ItemStack.of(tag.getCompound("CyberNpcReadyFood")));
+        }
+        if (getStoredSword().isEmpty() && tag.contains("CyberNpcStoredWeapon")) {
+            ItemStack oldWeapon = ItemStack.of(tag.getCompound("CyberNpcStoredWeapon"));
+            if (oldWeapon.getItem() instanceof SwordItem) {
+                addToInventory(oldWeapon);
+            }
+        }
 
         foodToEat = tag.contains("CyberNpcCookedFood")
                 ? ItemStack.of(tag.getCompound("CyberNpcCookedFood"))
@@ -2739,13 +2793,6 @@ public class CyberNpcEntity extends PathfinderMob {
         claimedCookingStation = tag.contains("CyberNpcClaimedCookingStation")
                 ? BlockPos.of(tag.getLong("CyberNpcClaimedCookingStation"))
                 : null;
-
-        if (storedSword.isEmpty() && tag.contains("CyberNpcStoredWeapon")) {
-            ItemStack oldWeapon = ItemStack.of(tag.getCompound("CyberNpcStoredWeapon"));
-            if (oldWeapon.getItem() instanceof SwordItem) {
-                storedSword = oldWeapon;
-            }
-        }
 
         setCombatActive(false);
         setRangedState(RANGED_STATE_NONE);
