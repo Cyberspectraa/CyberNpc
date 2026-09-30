@@ -395,6 +395,8 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         return switch (reaction) {
             case HAPPY -> 0xFF2FAF4A;
             case FRIENDLY -> 0xFFF15B8A;
+            case GROUP_INVITE -> 0xFF4F86E8;
+            case GROUP_ACCEPT -> 0xFF32B55B;
             case ANNOYED -> 0xFFE08B18;
             case ANGRY -> 0xFFF04444;
             case SAD -> 0xFF4B93D1;
