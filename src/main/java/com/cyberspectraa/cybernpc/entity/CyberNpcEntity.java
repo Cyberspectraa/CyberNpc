@@ -1,5 +1,6 @@
 package com.cyberspectraa.cybernpc.entity;
 
+import com.cyberspectraa.cybernpc.world.CyberNpcWorldClaims;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -31,7 +32,10 @@ import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.RandomStrollGoal;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
+import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Arrow;
 import net.minecraft.world.item.CrossbowItem;
@@ -44,6 +48,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.CampfireBlockEntity;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -51,6 +56,7 @@ import javax.annotation.Nullable;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.UUID;
 
 public class CyberNpcEntity extends PathfinderMob {
     public static final int RANGED_STATE_NONE = 0;
@@ -80,6 +86,12 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final int COOK_MODE_CAMPFIRE = 2;
     private static final double HUNT_RADIUS = 24.0D;
     private static final int COOK_SEARCH_RADIUS = 12;
+    private static final int GROUND_FOOD_SEARCH_INTERVAL = 20;
+    private static final int HUNT_TARGET_RECHECK_INTERVAL = 20;
+    private static final int THREAT_SCAN_INTERVAL = 10;
+    private static final int FLEE_SAFE_TICKS = 60;
+    private static final double THREAT_SCAN_RADIUS = 20.0D;
+    private static final double FLEE_RELEASE_DISTANCE = 30.0D;
 
     private static final EntityDataAccessor<String> DATA_ROLE =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
@@ -101,6 +113,24 @@ public class CyberNpcEntity extends PathfinderMob {
 
     private static final EntityDataAccessor<Integer> DATA_MELEE_SWING_TICKS =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.INT);
+
+    private static final EntityDataAccessor<Integer> DATA_AGGRESSION =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.INT);
+
+    private static final EntityDataAccessor<String> DATA_DEBUG_ACTIVITY =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
+    private static final EntityDataAccessor<String> DATA_DEBUG_TARGET =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
+    private static final EntityDataAccessor<String> DATA_DEBUG_PATH =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
+    private static final EntityDataAccessor<String> DATA_DEBUG_CLAIMS =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
+    private static final EntityDataAccessor<String> DATA_DEBUG_INVENTORY =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
 
     private int aggressionLevel = -1;
     private int provocation;
@@ -125,6 +155,21 @@ public class CyberNpcEntity extends PathfinderMob {
     private ItemStack foodToEat = ItemStack.EMPTY;
     private int eatingTicks;
     private boolean utilityItemActive;
+
+    @Nullable
+    private BlockPos claimedCookingStation;
+
+    @Nullable
+    private UUID groundFoodTargetId;
+
+    @Nullable
+    private LivingEntity fleeingThreat;
+
+    private int groundFoodSearchCooldown;
+    private int huntTargetRecheckCooldown;
+    private int threatScanCooldown;
+    private int fleeSafeTicks;
+    private int fleeRepathCooldown;
 
     private final WildNpcCorralBrain corralBrain;
     private final WildNpcSleepBrain sleepBrain;
@@ -171,6 +216,12 @@ public class CyberNpcEntity extends PathfinderMob {
         entityData.define(DATA_HUNGER, MAX_HUNGER);
         entityData.define(DATA_RANGED_STATE, RANGED_STATE_NONE);
         entityData.define(DATA_MELEE_SWING_TICKS, 0);
+        entityData.define(DATA_AGGRESSION, -1);
+        entityData.define(DATA_DEBUG_ACTIVITY, "Idle");
+        entityData.define(DATA_DEBUG_TARGET, "none");
+        entityData.define(DATA_DEBUG_PATH, "none");
+        entityData.define(DATA_DEBUG_CLAIMS, "none");
+        entityData.define(DATA_DEBUG_INVENTORY, "empty");
     }
 
     @Override
@@ -277,7 +328,27 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     public int getAggressionLevel() {
-        return aggressionLevel;
+        return entityData.get(DATA_AGGRESSION);
+    }
+
+    public String getDebugActivity() {
+        return entityData.get(DATA_DEBUG_ACTIVITY);
+    }
+
+    public String getDebugTarget() {
+        return entityData.get(DATA_DEBUG_TARGET);
+    }
+
+    public String getDebugPath() {
+        return entityData.get(DATA_DEBUG_PATH);
+    }
+
+    public String getDebugClaims() {
+        return entityData.get(DATA_DEBUG_CLAIMS);
+    }
+
+    public String getDebugInventory() {
+        return entityData.get(DATA_DEBUG_INVENTORY);
     }
 
     public int getHunger() {
@@ -317,6 +388,9 @@ public class CyberNpcEntity extends PathfinderMob {
         if (aggressionLevel < 0) {
             aggressionLevel = WILD_MIN_AGGRESSION
                     + getRandom().nextInt(WILD_MAX_AGGRESSION - WILD_MIN_AGGRESSION + 1);
+            entityData.set(DATA_AGGRESSION, aggressionLevel);
+        } else if (entityData.get(DATA_AGGRESSION) != aggressionLevel) {
+            entityData.set(DATA_AGGRESSION, aggressionLevel);
         }
 
         if (storedSword.isEmpty()) {
@@ -470,13 +544,21 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         tickHunger();
+
+        if (tickThreatResponse()) {
+            updateDebugState();
+            return;
+        }
+
         tickWildCombat();
 
         if (sleepBrain.tick()) {
+            updateDebugState();
             return;
         }
 
         tickHuntingAndFood();
+        updateDebugState();
     }
 
     private void tickHunger() {
@@ -526,6 +608,10 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
+        if (huntingTarget) {
+            target = maybeSwitchHuntTarget(target);
+        }
+
         if (distanceToSqr(target) > WILD_DISENGAGE_DISTANCE * WILD_DISENGAGE_DISTANCE) {
             outOfRangeTicks++;
 
@@ -573,6 +659,10 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (dropSearchTicks > 0) {
             tickFoodPickup();
+            return;
+        }
+
+        if (tickGroundFoodPickup()) {
             return;
         }
 
@@ -628,6 +718,130 @@ public class CyberNpcEntity extends PathfinderMob {
 
         return prey.getHealth() <= confidenceHealth
                 && prey.getMaxHealth() <= maximumPreyHealth;
+    }
+
+    private LivingEntity maybeSwitchHuntTarget(LivingEntity current) {
+        if (huntTargetRecheckCooldown > 0) {
+            huntTargetRecheckCooldown--;
+            return current;
+        }
+
+        huntTargetRecheckCooldown = HUNT_TARGET_RECHECK_INTERVAL;
+
+        AABB nearby = current.getBoundingBox().inflate(12.0D, 5.0D, 12.0D);
+        List<LivingEntity> alternatives = level().getEntitiesOfClass(
+                LivingEntity.class,
+                nearby,
+                candidate -> candidate.getType() == current.getType()
+                        && canHuntPrey(candidate)
+        );
+
+        LivingEntity best = alternatives.stream()
+                .min(Comparator.comparingDouble(this::distanceToSqr))
+                .orElse(current);
+
+        if (best != current) {
+            double currentDistance = distanceToSqr(current);
+            double bestDistance = distanceToSqr(best);
+            boolean currentBlocked = !getSensing().hasLineOfSight(current);
+
+            if (currentBlocked || bestDistance + 9.0D < currentDistance) {
+                setTarget(best);
+                return best;
+            }
+        }
+
+        return current;
+    }
+
+    private boolean tickGroundFoodPickup() {
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel serverLevel)
+                || getHunger() >= STOP_EATING_HUNGER
+                || !carriedRawFood.isEmpty()
+                || !foodToEat.isEmpty()
+                || cookingMode != COOK_MODE_NONE) {
+            groundFoodTargetId = null;
+            return false;
+        }
+
+        ItemEntity targetFood = null;
+        if (groundFoodTargetId != null) {
+            var entity = serverLevel.getEntity(groundFoodTargetId);
+            if (entity instanceof ItemEntity item
+                    && item.isAlive()
+                    && isUsefulGroundFood(item.getItem())) {
+                targetFood = item;
+            } else {
+                groundFoodTargetId = null;
+            }
+        }
+
+        if (targetFood == null) {
+            if (groundFoodSearchCooldown > 0) {
+                groundFoodSearchCooldown--;
+                return false;
+            }
+
+            groundFoodSearchCooldown = GROUND_FOOD_SEARCH_INTERVAL;
+            targetFood = level().getEntitiesOfClass(
+                            ItemEntity.class,
+                            getBoundingBox().inflate(16.0D, 6.0D, 16.0D),
+                            item -> item.isAlive()
+                                    && !item.hasPickUpDelay()
+                                    && isUsefulGroundFood(item.getItem())
+                    ).stream()
+                    .min(Comparator.comparingDouble(this::distanceToSqr))
+                    .orElse(null);
+
+            if (targetFood == null) {
+                return false;
+            }
+
+            groundFoodTargetId = targetFood.getUUID();
+        }
+
+        setShiftKeyDown(false);
+        setSprinting(true);
+        getNavigation().moveTo(targetFood, 1.05D);
+
+        if (distanceToSqr(targetFood) > 2.25D) {
+            return true;
+        }
+
+        ItemStack stack = targetFood.getItem();
+
+        if (CyberNpcHuntingData.isRawFood(stack)) {
+            if (carriedRawFood.isEmpty()) {
+                carriedRawFood = stack.copy();
+                targetFood.discard();
+            } else if (ItemStack.isSameItemSameTags(carriedRawFood, stack)) {
+                carriedRawFood.grow(stack.getCount());
+                targetFood.discard();
+            }
+
+            resetCookingSearch();
+        } else {
+            ItemStack one = stack.copy();
+            one.setCount(1);
+            stack.shrink(1);
+
+            if (stack.isEmpty()) {
+                targetFood.discard();
+            }
+
+            beginEating(one);
+        }
+
+        groundFoodTargetId = null;
+        setSprinting(false);
+        getNavigation().stop();
+        return true;
+    }
+
+    private boolean isUsefulGroundFood(ItemStack stack) {
+        return !stack.isEmpty()
+                && (CyberNpcHuntingData.isRawFood(stack)
+                || (stack.isEdible() && CyberNpcHuntingData.hungerRestored(stack) > 0));
     }
 
     private void tickFoodPickup() {
@@ -695,7 +909,7 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
-        if (cookingTarget == null || !isUsableCookingStation(cookingTarget)) {
+        if (cookingTarget == null || !isCookingTargetStillValid(cookingTarget)) {
             if (cookingSearchCooldown > 0) {
                 cookingSearchCooldown--;
                 return;
@@ -713,7 +927,7 @@ public class CyberNpcEntity extends PathfinderMob {
         double distance = distanceToSqr(cookingSpot);
 
         if (distance > 4.0D) {
-            getNavigation().moveTo(cookingSpot.x, cookingSpot.y, cookingSpot.z, 0.9D);
+            navigateTowardPersistentClaim(cookingTarget, 0.95D);
             return;
         }
 
@@ -722,6 +936,41 @@ public class CyberNpcEntity extends PathfinderMob {
         if (!depositFoodIntoCookingStation(cookingTarget)) {
             cookingTarget = null;
             cookingSearchCooldown = COOK_STATION_SEARCH_INTERVAL;
+        }
+    }
+
+    private void navigateTowardPersistentClaim(BlockPos target, double speed) {
+        Vec3 destination = Vec3.atCenterOf(target).add(0.0D, 1.0D, 0.0D);
+        double distanceSqr = distanceToSqr(destination);
+
+        // Vanilla pathfinders do not build a useful full path into unloaded
+        // distant chunks. Walk in reachable local legs toward the persistent
+        // claim until the actual station is close enough to path to directly.
+        if (distanceSqr <= 18.0D * 18.0D
+                || (level() instanceof net.minecraft.server.level.ServerLevel serverLevel
+                && serverLevel.hasChunkAt(target))) {
+            if (getNavigation().moveTo(destination.x, destination.y, destination.z, speed)) {
+                return;
+            }
+        }
+
+        Vec3 waypoint = DefaultRandomPos.getPosTowards(
+                this,
+                16,
+                7,
+                destination,
+                Math.PI / 2.0D
+        );
+
+        if (waypoint != null && waypoint.distanceToSqr(destination) < position().distanceToSqr(destination)) {
+            getNavigation().moveTo(waypoint.x, waypoint.y, waypoint.z, speed);
+            return;
+        }
+
+        Vec3 direction = destination.subtract(position());
+        if (direction.lengthSqr() > 0.001D) {
+            Vec3 step = position().add(direction.normalize().scale(Math.min(12.0D, Math.sqrt(distanceSqr))));
+            getNavigation().moveTo(step.x, step.y, step.z, speed);
         }
     }
 
@@ -945,6 +1194,26 @@ public class CyberNpcEntity extends PathfinderMob {
 
     @Nullable
     private BlockPos findCookingStation() {
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
+            return null;
+        }
+
+        CyberNpcWorldClaims claims = CyberNpcWorldClaims.get(serverLevel);
+
+        if (claimedCookingStation != null) {
+            if (!serverLevel.hasChunkAt(claimedCookingStation)) {
+                return claimedCookingStation;
+            }
+
+            int capacity = cookingStationCapacity(claimedCookingStation);
+            if (capacity > 0 && claims.claimCooking(claimedCookingStation, getUUID(), capacity)) {
+                return claimedCookingStation;
+            }
+
+            claims.releaseCooking(claimedCookingStation, getUUID());
+            claimedCookingStation = null;
+        }
+
         BlockPos origin = blockPosition();
         BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
@@ -957,6 +1226,11 @@ public class CyberNpcEntity extends PathfinderMob {
                 continue;
             }
 
+            int capacity = cookingStationCapacity(pos);
+            if (capacity <= 0 || !claims.canClaimCooking(pos, getUUID(), capacity)) {
+                continue;
+            }
+
             double distance = pos.distSqr(origin);
             if (distance < bestDistance) {
                 bestDistance = distance;
@@ -964,7 +1238,39 @@ public class CyberNpcEntity extends PathfinderMob {
             }
         }
 
-        return best;
+        if (best != null) {
+            int capacity = cookingStationCapacity(best);
+            if (claims.claimCooking(best, getUUID(), capacity)) {
+                claimedCookingStation = best;
+                return best;
+            }
+        }
+
+        return null;
+    }
+
+    private boolean isCookingTargetStillValid(BlockPos pos) {
+        if (claimedCookingStation != null && claimedCookingStation.equals(pos)) {
+            if (level() instanceof net.minecraft.server.level.ServerLevel serverLevel
+                    && !serverLevel.hasChunkAt(pos)) {
+                return true;
+            }
+
+            return cookingStationCapacity(pos) > 0;
+        }
+
+        return isUsableCookingStation(pos);
+    }
+
+    private int cookingStationCapacity(BlockPos pos) {
+        var blockEntity = level().getBlockEntity(pos);
+        if (blockEntity instanceof CampfireBlockEntity) {
+            return 4;
+        }
+        if (blockEntity instanceof AbstractFurnaceBlockEntity) {
+            return 1;
+        }
+        return 0;
     }
 
     private boolean isUsableCookingStation(BlockPos pos) {
@@ -1031,6 +1337,293 @@ public class CyberNpcEntity extends PathfinderMob {
         cookingSearchCooldown = COOK_STATION_SEARCH_INTERVAL;
     }
 
+    private boolean tickThreatResponse() {
+        if (fleeingThreat != null) {
+            if (!fleeingThreat.isAlive()
+                    || distanceToSqr(fleeingThreat) > FLEE_RELEASE_DISTANCE * FLEE_RELEASE_DISTANCE) {
+                fleeSafeTicks++;
+                if (fleeSafeTicks >= FLEE_SAFE_TICKS) {
+                    fleeingThreat = null;
+                    fleeSafeTicks = 0;
+                    fleeRepathCooldown = 0;
+                    setSprinting(false);
+                    getNavigation().stop();
+                    return false;
+                }
+            } else {
+                fleeSafeTicks = 0;
+            }
+
+            tickFleeing();
+            return true;
+        }
+
+        if (threatScanCooldown > 0) {
+            threatScanCooldown--;
+            return false;
+        }
+
+        threatScanCooldown = THREAT_SCAN_INTERVAL;
+
+        Mob threat = level().getEntitiesOfClass(
+                        Mob.class,
+                        getBoundingBox().inflate(THREAT_SCAN_RADIUS, 10.0D, THREAT_SCAN_RADIUS),
+                        mob -> mob != this
+                                && mob.isAlive()
+                                && mob instanceof Enemy
+                                && mob.getTarget() == this
+                ).stream()
+                .min(Comparator.comparingDouble(this::distanceToSqr))
+                .orElse(null);
+
+        if (threat == null) {
+            return false;
+        }
+
+        if (shouldFightHostile(threat)) {
+            if (!isCombatActive() || huntingTarget || getTarget() != threat) {
+                beginWildCombat(threat, false, false);
+            }
+            return false;
+        }
+
+        startFleeingFrom(threat);
+        tickFleeing();
+        return true;
+    }
+
+    private boolean shouldFightHostile(Mob threat) {
+        if (threat instanceof Creeper || getHealth() < 8.0F) {
+            return false;
+        }
+
+        var attackAttribute = threat.getAttribute(Attributes.ATTACK_DAMAGE);
+        double attackDamage = attackAttribute == null ? 4.0D : attackAttribute.getValue();
+        double threatPower = threat.getHealth() + attackDamage * 2.5D;
+        double npcPower = getHealth()
+                + (storedSword.isEmpty() ? 0.0D : 8.0D)
+                + (storedRangedWeapon.isEmpty() ? 0.0D : 8.0D);
+
+        return npcPower >= threatPower * 0.95D;
+    }
+
+    private void startFleeingFrom(LivingEntity threat) {
+        sleepBrain.interrupt();
+        corralBrain.interrupt();
+        stopUsingItem();
+        clearUtilityItem();
+        setTarget(null);
+        setCombatActive(false);
+        huntingTarget = false;
+        stowWeapons();
+        fleeingThreat = threat;
+        fleeSafeTicks = 0;
+        fleeRepathCooldown = 0;
+        getNavigation().stop();
+        setSprinting(true);
+    }
+
+    private void tickFleeing() {
+        if (fleeingThreat == null) {
+            return;
+        }
+
+        if (fleeRepathCooldown > 0) {
+            fleeRepathCooldown--;
+            return;
+        }
+
+        fleeRepathCooldown = 10;
+
+        BlockPos shelter = findNearbyShelter(fleeingThreat);
+        if (shelter != null) {
+            Vec3 shelterSpot = Vec3.atBottomCenterOf(shelter);
+            if (distanceToSqr(shelterSpot) > 3.0D) {
+                getNavigation().moveTo(shelterSpot.x, shelterSpot.y, shelterSpot.z, 1.22D);
+                setShiftKeyDown(false);
+            } else {
+                getNavigation().stop();
+                setSprinting(false);
+                setShiftKeyDown(true);
+            }
+            return;
+        }
+
+        BlockPos bed = sleepBrain.getClaimedBed();
+        if (bed != null) {
+            double threatToBed = fleeingThreat.distanceToSqr(Vec3.atBottomCenterOf(bed));
+            if (threatToBed > 100.0D) {
+                Vec3 bedSpot = Vec3.atBottomCenterOf(bed);
+                if (distanceToSqr(bedSpot) > 4.0D) {
+                    navigateTowardPersistentClaim(bed, 1.22D);
+                    setShiftKeyDown(false);
+                } else {
+                    getNavigation().stop();
+                    setSprinting(false);
+                    setShiftKeyDown(true);
+                }
+                return;
+            }
+        }
+
+        Vec3 away = DefaultRandomPos.getPosAway(this, 16, 7, fleeingThreat.position());
+        if (away != null) {
+            getNavigation().moveTo(away.x, away.y, away.z, 1.25D);
+            setSprinting(true);
+        }
+    }
+
+    @Nullable
+    private BlockPos findNearbyShelter(LivingEntity threat) {
+        BlockPos origin = blockPosition();
+        double currentThreatDistance = threat.distanceToSqr(this);
+        BlockPos best = null;
+        double bestScore = Double.MAX_VALUE;
+
+        for (BlockPos candidate : BlockPos.betweenClosed(
+                origin.offset(-10, -3, -10),
+                origin.offset(10, 4, 10)
+        )) {
+            if (level().canSeeSky(candidate)
+                    || !level().getBlockState(candidate).getCollisionShape(level(), candidate).isEmpty()
+                    || !level().getBlockState(candidate.above()).getCollisionShape(level(), candidate.above()).isEmpty()
+                    || level().getBlockState(candidate.below()).getCollisionShape(level(), candidate.below()).isEmpty()) {
+                continue;
+            }
+
+            double threatDistance = threat.distanceToSqr(Vec3.atBottomCenterOf(candidate));
+            if (threatDistance <= currentThreatDistance + 9.0D) {
+                continue;
+            }
+
+            double travelDistance = candidate.distSqr(origin);
+            double score = travelDistance - Math.min(threatDistance, 900.0D) * 0.12D;
+
+            if (score < bestScore) {
+                Path path = getNavigation().createPath(candidate, 0);
+                if (path != null && (path.canReach() || path.getEndNode() != null)) {
+                    best = candidate.immutable();
+                    bestScore = score;
+                }
+            }
+        }
+
+        return best;
+    }
+
+    private void updateDebugState() {
+        if (level().isClientSide || tickCount % 5 != 0) {
+            return;
+        }
+
+        entityData.set(DATA_DEBUG_ACTIVITY, buildDebugActivity());
+
+        LivingEntity target = getTarget();
+        entityData.set(
+                DATA_DEBUG_TARGET,
+                target == null
+                        ? (fleeingThreat == null ? "none" : "avoiding " + fleeingThreat.getName().getString())
+                        : target.getName().getString() + " @ " + formatPos(target.blockPosition())
+        );
+
+        Path path = getNavigation().getPath();
+        if (path == null || path.isDone() || path.getNodeCount() == 0) {
+            entityData.set(DATA_DEBUG_PATH, "none");
+        } else {
+            BlockPos next = path.getNextNodePos();
+            BlockPos destination = path.getTarget();
+            entityData.set(
+                    DATA_DEBUG_PATH,
+                    "next " + formatPos(next)
+                            + " -> " + formatPos(destination)
+                            + " [" + (path.getNextNodeIndex() + 1) + "/" + path.getNodeCount() + "]"
+                            + (path.canReach() ? "" : " partial")
+            );
+        }
+
+        String bed = sleepBrain.getClaimedBed() == null
+                ? "bed:none"
+                : "bed:" + formatPos(sleepBrain.getClaimedBed());
+
+        String station = "station:none";
+        if (claimedCookingStation != null) {
+            int count = 0;
+            int capacity = cookingStationCapacity(claimedCookingStation);
+            if (level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                count = CyberNpcWorldClaims.get(serverLevel).cookingClaimCount(claimedCookingStation);
+            }
+
+            station = "station:" + formatPos(claimedCookingStation)
+                    + (capacity > 0 ? " " + count + "/" + capacity : "");
+        }
+
+        entityData.set(
+                DATA_DEBUG_CLAIMS,
+                bed + " | " + station + " | pen:" + corralBrain.getClaimDebug()
+        );
+
+        entityData.set(
+                DATA_DEBUG_INVENTORY,
+                "sword:" + stackDebug(storedSword)
+                        + " | ranged:" + stackDebug(storedRangedWeapon)
+                        + " | raw:" + stackDebug(carriedRawFood)
+                        + " | eating:" + stackDebug(foodToEat)
+        );
+    }
+
+    private String buildDebugActivity() {
+        if (fleeingThreat != null) {
+            return "Fleeing/hiding from " + fleeingThreat.getName().getString();
+        }
+        if (isSleeping()) {
+            return "Sleeping";
+        }
+        if (isCombatActive()) {
+            LivingEntity target = getTarget();
+            String name = target == null ? "target" : target.getName().getString();
+            return huntingTarget ? "Hunting " + name : "Fighting " + name;
+        }
+        if (!foodToEat.isEmpty()) {
+            return "Eating " + foodToEat.getHoverName().getString();
+        }
+        if (cookingMode == COOK_MODE_FURNACE) {
+            return "Waiting for furnace/smoker";
+        }
+        if (cookingMode == COOK_MODE_CAMPFIRE) {
+            return "Waiting for campfire";
+        }
+        if (!carriedRawFood.isEmpty()) {
+            return claimedCookingStation == null ? "Looking for cooking station" : "Returning to cooking station";
+        }
+        if (groundFoodTargetId != null) {
+            return "Picking up food";
+        }
+        if (corralBrain.isBusy()) {
+            return corralBrain.getDebugActivity();
+        }
+        if (sleepBrain.isBusy()) {
+            return "Going to claimed bed";
+        }
+        if (getHunger() <= HUNT_HUNGER_THRESHOLD) {
+            return "Looking for food";
+        }
+        if (!getNavigation().isDone()) {
+            return "Travelling";
+        }
+        return canWander() ? "Wandering/idle" : "Idle";
+    }
+
+    private static String stackDebug(ItemStack stack) {
+        if (stack.isEmpty()) {
+            return "none";
+        }
+        return stack.getHoverName().getString() + "x" + stack.getCount();
+    }
+
+    private static String formatPos(BlockPos pos) {
+        return pos.getX() + "," + pos.getY() + "," + pos.getZ();
+    }
+
     private boolean isBusyWithNeeds() {
         return getHunger() <= HUNT_HUNGER_THRESHOLD
                 || (!carriedRawFood.isEmpty() && getHunger() < STOP_EATING_HUNGER)
@@ -1039,7 +1632,9 @@ public class CyberNpcEntity extends PathfinderMob {
                 || dropSearchTicks > 0
                 || cookingTarget != null
                 || corralBrain.isBusy()
-                || sleepBrain.isBusy();
+                || sleepBrain.isBusy()
+                || fleeingThreat != null
+                || groundFoodTargetId != null;
     }
 
     @Override
@@ -1076,6 +1671,9 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void beginWildCombat(LivingEntity target, boolean callForHelp, boolean isHunt) {
+        fleeingThreat = null;
+        fleeSafeTicks = 0;
+        fleeRepathCooldown = 0;
         sleepBrain.interrupt();
         corralBrain.interrupt();
         clearUtilityItem();
@@ -1142,6 +1740,19 @@ public class CyberNpcEntity extends PathfinderMob {
         level().addFreshEntity(arrow);
     }
 
+    public void releasePersistentClaims() {
+        if (level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            CyberNpcWorldClaims.get(serverLevel).releaseOwner(getUUID());
+        }
+        claimedCookingStation = null;
+    }
+
+    @Override
+    public void die(DamageSource source) {
+        releasePersistentClaims();
+        super.die(source);
+    }
+
     @Override
     protected InteractionResult mobInteract(Player player, InteractionHand hand) {
         if (!level().isClientSide && hand == InteractionHand.MAIN_HAND) {
@@ -1199,6 +1810,11 @@ public class CyberNpcEntity extends PathfinderMob {
             }
         }
 
+        if (claimedCookingStation != null) {
+            tag.putLong("CyberNpcClaimedCookingStation", claimedCookingStation.asLong());
+        }
+
+        corralBrain.addSaveData(tag);
         sleepBrain.addSaveData(tag);
     }
 
@@ -1229,6 +1845,7 @@ public class CyberNpcEntity extends PathfinderMob {
         } else {
             aggressionLevel = -1;
         }
+        entityData.set(DATA_AGGRESSION, aggressionLevel);
 
         setHunger(tag.contains("CyberNpcHunger") ? tag.getInt("CyberNpcHunger") : MAX_HUNGER);
 
@@ -1264,6 +1881,10 @@ public class CyberNpcEntity extends PathfinderMob {
             expectedCookedFood = ItemStack.EMPTY;
         }
 
+        claimedCookingStation = tag.contains("CyberNpcClaimedCookingStation")
+                ? BlockPos.of(tag.getLong("CyberNpcClaimedCookingStation"))
+                : null;
+
         if (storedSword.isEmpty() && tag.contains("CyberNpcStoredWeapon")) {
             ItemStack oldWeapon = ItemStack.of(tag.getCompound("CyberNpcStoredWeapon"));
             if (oldWeapon.getItem() instanceof SwordItem) {
@@ -1283,6 +1904,14 @@ public class CyberNpcEntity extends PathfinderMob {
         cookingSearchCooldown = 0;
         eatingTicks = 0;
         utilityItemActive = false;
+        groundFoodTargetId = null;
+        groundFoodSearchCooldown = 0;
+        huntTargetRecheckCooldown = 0;
+        threatScanCooldown = 0;
+        fleeingThreat = null;
+        fleeSafeTicks = 0;
+        fleeRepathCooldown = 0;
+        corralBrain.readSaveData(tag);
         sleepBrain.readSaveData(tag);
 
         if (getNpcType() == NpcType.WILD) {

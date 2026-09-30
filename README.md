@@ -1,85 +1,28 @@
 # CyberNpc
 
-CyberNpc is a custom NPC framework for **Minecraft 1.20.1 Forge**, built for the CyberSpectra modpack.
+CyberNpc is a custom NPC framework for Minecraft 1.20.1 Forge, built for the CyberSpectra modpack.
 
-## Current release: 0.8.0
+## Current release: 0.9.0
 
-### Player-style animation system
+### Hostile encounters
+Wild NPCs now participate in hostile-mob encounters. Hostile Enemy mobs can acquire CyberNpc entities as targets. Endermen have special gaze handling: direct NPC eye contact with line of sight can provoke them. A Wild NPC evaluates the threat and either uses its normal combat system or retreats. Dangerous encounters such as Creepers favor retreat. Retreating NPCs search for reachable covered positions farther from the threat and can use their claimed bed as a fallback safe place.
 
-CyberNpc now drives its humanoid model through Minecraft's player animation states instead of relying on generic mob defaults.
+### Developer Glasses
+Developer Glasses are a head-slot item in Tools & Utilities. While wearing them, look at a CyberNpc to see live debug information: name/type, health, hunger, role, aggression, current activity, current target, server path next node and destination, claimed bed/cooking station/pen, and stored survival items.
 
-Current animation coverage includes:
+### Cooking station claims
+Cooking claims persist in world SavedData. Furnaces and smokers allow one NPC claimant. Campfires allow up to four. NPCs remember their station across saves and long travel. Distant returns use local pathfinding legs until the real station is reachable again.
 
-- Walking and normal limb movement.
-- Faster movement/sprinting animation driven by actual movement speed.
-- Crouching/sneaking with the player-style render offset.
-- Swimming arm/leg animation and player-style swimming body rotation.
-- Jumping/falling movement through the normal living-entity/player model pipeline.
-- Riding pose when the NPC is a passenger.
-- Main-hand melee attack animation.
-- Normal held-item pose.
-- Shield/blocking pose when a used item reports the BLOCK animation.
-- Bow draw pose.
-- Crossbow charge and charged-hold poses.
-- Spear/trident-use pose.
-- Spyglass pose.
-- Goat-horn pose.
-- Brush pose.
-- Food/item-use state while eating.
-- Normal hurt/death rendering inherited from Minecraft's living-entity renderer.
-- Real sleeping body rotation aligned to the bed.
+### Food and hunting
+Hungry NPCs can collect useful food already on the ground. Raw meat goes through the cooking system; suitable ready-to-eat food can be consumed directly. During a hunt, an NPC can re-evaluate nearby prey of the same species and switch when another target is much more practical. Managed pen animals remain protected from normal hunting.
 
-The renderer now shows any item the NPC is actively holding, including combat weapons, food, and animal-lure items.
+### Corrals
+Existing corrals can be claimed by one NPC only. Livestock being moved into the pen are actually leashed to the NPC, giving the normal visible lead connection. The pen detector records multiple gates, chooses an entry route, releases the animals after delivery, then deliberately routes the NPC back outside and closes the gates.
 
-### Reliable sword swing
-
-Wild NPC melee attacks use a dedicated synchronized swing timer. The client no longer depends only on the generic mob swing event to decide whether the PlayerModel should animate an attack.
-
-The synchronized attack progress is fed directly into Minecraft's normal humanoid attack animation on the same attack that deals damage.
-
-### Sleeping
-
-- Wild NPCs keep their persistent claimed bed.
-- They use Minecraft's real sleeping pose and bed orientation.
-- Look-at-player and random-look goals are disabled while sleeping.
-- The custom player model locks the sleeping head straight with the body, so the head no longer tracks entities or visibly moves around in bed.
-- NPCs still wake for daytime, combat, damage, a removed bed, or urgent hunger.
-
-### Corrals and hunting
-
-Managed corral animals are now protected from the normal hunting target search.
-
-- A Wild NPC no longer sees animals inside its managed pen as ordinary prey.
-- The corral can still be stocked and bred.
-- Hungry NPCs search for suitable adult prey **outside** the managed pen.
-- Babies remain protected.
-- The old behavior that immediately selected a surplus penned adult for hunting has been removed.
-
-This avoids the NPC maintaining a breeding pen and then treating the same herd as its first/default hunting target.
-
-### Existing survival AI
-
-Wild NPCs retain hunger, starvation, adaptive bow/crossbow combat, stalking, food pickup, real furnace/smoker/campfire cooking, eating, door use, swimming, climbing support, corrals, bed claiming, and nearby-Wild-NPC combat assistance.
+### Existing systems
+The mod retains persistent beds/sleep, hunger and starvation, real furnace/smoker/campfire cooking, sword plus bow/crossbow combat, adaptive ranged aiming, stalking/sneaking, player-style animations, swimming, door use, climbing support, group aggression, and natural Wild NPC spawning.
 
 Building and mining remain intentionally excluded.
 
-### Commands
-
-- `/cybernpc spawn <name>`
-- `/cybernpc role <target> <role>`
-- `/cybernpc wander <target> <true|false>`
-- `/cybernpc hunger <target> <0-20>`
-- `/cybernpc remove <target>`
-
-NPCs made with `/cybernpc spawn` are Main NPCs.
-
 ## Development target
-
-- Minecraft: 1.20.1
-- Loader: Forge
-- Forge baseline: 47.4.10
-- Java: 17
-
-## Development rule
-
-New gameplay systems and NPC features are added only when explicitly requested by the modpack owner. Building and mining remain excluded from player-like Wild NPC behavior.
+Minecraft 1.20.1, Forge 47.4.10, Java 17.

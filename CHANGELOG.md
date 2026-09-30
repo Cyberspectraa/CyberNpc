@@ -1,35 +1,28 @@
 # Changelog
 
-## 0.8.0
+## 0.9.0
+- Hostile Enemy mobs can acquire CyberNpc targets.
+- Added Enderman gaze detection for NPC eye contact.
+- Added Wild NPC threat evaluation with fight-or-retreat behavior.
+- Added covered-position retreat searching and claimed-bed fallback.
+- Added Developer Glasses with live health, hunger, activity, target, pathfinding, claims, and inventory debug data.
+- Added persistent world data for cooking-station and pen claims.
+- Furnaces/smokers allow one claimant and campfires allow four.
+- Added persistent return routing to distant claimed cooking stations.
+- Added general ground-food collection.
+- Hunting can switch between nearby prey of the same species.
+- Corrals can be claimed by one NPC.
+- Livestock transfer now uses real leash links.
+- Added multi-gate corral detection and explicit pathfinding out of the pen after delivery.
 
-- Protected animals inside a Wild NPC's managed corral from the normal hunting target search.
-- Removed automatic hunting of surplus penned adults so outside prey is selected instead.
-- Added a dedicated synchronized melee-swing animation timer.
-- Wild NPC sword hits now feed explicit attack progress into Minecraft's normal humanoid/player attack animation.
-- Disabled look-at-player and random-look goals while an NPC is sleeping.
-- Added a CyberNpc-specific PlayerModel that locks the head in place while sleeping.
-- Reworked the renderer to mirror vanilla player arm-pose selection for held and used items.
-- Added player-style swimming body rotation and crouch render offset.
-- Added support for vanilla player arm poses including blocking, bow, spear, crossbow charge/hold, spyglass, horn, brush, and ordinary item use.
-- Replaced the combat-only held-item render layer with a general held-item layer so food and lure items are visible while being used.
+## 0.8.0
+- Protected managed corral animals from normal hunting.
+- Added synchronized melee animation progress.
+- Locked sleeping head movement.
+- Reworked rendering around player-style animation states.
 
 ## 0.7.0
-
-- Added persistent Wild NPC bed claiming and real sleeping.
-- Added the first melee swing call.
-- Sleeping NPCs wake for daytime, combat, damage, removed beds, or urgent hunger.
+- Added persistent bed claiming and real sleeping.
 
 ## 0.6.0
-
-- Replaced simulated cooking with real furnace/smoker/campfire interaction.
-- Added sustainable livestock/corral management using existing fenced pens.
-
-## 0.5.0
-
-- Reworked Wild NPC ranged combat into a visible bow/crossbow state machine.
-- Added adaptive aiming, stalking, and improved player-like movement.
-
-## 0.4.0
-
-- Added two-weapon Wild NPC combat.
-- Added hunger, hunting, food pickup, cooking, eating, and starvation.
+- Added real cooking and livestock corral management.

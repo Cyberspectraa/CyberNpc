@@ -149,6 +149,7 @@ public final class CyberNpcCommands {
         }
 
         String name = npc.getName().getString();
+        npc.releasePersistentClaims();
         npc.discard();
         source.sendSuccess(() -> Component.literal("Removed NPC '" + name + "'."), true);
         return 1;

@@ -38,6 +38,10 @@ public final class ModEvents {
             event.accept(ModItems.QUEST_NPC_SPAWN_EGG);
             event.accept(ModItems.WILD_NPC_SPAWN_EGG);
         }
+
+        if (event.getTabKey().equals(CreativeModeTabs.TOOLS_AND_UTILITIES)) {
+            event.accept(ModItems.DEVELOPER_GLASSES);
+        }
     }
 
     private ModEvents() {

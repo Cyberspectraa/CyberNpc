@@ -3,6 +3,7 @@ package com.cyberspectraa.cybernpc.registry;
 import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.item.CyberNpcSpawnEggItem;
+import com.cyberspectraa.cybernpc.item.DeveloperGlassesItem;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -41,6 +42,10 @@ public final class ModItems {
                             NpcType.WILD,
                             new Item.Properties()
                     ));
+
+    public static final RegistryObject<Item> DEVELOPER_GLASSES =
+            ITEMS.register("developer_glasses", () ->
+                    new DeveloperGlassesItem(new Item.Properties()));
 
     private ModItems() {
     }

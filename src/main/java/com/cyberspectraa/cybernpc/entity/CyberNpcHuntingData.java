@@ -55,7 +55,8 @@ public final class CyberNpcHuntingData {
             return 5;
         }
 
-        return 0;
+        var food = item.getFoodProperties();
+        return food == null ? 0 : Math.max(0, food.getNutrition());
     }
 
     private CyberNpcHuntingData() {
