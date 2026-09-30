@@ -98,9 +98,6 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
 
         String glyph = reaction.glyph();
         int glyphWidth = font.width(glyph);
-
-        // Keep even the shortest symbols in a comfortably sized bubble while
-        // allowing longer emoticons to expand naturally.
         float halfWidth = Math.max(
                 12.0F,
                 (glyphWidth + 16.0F) * 0.5F
@@ -117,9 +114,6 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
                 0.0D
         );
         poseStack.mulPose(renderDispatcher.cameraOrientation());
-
-        // Larger than the old 0.025 scale so reactions remain readable without
-        // needing to stand directly beside the NPC.
         poseStack.scale(-0.032F, -0.032F, 0.032F);
 
         PoseStack.Pose bubblePose = poseStack.last();
@@ -128,121 +122,29 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
                 RenderType.entityTranslucent(REACTION_WHITE_TEXTURE)
         );
 
-        int shadow = 0x80000000;
-        int outline = 0xFF292725;
-        int fill = 0xFFFDF7E6;
-        int highlight = 0xFFFFFFFF;
+        // IMPORTANT: border and fill occupy different XY regions on the exact
+        // same Z plane. There is no full black silhouette behind the white
+        // panel anymore, so depth ordering cannot turn the whole bubble black.
+        int border = 0xFF2B2927;
+        int fill = 0xFFFFFFFF;
 
-        // Shadow first. Using the same stepped silhouette keeps the bubble from
-        // looking like a flat GUI rectangle pasted into the world.
-        drawPixelBubble(
+        drawBubbleFrameAndFill(
                 background,
                 bubblePose,
                 halfWidth,
-                2.0F,
-                2.0F,
-                -0.04F,
-                shadow,
-                packedLight
-        );
-
-        // Dark outer silhouette.
-        drawPixelBubble(
-                background,
-                bubblePose,
-                halfWidth,
-                0.0F,
-                0.0F,
-                0.0F,
-                outline,
-                packedLight
-        );
-
-        // Bright inner panel. These strips touch at the edges but never
-        // overlap, which avoids depth flicker at oblique camera angles.
-        drawBubbleRect(
-                background,
-                bubblePose,
-                -halfWidth + 4.0F,
-                -9.0F,
-                halfWidth - 4.0F,
-                -6.0F,
-                0.02F,
-                fill,
-                packedLight
-        );
-        drawBubbleRect(
-                background,
-                bubblePose,
-                -halfWidth + 2.0F,
-                -6.0F,
-                halfWidth - 2.0F,
-                6.0F,
-                0.02F,
-                fill,
-                packedLight
-        );
-        drawBubbleRect(
-                background,
-                bubblePose,
-                -halfWidth + 4.0F,
-                6.0F,
-                halfWidth - 4.0F,
-                9.0F,
-                0.02F,
-                fill,
-                packedLight
-        );
-
-        // Small top highlight gives the otherwise pixel-flat panel a little
-        // depth without making it look modern or glossy.
-        drawBubbleRect(
-                background,
-                bubblePose,
-                -halfWidth + 5.0F,
-                -8.0F,
-                halfWidth - 5.0F,
-                -7.0F,
-                0.03F,
-                highlight,
-                packedLight
-        );
-
-        // Fill the inside of the stepped speech tail without overlapping the
-        // lower body strip.
-        drawBubbleRect(
-                background,
-                bubblePose,
-                -1.0F,
-                9.0F,
-                4.0F,
-                12.0F,
-                0.02F,
-                fill,
-                packedLight
-        );
-        drawBubbleRect(
-                background,
-                bubblePose,
-                1.0F,
-                12.0F,
-                4.0F,
-                14.0F,
-                0.02F,
-                fill,
-                packedLight
+                border,
+                fill
         );
 
         int iconColor = reactionColor(reaction);
         float iconX = -glyphWidth / 2.0F;
         float iconY = -4.5F;
 
-        // Pixel-style icon shadow for contrast on every biome/lighting setup.
         font.drawInBatch(
                 glyph,
                 iconX + 1.0F,
                 iconY + 1.0F,
-                0xB0000000,
+                0x90000000,
                 false,
                 matrix,
                 buffer,
@@ -266,74 +168,128 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         poseStack.popPose();
     }
 
-    private static void drawPixelBubble(
+    private static void drawBubbleFrameAndFill(
             VertexConsumer consumer,
             PoseStack.Pose pose,
             float halfWidth,
-            float offsetX,
-            float offsetY,
-            float z,
-            int color,
-            int packedLight
+            int border,
+            int fill
     ) {
-        // Non-overlapping strips avoid the coplanar/z-fighting flicker that the
-        // old overlapping rectangles could produce at certain camera angles.
+        final float z = 0.0F;
+
+        // Top stepped border.
         drawBubbleRect(
-                consumer,
-                pose,
-                -halfWidth + 3.0F + offsetX,
-                -11.0F + offsetY,
-                halfWidth - 3.0F + offsetX,
-                -8.0F + offsetY,
-                z,
-                color,
-                packedLight
+                consumer, pose,
+                -halfWidth + 3.0F, -11.0F,
+                halfWidth - 3.0F, -9.0F,
+                z, border
         );
         drawBubbleRect(
-                consumer,
-                pose,
-                -halfWidth + offsetX,
-                -8.0F + offsetY,
-                halfWidth + offsetX,
-                8.0F + offsetY,
-                z,
-                color,
-                packedLight
+                consumer, pose,
+                -halfWidth + 1.0F, -9.0F,
+                -halfWidth + 3.0F, -7.0F,
+                z, border
         );
         drawBubbleRect(
-                consumer,
-                pose,
-                -halfWidth + 3.0F + offsetX,
-                8.0F + offsetY,
-                halfWidth - 3.0F + offsetX,
-                11.0F + offsetY,
-                z,
-                color,
-                packedLight
+                consumer, pose,
+                halfWidth - 3.0F, -9.0F,
+                halfWidth - 1.0F, -7.0F,
+                z, border
         );
 
-        // Two-step pixel tail, also kept non-overlapping.
+        // Side borders.
         drawBubbleRect(
-                consumer,
-                pose,
-                -2.0F + offsetX,
-                11.0F + offsetY,
-                5.0F + offsetX,
-                13.0F + offsetY,
-                z,
-                color,
-                packedLight
+                consumer, pose,
+                -halfWidth, -7.0F,
+                -halfWidth + 2.0F, 7.0F,
+                z, border
         );
         drawBubbleRect(
-                consumer,
-                pose,
-                0.0F + offsetX,
-                13.0F + offsetY,
-                5.0F + offsetX,
-                16.0F + offsetY,
-                z,
-                color,
-                packedLight
+                consumer, pose,
+                halfWidth - 2.0F, -7.0F,
+                halfWidth, 7.0F,
+                z, border
+        );
+
+        // Bottom stepped border.
+        drawBubbleRect(
+                consumer, pose,
+                -halfWidth + 1.0F, 7.0F,
+                -halfWidth + 3.0F, 9.0F,
+                z, border
+        );
+        drawBubbleRect(
+                consumer, pose,
+                halfWidth - 3.0F, 7.0F,
+                halfWidth - 1.0F, 9.0F,
+                z, border
+        );
+        drawBubbleRect(
+                consumer, pose,
+                -halfWidth + 3.0F, 9.0F,
+                halfWidth - 3.0F, 11.0F,
+                z, border
+        );
+
+        // White interior. These regions meet the border at their edges but do
+        // not overlap any dark geometry.
+        drawBubbleRect(
+                consumer, pose,
+                -halfWidth + 3.0F, -9.0F,
+                halfWidth - 3.0F, -7.0F,
+                z, fill
+        );
+        drawBubbleRect(
+                consumer, pose,
+                -halfWidth + 2.0F, -7.0F,
+                halfWidth - 2.0F, 7.0F,
+                z, fill
+        );
+        drawBubbleRect(
+                consumer, pose,
+                -halfWidth + 3.0F, 7.0F,
+                halfWidth - 3.0F, 9.0F,
+                z, fill
+        );
+
+        // Pixel speech tail. Like the body, the white center and dark edge use
+        // separate coordinates instead of stacked surfaces.
+        drawBubbleRect(
+                consumer, pose,
+                -2.0F, 11.0F,
+                0.0F, 14.0F,
+                z, border
+        );
+        drawBubbleRect(
+                consumer, pose,
+                0.0F, 13.0F,
+                2.0F, 16.0F,
+                z, border
+        );
+        drawBubbleRect(
+                consumer, pose,
+                4.0F, 11.0F,
+                6.0F, 14.0F,
+                z, border
+        );
+        drawBubbleRect(
+                consumer, pose,
+                2.0F, 15.0F,
+                4.0F, 17.0F,
+                z, border
+        );
+
+        drawBubbleRect(
+                consumer, pose,
+                0.0F, 11.0F,
+                4.0F, 13.0F,
+                z, fill
+        );
+        drawBubbleRect(
+                consumer, pose,
+                2.0F, 13.0F,
+                4.0F, 15.0F,
+                z, fill
         );
     }
 
@@ -345,8 +301,7 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
             float right,
             float bottom,
             float z,
-            int color,
-            int packedLight
+            int color
     ) {
         Matrix4f matrix = pose.pose();
         Matrix3f normal = pose.normal();
@@ -356,27 +311,25 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         int green = color >>> 8 & 0xFF;
         int blue = color & 0xFF;
 
-        int light = LightTexture.FULL_BRIGHT;
-
         bubbleVertex(
                 consumer, matrix, normal,
                 left, top, z, 0.0F, 0.0F,
-                red, green, blue, alpha, light
+                red, green, blue, alpha
         );
         bubbleVertex(
                 consumer, matrix, normal,
                 left, bottom, z, 0.0F, 1.0F,
-                red, green, blue, alpha, light
+                red, green, blue, alpha
         );
         bubbleVertex(
                 consumer, matrix, normal,
                 right, bottom, z, 1.0F, 1.0F,
-                red, green, blue, alpha, light
+                red, green, blue, alpha
         );
         bubbleVertex(
                 consumer, matrix, normal,
                 right, top, z, 1.0F, 0.0F,
-                red, green, blue, alpha, light
+                red, green, blue, alpha
         );
     }
 
@@ -392,14 +345,13 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
             int red,
             int green,
             int blue,
-            int alpha,
-            int light
+            int alpha
     ) {
         consumer.vertex(matrix, x, y, z)
                 .color(red, green, blue, alpha)
                 .uv(u, v)
                 .overlayCoords(OverlayTexture.NO_OVERLAY)
-                .uv2(light)
+                .uv2(LightTexture.FULL_BRIGHT)
                 .normal(normal, 0.0F, 0.0F, 1.0F)
                 .endVertex();
     }
