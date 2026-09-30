@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.27.0
+
+### Horse Tamer class
+- Added the rare Horse Tamer Wild NPC class at a 3% class weight while keeping the full class-weight table at 100%.
+- Horse Tamer is only available when Icy's Better Horses is installed; CyberNpc still has no hard dependency on that mod.
+- Horse Tamers spawn with the Better Horses Upgraded Saddle rather than a duplicate CyberNpc saddle.
+- A Horse Tamer searches for an adult unowned horse, approaches it, uses its Upgraded Saddle to tame/claim it, equips that saddle and makes the horse persistent.
+- Horse Tamers prefer their already-owned horse before attempting to tame another one.
+- Horse ownership is now strict: ordinary Wild NPCs no longer borrow saddled horses, and Horse Tamers never take player-owned or another NPC's horse.
+- Existing combat, hunger, sleep and emergency behaviour still makes a mounted Horse Tamer dismount when the NPC has something more important to do.
+
+### Beast Tamer companion commands
+- Beast Tamer wolves now receive explicit owner state commands instead of only being targeted at enemies.
+- Wolves sit while their Beast Tamer is sleeping or stopped for a social conversation.
+- Wolves automatically unsit to follow their owner again when the Beast Tamer resumes normal activity.
+- Combat orders unsit every owned wolf and give the whole nearby pack the Beast Tamer's current target.
+- Hunting uses the same coordinated target order, so the wolves help bring down the prey selected by their Beast Tamer rather than selecting unrelated animals.
+- A fleeing Beast Tamer recalls the pack instead of leaving wolves sitting behind.
+- Existing gear-tier companion limits, wolf taming, ownership and cleanup on death/zombification are preserved.
+
 ## 0.26.0
 
 ### Expanded reaction-bubble language
