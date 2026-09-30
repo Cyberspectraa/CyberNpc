@@ -51,12 +51,12 @@ public final class IronSpellsCompat {
             // Fire
             Map.entry(MOD_ID + ":firebolt", SpellTactics.mid()),
             Map.entry(MOD_ID + ":fireball", SpellTactics.longRange()),
-            Map.entry(MOD_ID + ":flaming_strike", SpellTactics.closeAoe()),
+            Map.entry(MOD_ID + ":flaming_strike", new SpellTactics(0.0D, 2.0D, 3.4D, SpellRole.CLOSE, true)),
             Map.entry(MOD_ID + ":magma_bomb", SpellTactics.longRange()),
 
             // Ice
             Map.entry(MOD_ID + ":icicle", new SpellTactics(2.0D, 11.0D, 28.0D, SpellRole.RANGED, true)),
-            Map.entry(MOD_ID + ":frostwave", SpellTactics.closeAoe()),
+            Map.entry(MOD_ID + ":frostwave", new SpellTactics(0.0D, 5.0D, 7.5D, SpellRole.CLOSE, false)),
             Map.entry(MOD_ID + ":snowball", SpellTactics.mid()),
             Map.entry(MOD_ID + ":ray_of_frost", new SpellTactics(4.0D, 15.0D, 30.0D, SpellRole.RANGED, true)),
 
@@ -64,19 +64,19 @@ public final class IronSpellsCompat {
             Map.entry(MOD_ID + ":lightning_bolt", SpellTactics.longRange()),
             Map.entry(MOD_ID + ":chain_lightning", new SpellTactics(4.0D, 14.0D, 30.0D, SpellRole.RANGED, true)),
             Map.entry(MOD_ID + ":electrocute", new SpellTactics(0.0D, 6.0D, 10.0D, SpellRole.CLOSE, true)),
-            Map.entry(MOD_ID + ":shockwave", new SpellTactics(0.0D, 5.0D, 11.0D, SpellRole.CLOSE, false)),
+            Map.entry(MOD_ID + ":shockwave", new SpellTactics(0.0D, 7.0D, 10.0D, SpellRole.CLOSE, false)),
 
             // Nature
             Map.entry(MOD_ID + ":acid_orb", new SpellTactics(4.0D, 12.0D, 28.0D, SpellRole.RANGED, true)),
             Map.entry(MOD_ID + ":poison_arrow", SpellTactics.longRange()),
             Map.entry(MOD_ID + ":root", new SpellTactics(4.0D, 14.0D, 30.0D, SpellRole.CONTROL, true)),
-            Map.entry(MOD_ID + ":poison_splash", new SpellTactics(6.0D, 16.0D, 30.0D, SpellRole.CONTROL, true)),
+            Map.entry(MOD_ID + ":poison_splash", new SpellTactics(5.0D, 18.0D, 32.0D, SpellRole.CONTROL, true)),
 
             // Holy
             Map.entry(MOD_ID + ":guiding_bolt", SpellTactics.longRange()),
-            Map.entry(MOD_ID + ":divine_smite", new SpellTactics(0.0D, 2.0D, 4.0D, SpellRole.CLOSE, true)),
+            Map.entry(MOD_ID + ":divine_smite", new SpellTactics(0.0D, 1.7D, 2.6D, SpellRole.CLOSE, true)),
             Map.entry(MOD_ID + ":heal", new SpellTactics(0.0D, 0.0D, 64.0D, SpellRole.HEAL, false)),
-            Map.entry(MOD_ID + ":wisp", new SpellTactics(5.0D, 18.0D, 40.0D, SpellRole.RANGED, true)),
+            Map.entry(MOD_ID + ":wisp", new SpellTactics(5.0D, 20.0D, 48.0D, SpellRole.RANGED, true)),
 
             // Ender
             Map.entry(MOD_ID + ":magic_missile", SpellTactics.mid()),
@@ -85,16 +85,16 @@ public final class IronSpellsCompat {
             Map.entry(MOD_ID + ":evasion", new SpellTactics(0.0D, 0.0D, 64.0D, SpellRole.DEFENSE, false)),
 
             // Blood
-            Map.entry(MOD_ID + ":blood_needles", SpellTactics.mid()),
+            Map.entry(MOD_ID + ":blood_needles", new SpellTactics(3.0D, 16.0D, 32.0D, SpellRole.RANGED, true)),
             Map.entry(MOD_ID + ":blood_slash", new SpellTactics(2.0D, 8.0D, 18.0D, SpellRole.RANGED, true)),
             Map.entry(MOD_ID + ":wither_skull", SpellTactics.longRange()),
             Map.entry(MOD_ID + ":ray_of_siphoning", new SpellTactics(3.0D, 12.0D, 24.0D, SpellRole.RANGED, true)),
 
             // Evocation
             Map.entry(MOD_ID + ":fang_strike", new SpellTactics(2.0D, 7.0D, 14.0D, SpellRole.CLOSE, true)),
-            Map.entry(MOD_ID + ":fang_swirl", new SpellTactics(4.0D, 14.0D, 30.0D, SpellRole.RANGED, true)),
-            Map.entry(MOD_ID + ":slow", new SpellTactics(4.0D, 14.0D, 30.0D, SpellRole.CONTROL, true)),
-            Map.entry(MOD_ID + ":firecracker", new SpellTactics(4.0D, 12.0D, 24.0D, SpellRole.RANGED, true))
+            Map.entry(MOD_ID + ":fang_swirl", new SpellTactics(4.0D, 18.0D, 32.0D, SpellRole.RANGED, true)),
+            Map.entry(MOD_ID + ":slow", new SpellTactics(4.0D, 18.0D, 32.0D, SpellRole.CONTROL, true)),
+            Map.entry(MOD_ID + ":firecracker", new SpellTactics(4.0D, 14.0D, 24.0D, SpellRole.RANGED, true))
     );
 
     private static boolean attemptedInit;
@@ -105,6 +105,7 @@ public final class IronSpellsCompat {
     private static Method getSpellCooldown;
     private static Method getEffectiveCastTime;
     private static Method checkPreCastConditions;
+    private static Method shouldAIStopCasting;
     private static Method onServerPreCast;
     private static Method onServerCastTick;
     private static Method onCast;
@@ -478,6 +479,17 @@ public final class IronSpellsCompat {
             faceTarget(caster, target);
 
             try {
+                boolean ironSaysStop = (Boolean) shouldAIStopCasting.invoke(
+                        active.spell,
+                        active.level,
+                        caster,
+                        target
+                );
+                if (ironSaysStop) {
+                    cancelCast(caster);
+                    return CastResult.failed();
+                }
+
                 onServerCastTick.invoke(
                         active.spell,
                         caster.level(),
@@ -574,6 +586,16 @@ public final class IronSpellsCompat {
 
                 Object castType = getCastType.invoke(spell);
                 String castTypeName = String.valueOf(castType);
+
+                boolean ironSaysStop = (Boolean) shouldAIStopCasting.invoke(
+                        spell,
+                        entry.level(),
+                        caster,
+                        target
+                );
+                if (ironSaysStop) {
+                    continue;
+                }
 
                 Object magicData = createMobMagicData(caster);
 
@@ -1059,6 +1081,12 @@ public final class IronSpellsCompat {
                     int.class,
                     LivingEntity.class,
                     magicDataClass
+            );
+            shouldAIStopCasting = abstractSpellClass.getMethod(
+                    "shouldAIStopCasting",
+                    int.class,
+                    Mob.class,
+                    LivingEntity.class
             );
             onServerPreCast = abstractSpellClass.getMethod(
                     "onServerPreCast",
