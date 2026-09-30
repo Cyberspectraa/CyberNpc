@@ -2,6 +2,7 @@ package com.cyberspectraa.cybernpc.event;
 
 import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
+import com.cyberspectraa.cybernpc.entity.ZombieCyberNpcEntity;
 import com.cyberspectraa.cybernpc.registry.ModEffects;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityType;
@@ -27,6 +28,7 @@ public final class HostileMobEvents {
     public static void onLivingTick(LivingEvent.LivingTickEvent event) {
         if (!(event.getEntity() instanceof Mob mob)
                 || mob instanceof CyberNpcEntity
+                || mob instanceof ZombieCyberNpcEntity
                 || mob.level().isClientSide
                 || mob.getType() == EntityType.WARDEN
                 || !(mob instanceof Enemy)
@@ -41,10 +43,6 @@ public final class HostileMobEvents {
                 && infected.hasEffect(ModEffects.ZOMBIFICATION.get())) {
             mob.setTarget(null);
             current = null;
-        }
-
-        if (current != null && current.isAlive()) {
-            return;
         }
 
         double followRange = mob.getAttributeValue(Attributes.FOLLOW_RANGE);
@@ -77,7 +75,16 @@ public final class HostileMobEvents {
                 .min(Comparator.comparingDouble(mob::distanceToSqr))
                 .orElse(null);
 
-        if (nearest != null) {
+        if (nearest == null) {
+            return;
+        }
+
+        if (current == null
+                || !current.isAlive()
+                || nearest == current
+                || !mob.getSensing().hasLineOfSight(current)
+                || mob.distanceToSqr(nearest) + 4.0D
+                < mob.distanceToSqr(current)) {
             mob.setTarget(nearest);
         }
     }
