@@ -1,11 +1,11 @@
 package com.cyberspectraa.cybernpc.entity;
 
+import com.cyberspectraa.cybernpc.compat.IronSpellsCompat;
 import com.cyberspectraa.cybernpc.effect.ZombificationEffect;
 import com.cyberspectraa.cybernpc.registry.ModEffects;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.cyberspectraa.cybernpc.world.CyberNpcWorldClaims;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -485,6 +485,10 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (entityData.get(DATA_PERSONALITY).isBlank()) {
             setPersonality(WildNpcPersonality.randomPersonality(getRandom()));
+        }
+
+        if (!getWildClass().isAvailable()) {
+            setWildClass(WildNpcClass.CLASSLESS);
         }
 
         applyClassAttributes();
@@ -2917,6 +2921,10 @@ public class CyberNpcEntity extends PathfinderMob {
                 setWildClass(WildNpcClass.randomSpawnClass(getRandom()));
             }
 
+            if (!getWildClass().isAvailable()) {
+                setWildClass(WildNpcClass.CLASSLESS);
+            }
+
             if (tag.contains("CyberNpcPersonality")) {
                 setPersonality(WildNpcPersonality.fromSerializedName(tag.getString("CyberNpcPersonality")));
             } else {
@@ -3436,6 +3444,14 @@ public class CyberNpcEntity extends PathfinderMob {
             npc.setSprinting(false);
             npc.setShiftKeyDown(false);
 
+            if (!IronSpellsCompat.isLoaded()) {
+                // Mage should never exist without Iron's Spells installed, but
+                // fail safe to classless behavior rather than inventing magic.
+                npc.setWildClass(WildNpcClass.CLASSLESS);
+                tickMelee(target, distanceSqr);
+                return;
+            }
+
             if (mageCooldown > 0) {
                 mageCooldown--;
             }
@@ -3459,68 +3475,18 @@ public class CyberNpcEntity extends PathfinderMob {
                 return;
             }
 
-            float damage = switch (npc.getPersonality()) {
-                case AGGRESSIVE -> 5.5F;
-                case CAUTIOUS -> 4.0F;
-                case TACTICAL -> 5.0F;
-                default -> 4.5F;
-            };
+            int spellLevel = npc.getPersonality() == WildNpcPersonality.AGGRESSIVE ? 2 : 1;
+            IronSpellsCompat.CastResult result =
+                    IronSpellsCompat.castAttackSpell(npc, target, spellLevel);
 
-            target.hurt(
-                    npc.damageSources().indirectMagic(npc, npc),
-                    damage
-            );
-
-            if (npc.level() instanceof ServerLevel serverLevel) {
-                Vec3 from = npc.getEyePosition();
-                Vec3 to = target.getEyePosition();
-                Vec3 delta = to.subtract(from);
-
-                for (int i = 1; i <= 8; i++) {
-                    double t = i / 9.0D;
-                    Vec3 point = from.add(delta.scale(t));
-                    serverLevel.sendParticles(
-                            ParticleTypes.ENCHANT,
-                            point.x,
-                            point.y,
-                            point.z,
-                            2,
-                            0.08D,
-                            0.08D,
-                            0.08D,
-                            0.02D
-                    );
-                }
-
-                serverLevel.sendParticles(
-                        ParticleTypes.WITCH,
-                        target.getX(),
-                        target.getEyeY(),
-                        target.getZ(),
-                        8,
-                        0.25D,
-                        0.35D,
-                        0.25D,
-                        0.02D
-                );
+            if (result.success()) {
+                mageCooldown = result.cooldownTicks();
+            } else {
+                // Never fall back to CyberNpc-created magic. If Iron's cannot
+                // provide a valid spell, reposition and retry later.
+                mageCooldown = 30;
+                moveForRangedSpacing(target, 12.0D);
             }
-
-            npc.level().playSound(
-                    null,
-                    npc.blockPosition(),
-                    SoundEvents.EVOKER_CAST_SPELL,
-                    SoundSource.NEUTRAL,
-                    0.9F,
-                    1.05F + npc.getRandom().nextFloat() * 0.15F
-            );
-
-            mageCooldown = switch (npc.getPersonality()) {
-                case AGGRESSIVE -> 24;
-                case CAUTIOUS -> 38;
-                case TACTICAL -> 28;
-                case BRAVE -> 27;
-                default -> 32;
-            };
         }
 
         private void tickBow(LivingEntity target, double distanceSqr) {

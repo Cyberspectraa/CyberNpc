@@ -222,7 +222,7 @@ public final class DeveloperGlassesOverlay {
             case ARCHER -> "Ranged control / kiting";
             case KNIGHT -> "Armored committed melee";
             case ROGUE -> "Fast flanking melee";
-            case MAGE -> "Ranged magic / distance control";
+            case MAGE -> "Iron's Spells caster / distance control";
             default -> "Mixed sword + ranged";
         };
     }

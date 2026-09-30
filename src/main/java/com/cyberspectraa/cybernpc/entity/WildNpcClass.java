@@ -1,5 +1,6 @@
 package com.cyberspectraa.cybernpc.entity;
 
+import com.cyberspectraa.cybernpc.compat.IronSpellsCompat;
 import net.minecraft.util.RandomSource;
 
 import java.util.Locale;
@@ -49,13 +50,22 @@ public enum WildNpcClass {
     }
 
     public static WildNpcClass randomSpawnClass(RandomSource random) {
+        boolean allowMage = IronSpellsCompat.isLoaded();
+
         int total = 0;
         for (WildNpcClass npcClass : values()) {
+            if (npcClass == MAGE && !allowMage) {
+                continue;
+            }
             total += npcClass.spawnWeight;
         }
 
         int roll = random.nextInt(total);
         for (WildNpcClass npcClass : values()) {
+            if (npcClass == MAGE && !allowMage) {
+                continue;
+            }
+
             roll -= npcClass.spawnWeight;
             if (roll < 0) {
                 return npcClass;
@@ -63,5 +73,9 @@ public enum WildNpcClass {
         }
 
         return CLASSLESS;
+    }
+
+    public boolean isAvailable() {
+        return this != MAGE || IronSpellsCompat.isLoaded();
     }
 }

@@ -1,144 +1,50 @@
 # CyberNpc
 
-CyberNpc is a custom NPC framework for Minecraft 1.20.1 Forge, built for the CyberSpectra modpack.
+## Current release: 0.13.1
 
-## Current release: 0.13.0
+v0.13.1 keeps the class/personality and tabbed Developer Glasses systems from v0.13.0, but changes Mage integration.
 
-### Wild NPC classes
+### Mage requires Iron's Spells 'n Spellbooks
 
-Wild NPCs now roll a persistent combat class. Classless is deliberately dominant so special classes stay uncommon instead of taking over normal spawning.
+Mage is now a true optional-integration class.
 
-Current spawn weights:
+- Mage is only included in the Wild NPC class spawn roll when the mod id `irons_spellbooks` is loaded.
+- Without Iron's installed, the Mage weight is skipped entirely and the remaining classes are re-normalized automatically.
+- Any saved Mage loaded without Iron's installed is safely converted to Classless.
+- CyberNpc does not hard-link to Iron's classes, so CyberNpc itself can still load without Iron's.
+- Iron's is declared as an optional AFTER dependency so its registries are ready before CyberNpc uses the integration.
 
-- **Classless — 78%**
-- **Archer — 8%**
-- **Knight — 6%**
-- **Rogue — 5%**
-- **Mage — 3%**
+### Real Iron's spells only
 
-Class and personality are saved in NBT and synchronized to clients. Existing v0.12.0 Wild NPCs receive a class/personality once when they are first loaded under v0.13.0.
+The temporary CyberNpc-created magic attack has been removed.
 
-#### Classless
+Mage combat now invokes Iron's own spell registry and server-side spell lifecycle using `CastSource.MOB`.
 
-The normal Wild NPC.
+The initial verified Mage attack pool is:
+- `irons_spellbooks:firebolt`
+- `irons_spellbooks:magic_missile`
+- `irons_spellbooks:icicle`
 
-- Keeps the existing mixed sword and bow/crossbow combat.
-- Standard health, movement speed, and armor.
-- Remains by far the most common spawn.
+CyberNpc checks that a selected Iron's spell exists, is enabled, and is an INSTANT spell before casting it. The spell itself creates the projectile/effect, sound, damage behavior, school scaling, and other Iron's mechanics.
 
-#### Archer
+If Iron's cannot provide a valid spell at runtime, the Mage repositions and retries later. It does not fall back to fake CyberNpc magic.
 
-A ranged-control class.
+### Class rarity
 
-- Starts with a ranged weapon plus sword backup.
-- Tries to maintain more distance than Classless NPCs.
-- Kites away when a target pressures it.
-- Uses its sword only when an enemy gets very close.
-- Fires bow/crossbow attacks slightly faster than Classless NPCs.
-- Slight movement-speed increase.
+When Iron's is installed:
+- Classless 78%
+- Archer 8%
+- Knight 6%
+- Rogue 5%
+- Mage 3%
 
-#### Knight
+When Iron's is not installed, Mage is excluded from the roll.
 
-A durable melee class.
+### Developer Glasses
 
-- Primarily commits to sword combat.
-- 26 maximum health.
-- 5 base armor.
-- Slightly slower movement.
-- Holds tighter melee spacing and does not rely on ranged combat.
+The Mage combat-style line now reports `Iron's Spells caster / distance control`.
 
-#### Rogue
-
-A fast melee/flanking class.
-
-- Primarily commits to sword combat.
-- Faster movement speed.
-- Shorter melee attack cooldown.
-- Wider side movement and more aggressive repositioning.
-- Lower maximum health than a Knight/Classless NPC.
-
-#### Mage
-
-A rare distance-control class.
-
-- 22 maximum health and light armor.
-- Uses a built-in magic attack with vanilla spell particles/sounds.
-- Tries to remain at medium range and backs away when pressured.
-- Personality changes its casting cadence and damage slightly.
-- Carries a sword as an emergency backup, but its combat brain prefers magic.
-
-Mage is intentionally self-contained for this release. **Iron's Spells 'n Spellbooks is not a hard dependency**, even if that mod is installed in the test pack. A future update can optionally teach Mage NPCs to use real Iron's Spells spellbooks without breaking CyberNpc on packs that do not include the mod.
-
-Better Combat is also not required by CyberNpc at this stage.
-
-### Personalities
-
-Every Wild NPC also rolls one persistent personality independently from its class:
-
-- **Balanced — 45%**
-- **Brave — 20%**
-- **Cautious — 15%**
-- **Aggressive — 12%**
-- **Tactical — 8%**
-
-Personality changes combat decision-making rather than replacing the class:
-
-- **Balanced:** standard survival/combat thresholds.
-- **Brave:** stays in fights longer and is less likely to retreat early.
-- **Cautious:** creates more space, retreats earlier, and asks for help sooner.
-- **Aggressive:** accepts riskier fights, attacks faster where applicable, and keeps less distance.
-- **Tactical:** favors spacing/flanking and requests assistance earlier than Balanced.
-
-This means two NPCs with the same class can still fight differently.
-
-### Developer Glasses tabbed HUD
-
-Developer Glasses now use a cleaner compact HUD rather than one large block of debug text.
-
-Default keybind: **V — Cycle Developer Glasses Tab**  
-The keybind is configurable in Minecraft controls.
-
-Tabs:
-
-#### Overview
-- NPC name.
-- Class.
-- Personality.
-- Health.
-- Hunger.
-- Current activity.
-- Zombification state.
-
-#### Combat
-- Class combat style.
-- Personality.
-- Aggression.
-- Current combat/avoidance target.
-- Current combat state.
-- Health.
-
-#### Survival
-- Hunger.
-- Real 18-slot inventory summary.
-- Bed/cooking-station/pen claims.
-- Current survival task.
-
-#### Debug
-- Raw activity.
-- Target.
-- Current pathfinding next node/destination.
-- Claims.
-- Inventory summary.
-- Internal class/personality IDs.
-
-### Existing systems
-
-v0.13.0 keeps the v0.12.0 proper 18-slot inventory, hunger/starvation, real cooking, chest food storage, beds, full pen claims and livestock handling, hostile-mob reactions, group combat, emergency healing, Zombification/Zombie NPC conversion, player-style animations, and Developer Glasses inspection.
-
-No farming or additional social system has been added in this release.
-
-Building and mining remain intentionally excluded.
+The existing Overview, Combat, Survival and Debug tabs remain unchanged, with V as the default configurable tab-cycle key.
 
 ## Development target
-
 Minecraft 1.20.1, Forge 47.4.10, Java 17.
