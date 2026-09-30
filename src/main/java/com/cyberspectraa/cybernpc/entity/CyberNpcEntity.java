@@ -2169,7 +2169,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         reinforcePartyBond(inviter);
         showReaction(NpcReactionIcon.GROUP_ACCEPT, 65);
-        inviter.showReaction(NpcReactionIcon.HAPPY, 65);
+        inviter.showReaction(NpcReactionIcon.GROUP_ACCEPT, 65);
     }
 
     private void clearPendingPartyInvite() {
