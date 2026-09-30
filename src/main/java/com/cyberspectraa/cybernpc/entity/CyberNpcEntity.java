@@ -123,10 +123,12 @@ public class CyberNpcEntity extends PathfinderMob {
     private boolean utilityItemActive;
 
     private final WildNpcCorralBrain corralBrain;
+    private final WildNpcSleepBrain sleepBrain;
 
     public CyberNpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
         corralBrain = new WildNpcCorralBrain(this);
+        sleepBrain = new WildNpcSleepBrain(this);
 
         getNavigation().setCanFloat(true);
         if (getNavigation() instanceof GroundPathNavigation groundNavigation) {
@@ -195,6 +197,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (safeType != NpcType.WILD) {
             setPersistenceRequired();
+            sleepBrain.interrupt();
             calmWildNpc();
         }
     }
@@ -378,6 +381,20 @@ public class CyberNpcEntity extends PathfinderMob {
         beginWildCombat(target, false, true);
     }
 
+    void prepareForSleep() {
+        corralBrain.interrupt();
+        clearUtilityItem();
+        stowWeapons();
+        getNavigation().stop();
+        setSprinting(false);
+        setShiftKeyDown(false);
+    }
+
+    @Nullable
+    BlockPos getClaimedBedPos() {
+        return sleepBrain.getClaimedBed();
+    }
+
     @Nullable
     @Override
     public SpawnGroupData finalizeSpawn(
@@ -420,6 +437,11 @@ public class CyberNpcEntity extends PathfinderMob {
 
         tickHunger();
         tickWildCombat();
+
+        if (sleepBrain.tick()) {
+            return;
+        }
+
         tickHuntingAndFood();
     }
 
@@ -981,7 +1003,8 @@ public class CyberNpcEntity extends PathfinderMob {
                 || cookingMode != COOK_MODE_NONE
                 || dropSearchTicks > 0
                 || cookingTarget != null
-                || corralBrain.isBusy();
+                || corralBrain.isBusy()
+                || sleepBrain.isBusy();
     }
 
     @Override
@@ -991,6 +1014,8 @@ public class CyberNpcEntity extends PathfinderMob {
         if (!damaged || level().isClientSide || getNpcType() != NpcType.WILD) {
             return damaged;
         }
+
+        sleepBrain.wakeUp();
 
         if (source.getEntity() instanceof Player player
                 && !player.isCreative()
@@ -1016,6 +1041,7 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void beginWildCombat(LivingEntity target, boolean callForHelp, boolean isHunt) {
+        sleepBrain.interrupt();
         corralBrain.interrupt();
         clearUtilityItem();
         setTarget(target);
@@ -1137,6 +1163,8 @@ public class CyberNpcEntity extends PathfinderMob {
                 tag.put("CyberNpcExpectedCookedFood", expectedCookedFood.save(new CompoundTag()));
             }
         }
+
+        sleepBrain.addSaveData(tag);
     }
 
     @Override
@@ -1219,6 +1247,7 @@ public class CyberNpcEntity extends PathfinderMob {
         cookingSearchCooldown = 0;
         eatingTicks = 0;
         utilityItemActive = false;
+        sleepBrain.readSaveData(tag);
 
         if (getNpcType() == NpcType.WILD) {
             ensureWildProfile();
@@ -1343,6 +1372,7 @@ public class CyberNpcEntity extends PathfinderMob {
             npc.getNavigation().moveTo(target, 1.20D);
 
             if (distanceSqr <= MELEE_DISTANCE_SQR && meleeCooldown <= 0) {
+                npc.swing(InteractionHand.MAIN_HAND, true);
                 npc.doHurtTarget(target);
                 meleeCooldown = 16;
             }

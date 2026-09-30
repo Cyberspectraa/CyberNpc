@@ -1,30 +1,26 @@
 # Changelog
 
+## 0.7.0
+
+- Added the missing visible sword-swing animation to Wild NPC melee attacks.
+- Added persistent Wild NPC bed claiming.
+- Wild NPCs search for an unclaimed nearby bed at night and remember that bed across saves.
+- Nearby loaded Wild NPCs avoid deliberately claiming the same bed.
+- NPCs path to their bed and use Minecraft's real sleeping state and bed orientation.
+- Beds are marked occupied only while the NPC is actually sleeping.
+- NPCs wake at daytime, when the claimed bed disappears, when combat starts, or when they take damage.
+- Hungry NPCs continue their survival behavior instead of going to sleep when hunger is already at the hunting threshold.
+
 ## 0.6.0
 
 - Replaced the simulated cooking timer with real furnace/smoker/campfire interaction.
-- Wild NPCs now insert raw food into the real cooking block inventory and wait for Minecraft to cook it.
-- Furnace/smoker cooking requires available fuel or existing burn time.
-- Campfire cooking uses the real campfire cooking slots and waits for the cooked item drop.
-- NPCs retrieve cooked food, hold it, and eat it before hunger is restored.
-- Added saved pending cooking/eating state.
-- Added a sustainable livestock/corral system using existing fenced pens.
-- NPCs detect enclosed fence-gate pens instead of building their own.
-- NPCs can choose a livestock species, hold the correct lure food, open the gate, and lead missing adults into the pen.
-- Corrals preserve at least two adult breeders.
-- NPCs put suitable breeding pairs into love mode.
-- Babies are never selected as food.
-- Hungry NPCs can hunt surplus adults once a corral has at least three adults.
-- Critically hungry NPCs fall back to ordinary hunting instead of waiting for herd setup.
+- Added sustainable livestock/corral management using existing fenced pens.
+- NPCs can lead breeding pairs into corrals, breed them, protect babies, and hunt surplus adults.
 
 ## 0.5.0
 
-- Reworked Wild NPC ranged combat into a visible weapon-use state machine.
-- Bow users visibly draw before firing.
-- Crossbow users visibly charge, hold, and fire.
-- Added adaptive projectile prediction and drop compensation.
-- Added sneaking while stalking prey and improved player-like movement.
-- Enabled swimming, wooden-door navigation, and climbable-block movement.
+- Reworked Wild NPC ranged combat into a visible bow/crossbow state machine.
+- Added adaptive aiming, stalking, and improved player-like movement.
 
 ## 0.4.0
 

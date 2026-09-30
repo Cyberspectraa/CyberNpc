@@ -2,50 +2,46 @@
 
 CyberNpc is a custom NPC framework for **Minecraft 1.20.1 Forge**, built for the CyberSpectra modpack.
 
-## Current release: 0.6.0
+## Current release: 0.7.0
 
-### Wild NPC survival AI
+### Wild NPC combat
 
-Wild NPCs keep the combat and player-like movement systems from 0.5.0:
+- Wild NPCs own one sword plus one bow or crossbow.
+- Bow users visibly draw before firing.
+- Crossbow users visibly charge, hold, and fire.
+- Ranged aim predicts target movement and compensates for projectile drop.
+- NPCs switch to their sword at close range.
+- **Sword attacks now play the normal main-hand swing animation on the same tick as the melee hit.**
+- Wild NPCs can call nearby Wild NPCs for help when player aggression crosses their personal threshold.
+- Hunting NPCs sneak while stalking prey.
 
-- One sword plus one bow or crossbow.
-- Visible bow draw and crossbow charge/hold/fire states.
-- Adaptive ranged aiming and target-motion prediction.
-- Sword switching at close range.
-- Sneaking while stalking prey.
-- Swimming, jumping, door use, climbable-block movement, sprinting, food pickup, cooking, and eating.
-- Persistent hunger, aggression, hunting, nearby NPC assistance, and starvation.
+### Hunger, hunting, cooking, and corrals
 
-### Real cooking interaction
+- Persistent hunger from 0 to 20.
+- Hungry NPCs hunt manageable adult prey and never deliberately hunt babies.
+- Killed prey is collected as real dropped food.
+- Raw food is inserted into real furnaces/smokers or placed on real lit campfires.
+- NPCs wait for Minecraft's real cooking process, retrieve the cooked result, hold it, and eat it.
+- Existing fenced corrals can be detected and managed without allowing NPC building/mining.
+- NPCs can lead in a breeding pair, breed them, preserve at least two adult breeders, and hunt surplus adults.
 
-Cooking now uses the actual Minecraft block inventories/processes instead of a fake timer.
+### Bed claiming and sleep
 
-- After collecting raw meat, the NPC searches for a usable **furnace, smoker, campfire, or soul campfire**.
-- Furnaces/smokers are only used if they are already burning or have valid fuel available.
-- The NPC physically walks to the cooking block.
-- For a furnace/smoker, it inserts one raw food item into the real input slot and waits for the real output slot to produce cooked food.
-- For a lit campfire, it places one raw food item into the campfire's real cooking inventory and waits for the cooked item to pop out.
-- The NPC then retrieves the cooked food, holds it, performs an eating wait, and restores hunger.
-- Pending cooking/eating state is saved with the NPC where possible.
+Wild NPCs can now establish a persistent personal bed:
 
-### Corral and livestock system
+- At night, a Wild NPC that is not fighting and is not hungry enough to need immediate hunting can look for a nearby bed.
+- The selected bed position is saved with that NPC and reused on later nights.
+- Loaded nearby Wild NPCs will not deliberately claim the same bed.
+- The NPC physically walks to its claimed bed and uses Minecraft's real sleeping state and bed orientation.
+- The bed's vanilla occupied flag is only set while the NPC is actually asleep; the persistent claim itself is stored by CyberNpc.
+- The NPC wakes when daytime arrives, if its bed is removed, if combat starts, or if it takes damage.
+- Hunger continues to function while sleeping, so an NPC that becomes too hungry can eventually be forced back into its survival loop.
 
-Wild NPCs do **not** build pens, because building/mining remains excluded.
+### Player-like movement
 
-Instead they can use an existing enclosed pen made from fences/walls with a fence gate:
+Wild NPCs can walk, sprint, sneak, swim, jump normal terrain, use wooden doors, traverse climbable blocks, use weapons, collect food, cook, eat, manage livestock, and sleep.
 
-- A hungry NPC can search for a nearby existing enclosed corral.
-- It detects the enclosed side of a fence gate rather than treating every gate as a pen.
-- It chooses a breedable prey species already in the pen, or a nearby species where at least two adults are available.
-- It holds the correct vanilla breeding/lure food for that animal type.
-- It opens the gate, leads missing animals through it, and closes the gate again.
-- It maintains at least **two adult breeders**.
-- When two suitable adults are present, it puts them into love mode so normal Minecraft breeding can create offspring.
-- Babies are protected from hunting.
-- If the pen later has at least three adults, a hungry NPC may hunt one surplus adult while preserving the breeding pair.
-- At critically low hunger, the NPC stops spending time establishing a herd and falls back to normal hunting so it does not knowingly starve while waiting for livestock.
-
-The initial corral detector is intended for ordinary, mostly level fenced pens. More complicated multi-level enclosures can be expanded later if needed.
+Building and mining remain intentionally excluded.
 
 ### Commands
 
