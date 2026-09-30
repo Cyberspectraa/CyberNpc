@@ -65,11 +65,18 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         this.model = entity.isSlimModel() ? slimModel : wideModel;
         setPlayerModelProperties(entity);
         super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
-        renderReactionBubble(entity, poseStack, buffer, packedLight);
+        renderReactionBubble(
+                entity,
+                partialTicks,
+                poseStack,
+                buffer,
+                packedLight
+        );
     }
 
     private void renderReactionBubble(
             CyberNpcEntity entity,
+            float partialTicks,
             PoseStack poseStack,
             MultiBufferSource buffer,
             int packedLight
@@ -86,78 +93,148 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
 
         String glyph = reaction.glyph();
         int glyphWidth = font.width(glyph);
-        float halfWidth = Math.max(8.0F, (glyphWidth + 8.0F) * 0.5F);
+
+        // Keep even the shortest symbols in a comfortably sized bubble while
+        // allowing longer emoticons to expand naturally.
+        float halfWidth = Math.max(
+                12.0F,
+                (glyphWidth + 16.0F) * 0.5F
+        );
+
+        float bob = Mth.sin(
+                (entity.tickCount + partialTicks) * 0.12F
+        ) * 0.035F;
 
         poseStack.pushPose();
         poseStack.translate(
                 0.0D,
-                entity.getBbHeight() + 0.88D,
+                entity.getBbHeight() + 1.02D + bob,
                 0.0D
         );
         poseStack.mulPose(renderDispatcher.cameraOrientation());
-        poseStack.scale(-0.025F, -0.025F, 0.025F);
+
+        // Larger than the old 0.025 scale so reactions remain readable without
+        // needing to stand directly beside the NPC.
+        poseStack.scale(-0.032F, -0.032F, 0.032F);
 
         Matrix4f matrix = poseStack.last().pose();
         VertexConsumer background = buffer.getBuffer(
                 RenderType.textBackground()
         );
 
-        int outline = 0xF0202020;
-        int fill = 0xEEF6F6F6;
+        int shadow = 0x80000000;
+        int outline = 0xFF292725;
+        int fill = 0xFFFDF7E6;
+        int highlight = 0xFFFFFFFF;
 
-        // Blocky Minecraft-style bubble body.
+        // Shadow first. Using the same stepped silhouette keeps the bubble from
+        // looking like a flat GUI rectangle pasted into the world.
+        drawPixelBubble(
+                background,
+                matrix,
+                halfWidth,
+                2.0F,
+                2.0F,
+                -0.04F,
+                shadow,
+                packedLight
+        );
+
+        // Dark outer silhouette.
+        drawPixelBubble(
+                background,
+                matrix,
+                halfWidth,
+                0.0F,
+                0.0F,
+                0.0F,
+                outline,
+                packedLight
+        );
+
+        // Bright inner panel, inset by two pixels from the outline.
         drawBubbleRect(
                 background,
                 matrix,
-                -halfWidth,
-                -7.0F,
-                halfWidth,
-                7.0F,
-                0.0F,
-                outline,
+                -halfWidth + 4.0F,
+                -9.0F,
+                halfWidth - 4.0F,
+                9.0F,
+                0.02F,
+                fill,
                 packedLight
         );
         drawBubbleRect(
                 background,
                 matrix,
-                -halfWidth + 1.0F,
+                -halfWidth + 2.0F,
                 -6.0F,
-                halfWidth - 1.0F,
+                halfWidth - 2.0F,
                 6.0F,
-                0.01F,
+                0.02F,
                 fill,
                 packedLight
         );
 
-        // Two small stacked rectangles create a pixel speech-tail.
+        // Small top highlight gives the otherwise pixel-flat panel a little
+        // depth without making it look modern or glossy.
         drawBubbleRect(
                 background,
                 matrix,
-                -3.0F,
-                6.0F,
-                2.0F,
-                11.0F,
-                0.0F,
-                outline,
+                -halfWidth + 5.0F,
+                -8.0F,
+                halfWidth - 5.0F,
+                -7.0F,
+                0.03F,
+                highlight,
+                packedLight
+        );
+
+        // Fill the inside of the stepped speech tail.
+        drawBubbleRect(
+                background,
+                matrix,
+                -1.0F,
+                8.0F,
+                4.0F,
+                12.0F,
+                0.02F,
+                fill,
                 packedLight
         );
         drawBubbleRect(
                 background,
                 matrix,
-                -2.0F,
-                6.0F,
                 1.0F,
-                9.0F,
-                0.01F,
+                11.0F,
+                4.0F,
+                14.0F,
+                0.02F,
                 fill,
                 packedLight
         );
 
         int iconColor = reactionColor(reaction);
+        float iconX = -glyphWidth / 2.0F;
+        float iconY = -4.5F;
+
+        // Pixel-style icon shadow for contrast on every biome/lighting setup.
         font.drawInBatch(
                 glyph,
-                -glyphWidth / 2.0F,
-                -4.0F,
+                iconX + 1.0F,
+                iconY + 1.0F,
+                0xB0000000,
+                false,
+                matrix,
+                buffer,
+                Font.DisplayMode.POLYGON_OFFSET,
+                0,
+                packedLight
+        );
+        font.drawInBatch(
+                glyph,
+                iconX,
+                iconY,
                 iconColor,
                 false,
                 matrix,
@@ -168,6 +245,65 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         );
 
         poseStack.popPose();
+    }
+
+    private static void drawPixelBubble(
+            VertexConsumer consumer,
+            Matrix4f matrix,
+            float halfWidth,
+            float offsetX,
+            float offsetY,
+            float z,
+            int color,
+            int packedLight
+    ) {
+        // Three overlapping strips create chunky "rounded" pixel corners.
+        drawBubbleRect(
+                consumer,
+                matrix,
+                -halfWidth + 3.0F + offsetX,
+                -11.0F + offsetY,
+                halfWidth - 3.0F + offsetX,
+                11.0F + offsetY,
+                z,
+                color,
+                packedLight
+        );
+        drawBubbleRect(
+                consumer,
+                matrix,
+                -halfWidth + offsetX,
+                -8.0F + offsetY,
+                halfWidth + offsetX,
+                8.0F + offsetY,
+                z,
+                color,
+                packedLight
+        );
+
+        // Two-step diagonal-ish tail.
+        drawBubbleRect(
+                consumer,
+                matrix,
+                -2.0F + offsetX,
+                8.0F + offsetY,
+                5.0F + offsetX,
+                13.0F + offsetY,
+                z,
+                color,
+                packedLight
+        );
+        drawBubbleRect(
+                consumer,
+                matrix,
+                0.0F + offsetX,
+                12.0F + offsetY,
+                5.0F + offsetX,
+                16.0F + offsetY,
+                z,
+                color,
+                packedLight
+        );
     }
 
     private static void drawBubbleRect(
@@ -201,15 +337,15 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
 
     private static int reactionColor(NpcReactionIcon reaction) {
         return switch (reaction) {
-            case HAPPY -> 0xFF3D8A3D;
-            case FRIENDLY -> 0xFFD24D78;
-            case ANNOYED -> 0xFF9A6A20;
-            case ANGRY -> 0xFFC73D3D;
-            case SAD -> 0xFF537AA3;
-            case SCARED -> 0xFF6D5AA6;
-            case SURPRISED -> 0xFFD18424;
-            case CONFUSED -> 0xFF5C6D7A;
-            case THINKING -> 0xFF555555;
+            case HAPPY -> 0xFF2FAF4A;
+            case FRIENDLY -> 0xFFF15B8A;
+            case ANNOYED -> 0xFFE08B18;
+            case ANGRY -> 0xFFF04444;
+            case SAD -> 0xFF4B93D1;
+            case SCARED -> 0xFF8B6BE8;
+            case SURPRISED -> 0xFFF0A126;
+            case CONFUSED -> 0xFF557A92;
+            case THINKING -> 0xFF5A5A5A;
             default -> 0xFF202020;
         };
     }
