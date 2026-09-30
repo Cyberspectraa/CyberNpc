@@ -108,6 +108,13 @@ public final class CyberNpcSkinCache {
                 blend(composed, hairLayer);
             }
 
+            // Starlight/Lunar exports may contain editor marker pixels in the
+            // unused 8x8 corner at the top-left of a 64x64 skin. Minecraft
+            // should never need that region for the player model, so sanitize
+            // it before registering the generated texture. This also protects
+            // future user-supplied appearance packs from the same artifact.
+            clearUnusedTopLeftCorner(composed);
+
             ResourceLocation generated = new ResourceLocation(
                     CyberNpc.MOD_ID,
                     "generated/appearance/" + key
@@ -120,6 +127,17 @@ public final class CyberNpcSkinCache {
             return generated;
         } catch (IOException | RuntimeException exception) {
             return fallback(zombie, gender);
+        }
+    }
+
+    private static void clearUnusedTopLeftCorner(NativeImage image) {
+        int width = Math.min(8, image.getWidth());
+        int height = Math.min(8, image.getHeight());
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                image.setPixelRGBA(x, y, 0x00000000);
+            }
         }
     }
 
