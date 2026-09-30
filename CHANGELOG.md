@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.21.0
+
+- Added persistent NPC-to-NPC relationships with Friendship, Trust, Respect, Fear and Rivalry values.
+- Relationships are stored per NPC in NBT and kept to a bounded history so long-running worlds do not accumulate unlimited social data.
+- Added per-NPC player reputation from -100 to +100.
+- Players gain reputation with an NPC by damaging or killing a mob the NPC is actively fighting or fleeing from.
+- Players lose reputation by attacking an NPC; nearby party members and strongly bonded NPCs also remember witnessed attacks and kills.
+- Existing player provocation now considers remembered reputation, so NPCs are more tolerant of trusted players and react faster to players with a bad history.
+- Added small persistent parties of up to 4 Wild NPCs.
+- Peaceful nearby contact slowly builds relationships; sufficiently positive mutual relationships can create a party or allow an NPC to join an existing party.
+- Parties persist in NBT, choose a leader using class/personality/gear traits and regroup around that leader during idle time.
+- If a loaded party leader dies, loaded party members choose a replacement leader instead of immediately losing the group.
+- Combat-help selection now prioritizes party members and trusted relationships instead of simply choosing the nearest healthy strangers.
+- Different personalities have different willingness to help: Protective/Loyal/Brave NPCs assist readily while Cautious/Skittish NPCs require stronger relationships.
+- Party/trusted backup contributes more realistically to combat confidence, and helping another NPC in combat strengthens mutual Trust and Respect.
+- Clerics now prioritize injured party members and trusted allies when choosing whom to support.
+- Added a Developer Glasses Relationships tab showing party role/leader/loaded size, strongest NPC relationships and remembered player reputation.
+- Converted CyberNpc zombies no longer use PlayerModel animation layers, preventing FA: Player Extension from treating them as players.
+- Male converted zombies now use Minecraft's ZombieModel layer; female zombies keep slim/Alex-width arm geometry through a dedicated CyberNpc layer while still using ZombieModel animation logic.
+- Zombie armor rendering now uses zombie armor layers.
+- This makes vanilla zombie animations authoritative for converted zombies. EMF supports modded entity models, so Fresh Animations can interact with CyberNpc's model path, but a full Fresh Animations CEM override for the custom entity may still require an explicit resource-pack compatibility entry.
+
+
 ## 0.20.1
 
 - Fixed the top-left Starlight/Lunar export artifact by clearing Minecraft's unused 8x8 skin corner after composition, so stray creator/editor pixels cannot render on NPCs or converted zombies.
