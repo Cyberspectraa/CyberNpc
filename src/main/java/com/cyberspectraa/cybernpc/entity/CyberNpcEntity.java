@@ -3861,6 +3861,10 @@ public class CyberNpcEntity extends PathfinderMob {
             hungerDecayTimer = 0;
             if (getHunger() > 0) {
                 setHunger(getHunger() - 1);
+
+                if (getHunger() == HUNT_HUNGER_THRESHOLD) {
+                    showReaction(NpcReactionIcon.FOOD, 45);
+                }
             }
         }
 
@@ -6019,6 +6023,11 @@ public class CyberNpcEntity extends PathfinderMob {
         provocation = isHunt ? provocation : 100;
         outOfRangeTicks = 0;
         getNavigation().stop();
+
+        if (!isHunt) {
+            showReaction(NpcReactionIcon.COMBAT, 45);
+        }
+
         commandTamedBeasts(target);
 
         if (callForHelp) {
