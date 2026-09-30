@@ -2,27 +2,45 @@
 
 CyberNpc is a custom NPC framework for Minecraft 1.20.1 Forge, built for the CyberSpectra modpack.
 
-## Current release: 0.9.0
+## Current release: 0.9.1
 
-### Hostile encounters
-Wild NPCs now participate in hostile-mob encounters. Hostile Enemy mobs can acquire CyberNpc entities as targets. Endermen have special gaze handling: direct NPC eye contact with line of sight can provoke them. A Wild NPC evaluates the threat and either uses its normal combat system or retreats. Dangerous encounters such as Creepers favor retreat. Retreating NPCs search for reachable covered positions farther from the threat and can use their claimed bed as a fallback safe place.
+### Pen and lead safety fixes
 
-### Developer Glasses
-Developer Glasses are a head-slot item in Tools & Utilities. While wearing them, look at a CyberNpc to see live debug information: name/type, health, hunger, role, aggression, current activity, current target, server path next node and destination, claimed bed/cooking station/pen, and stored survival items.
+v0.9.1 rebuilds livestock transfer around a safer state machine.
 
-### Cooking station claims
-Cooking claims persist in world SavedData. Furnaces and smokers allow one NPC claimant. Campfires allow up to four. NPCs remember their station across saves and long travel. Distant returns use local pathfinding legs until the real station is reachable again.
+- NPCs no longer attach a lead to an animal from far away.
+- The NPC must first walk close to a reachable animal before attaching the real Minecraft leash.
+- Vanilla 1.20.1 snaps PathfinderMob leashes beyond 10 blocks and drops a lead item. CyberNpc now keeps transfers below that distance and abandons the transfer safely if the animal falls too far behind.
+- If a leash breaks unexpectedly, that animal is temporarily blacklisted instead of being instantly re-leashed over and over. This stops the lead-item duplication/server-spam loop.
+- Only one livestock animal is moved per trip, avoiding two animals stretching in different directions.
 
-### Food and hunting
-Hungry NPCs can collect useful food already on the ground. Raw meat goes through the cooking system; suitable ready-to-eat food can be consumed directly. During a hunt, an NPC can re-evaluate nearby prey of the same species and switch when another target is much more practical. Managed pen animals remain protected from normal hunting.
+### Full pen claims
 
-### Corrals
-Existing corrals can be claimed by one NPC only. Livestock being moved into the pen are actually leashed to the NPC, giving the normal visible lead connection. The pen detector records multiple gates, chooses an entry route, releases the animals after delivery, then deliberately routes the NPC back outside and closes the gates.
+Pen ownership is now discovered independently from hunger.
 
-### Existing systems
-The mod retains persistent beds/sleep, hunger and starvation, real furnace/smoker/campfire cooking, sword plus bow/crossbow combat, adaptive ranged aiming, stalking/sneaking, player-style animations, swimming, door use, climbing support, group aggression, and natural Wild NPC spawning.
+- A nearby pen is claimed as soon as the NPC discovers it rather than waiting until it becomes hungry.
+- The persistent world claim covers the whole detected enclosure, not just one anchor coordinate.
+- Another NPC cannot claim an overlapping enclosure that already belongs to someone else.
+- Pen cell ownership survives saves and reloads.
+
+### Better pen entry and exit
+
+The NPC now calculates a holding position using the walkable pen cell farthest from all detected gates.
+
+- All gates stay shut while the NPC approaches with livestock.
+- Only the selected entry gate opens when the NPC reaches it.
+- The livestock is taken all the way to the safe holding point at the back of the pen before its lead is removed.
+- The delivered animal is temporarily held near that safe point while the NPC exits.
+- The NPC deliberately walks to the inside face of the chosen exit gate, then through to the outside.
+- Other gates stay closed while it leaves.
+- Once the NPC is outside, every gate is closed and the temporary livestock restriction is removed.
+
+### Other current systems
+
+CyberNpc also includes persistent beds/sleep, hunger and starvation, ground-food pickup, furnace/smoker/campfire cooking, persistent cooking claims, sword and ranged combat, hostile-mob reactions, hunting target switching, player-style animations, Developer Glasses debugging, and natural Wild NPC spawning.
 
 Building and mining remain intentionally excluded.
 
 ## Development target
+
 Minecraft 1.20.1, Forge 47.4.10, Java 17.

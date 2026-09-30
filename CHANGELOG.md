@@ -1,28 +1,27 @@
 # Changelog
 
+## 0.9.1
+
+- Fixed Wild NPCs attaching livestock leads while still far away.
+- Prevented the infinite lead-item duplication loop caused by repeatedly reattaching a leash after vanilla distance breakage.
+- NPCs now approach an animal first and only attach the lead at close range.
+- Added leash safety distances and transfer abort handling.
+- Unexpectedly broken leads blacklist that animal temporarily rather than immediately recreating the leash.
+- Changed livestock transfer to one animal per trip for more reliable movement.
+- Pen claims are now discovered independently from hunger.
+- Pen ownership now persists the full detected enclosure cell set instead of only an anchor position.
+- Overlapping claimed pen cells cannot be claimed by another NPC.
+- Added a calculated livestock holding point at the part of the enclosure farthest from detected gates.
+- NPCs carry livestock to the holding point before releasing the lead.
+- Delivered livestock stays near the safe point temporarily while the NPC exits.
+- Reworked gate handling so only the needed gate is open.
+- Reworked pen exit pathing through the inside gate tile and then the outside tile before gates close.
+
 ## 0.9.0
-- Hostile Enemy mobs can acquire CyberNpc targets.
-- Added Enderman gaze detection for NPC eye contact.
-- Added Wild NPC threat evaluation with fight-or-retreat behavior.
-- Added covered-position retreat searching and claimed-bed fallback.
-- Added Developer Glasses with live health, hunger, activity, target, pathfinding, claims, and inventory debug data.
-- Added persistent world data for cooking-station and pen claims.
-- Furnaces/smokers allow one claimant and campfires allow four.
-- Added persistent return routing to distant claimed cooking stations.
-- Added general ground-food collection.
-- Hunting can switch between nearby prey of the same species.
-- Corrals can be claimed by one NPC.
-- Livestock transfer now uses real leash links.
-- Added multi-gate corral detection and explicit pathfinding out of the pen after delivery.
 
-## 0.8.0
-- Protected managed corral animals from normal hunting.
-- Added synchronized melee animation progress.
-- Locked sleeping head movement.
-- Reworked rendering around player-style animation states.
-
-## 0.7.0
-- Added persistent bed claiming and real sleeping.
-
-## 0.6.0
-- Added real cooking and livestock corral management.
+- Added hostile-mob targeting and fight-or-retreat behavior.
+- Added Developer Glasses.
+- Added persistent cooking and pen claims.
+- Added ground-food collection.
+- Added hunt target switching.
+- Added real leash links and multi-gate corral handling.

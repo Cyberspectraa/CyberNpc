@@ -38,7 +38,24 @@ final class WildNpcCorralBrain {
     private static final int MANAGEMENT_HUNGER_THRESHOLD = 14;
     private static final int CRITICAL_HUNGER = 4;
     private static final int BREED_CHECK_COOLDOWN = 600;
+
+    private static final int CLAIM_RESCAN_TICKS = 10;
+    private static final int CLAIM_VALIDATE_TICKS = 40;
+
     private static final double REMOTE_RETURN_DISTANCE_SQR = 24.0D * 24.0D;
+    private static final double RECRUIT_SEARCH_RADIUS = 18.0D;
+    private static final double RECRUIT_MAX_NPC_DISTANCE_SQR = 22.0D * 22.0D;
+    private static final double RECRUIT_MAX_PEN_DISTANCE_SQR = 20.0D * 20.0D;
+    private static final int RECRUIT_APPROACH_TIMEOUT = 240;
+
+    // Vanilla PathfinderMob snaps a leash at >10 blocks and drops a lead item.
+    // Stay comfortably below that distance, and never auto-reattach after a break.
+    private static final double LEASH_ATTACH_DISTANCE_SQR = 4.5D * 4.5D;
+    private static final double LEASH_WAIT_DISTANCE_SQR = 7.0D * 7.0D;
+    private static final double LEASH_ABORT_DISTANCE_SQR = 8.5D * 8.5D;
+
+    private static final double HOLDING_NPC_REACHED_SQR = 2.5D * 2.5D;
+    private static final double HOLDING_ANIMAL_REACHED_SQR = 4.0D * 4.0D;
 
     private final CyberNpcEntity npc;
 
@@ -48,6 +65,9 @@ final class WildNpcCorralBrain {
     @Nullable
     private BlockPos penAnchor;
 
+    @Nullable
+    private BlockPos holdingPoint;
+
     private Set<BlockPos> penCells = Set.of();
     private Set<BlockPos> gates = Set.of();
 
@@ -55,10 +75,7 @@ final class WildNpcCorralBrain {
     private EntityType<?> livestockType;
 
     @Nullable
-    private UUID leadAnimalA;
-
-    @Nullable
-    private UUID leadAnimalB;
+    private UUID recruitAnimalId;
 
     @Nullable
     private BlockPos activeEntryGate;
@@ -66,10 +83,20 @@ final class WildNpcCorralBrain {
     @Nullable
     private BlockPos activeExitGate;
 
-    private int searchCooldown;
+    @Nullable
+    private UUID failedRecruitId;
+
+    private int failedRecruitCooldown;
+    private int recruitApproachTicks;
+    private int claimSearchCooldown;
+    private int claimValidationCooldown;
     private int breedCooldown;
+
+    private boolean leashAttachedByNpc;
     private boolean busy;
     private boolean exitingPen;
+    private boolean deliveredAnimal;
+
     private String debugActivity = "No pen task";
 
     WildNpcCorralBrain(CyberNpcEntity npc) {
@@ -96,12 +123,36 @@ final class WildNpcCorralBrain {
         }
 
         int gateCount = gates.isEmpty() ? (primaryGate == null ? 0 : 1) : gates.size();
-        return formatPos(penAnchor) + " (" + gateCount + " gate" + (gateCount == 1 ? "" : "s") + ")";
+        String hold = holdingPoint == null ? "?" : formatPos(holdingPoint);
+        return formatPos(penAnchor)
+                + " [" + penCells.size() + " cells, "
+                + gateCount + " gate" + (gateCount == 1 ? "" : "s")
+                + ", hold " + hold + "]";
     }
 
     @Nullable
     BlockPos getPenAnchor() {
         return penAnchor;
+    }
+
+    /**
+     * Claim discovery is deliberately independent from hunger/pen management.
+     * This makes a nearby unclaimed pen get reserved as soon as the NPC notices
+     * it, similar to villagers reserving a workstation or bed.
+     */
+    void tickClaimDiscovery() {
+        if (!(npc.level() instanceof ServerLevel level)) {
+            return;
+        }
+
+        if (failedRecruitCooldown > 0) {
+            failedRecruitCooldown--;
+            if (failedRecruitCooldown == 0) {
+                failedRecruitId = null;
+            }
+        }
+
+        ensureCorral(level);
     }
 
     boolean tick() {
@@ -114,11 +165,13 @@ final class WildNpcCorralBrain {
             breedCooldown--;
         }
 
-        // Finish an in-progress livestock transfer even if hunger changes, so the
-        // NPC never strands itself or its animals inside an open pen.
+        if (penAnchor == null || primaryGate == null || penCells.isEmpty()) {
+            ensureCorral(level);
+        }
+
+        // An active transfer must be finished cleanly even if hunger changes.
         if (hasActiveTransfer(level)) {
             busy = true;
-            debugActivity = exitingPen ? "Leaving claimed pen" : "Leading livestock to claimed pen";
             return tickTransfer(level);
         }
 
@@ -127,28 +180,23 @@ final class WildNpcCorralBrain {
                 || npc.getHunger() > MANAGEMENT_HUNGER_THRESHOLD) {
             stopLeading(level);
             busy = false;
-            debugActivity = "Pen idle";
+            debugActivity = penAnchor == null ? "No claimed pen" : "Claimed pen idle";
             return false;
         }
 
-        if (!ensureCorral(level)) {
+        if (penAnchor == null || primaryGate == null) {
             busy = false;
+            debugActivity = "No claimed pen";
             return false;
         }
 
         if (penCells.isEmpty()) {
-            // We still own the saved pen, but it is too far away to have its
-            // enclosure loaded/rebuilt. Travel back toward its primary gate.
-            if (primaryGate != null) {
-                Vec3 destination = Vec3.atBottomCenterOf(primaryGate);
-                npc.getNavigation().moveTo(destination.x, destination.y, destination.z, 0.95D);
-                npc.setSprinting(true);
-                busy = true;
-                debugActivity = "Returning to claimed pen";
-                return true;
-            }
-
-            return false;
+            Vec3 destination = Vec3.atBottomCenterOf(primaryGate);
+            npc.getNavigation().moveTo(destination.x, destination.y, destination.z, 0.95D);
+            npc.setSprinting(true);
+            busy = true;
+            debugActivity = "Returning to claimed pen";
+            return true;
         }
 
         List<Animal> insideAnimals = getAnimalsInside(level);
@@ -156,7 +204,7 @@ final class WildNpcCorralBrain {
 
         if (livestockType == null) {
             busy = false;
-            debugActivity = "Claimed pen has no livestock plan";
+            debugActivity = "Claimed pen waiting for nearby livestock";
             return false;
         }
 
@@ -200,28 +248,23 @@ final class WildNpcCorralBrain {
             return false;
         }
 
-        int needed = 2 - adultsInside.size();
-        List<Animal> recruits = resolveOrChooseRecruits(level, needed);
-
-        if (recruits.size() < needed) {
-            stopLeading(level);
+        Animal recruit = chooseRecruit(level);
+        if (recruit == null) {
             closeAllGates(level);
-            searchCooldown = 100;
             busy = false;
-            debugActivity = "Waiting for livestock near claimed pen";
+            debugActivity = "Waiting for reachable livestock";
             return false;
         }
 
-        leadAnimalA = recruits.size() > 0 ? recruits.get(0).getUUID() : null;
-        leadAnimalB = recruits.size() > 1 ? recruits.get(1).getUUID() : null;
-        activeEntryGate = selectEntryGate(recruits);
+        recruitAnimalId = recruit.getUUID();
+        activeEntryGate = selectEntryGate(recruit);
         activeExitGate = null;
+        recruitApproachTicks = 0;
+        leashAttachedByNpc = false;
         exitingPen = false;
-
-        attachLeads(recruits);
-        npc.equipUtilityItem(new ItemStack(Items.LEAD));
+        deliveredAnimal = false;
         busy = true;
-        debugActivity = "Leading livestock to claimed pen";
+        debugActivity = "Approaching livestock";
         return tickTransfer(level);
     }
 
@@ -229,11 +272,10 @@ final class WildNpcCorralBrain {
         if (npc.level() instanceof ServerLevel level) {
             stopLeading(level);
             closeAllGates(level);
+            clearDeliveredRestriction(level);
         }
 
-        activeEntryGate = null;
-        activeExitGate = null;
-        exitingPen = false;
+        clearTransferState();
         busy = false;
         debugActivity = "Pen task interrupted";
     }
@@ -255,16 +297,23 @@ final class WildNpcCorralBrain {
                 ? BlockPos.of(tag.getLong("CyberNpcPenGate"))
                 : null;
 
+        holdingPoint = null;
         penCells = Set.of();
         gates = primaryGate == null ? Set.of() : Set.of(primaryGate);
         livestockType = null;
-        leadAnimalA = null;
-        leadAnimalB = null;
+        recruitAnimalId = null;
         activeEntryGate = null;
         activeExitGate = null;
+        failedRecruitId = null;
+        failedRecruitCooldown = 0;
+        recruitApproachTicks = 0;
+        claimSearchCooldown = 0;
+        claimValidationCooldown = 0;
+        breedCooldown = 0;
+        leashAttachedByNpc = false;
         exitingPen = false;
+        deliveredAnimal = false;
         busy = false;
-        searchCooldown = 0;
         debugActivity = penAnchor == null ? "No pen task" : "Claimed pen saved";
     }
 
@@ -273,82 +322,160 @@ final class WildNpcCorralBrain {
             return true;
         }
 
-        Animal a = resolveAnimal(level, leadAnimalA);
-        Animal b = resolveAnimal(level, leadAnimalB);
-        return a != null || b != null;
+        return resolveRecruit(level) != null;
     }
 
     private boolean tickTransfer(ServerLevel level) {
-        List<Animal> recruits = currentRecruits(level);
-
         if (exitingPen) {
+            debugActivity = "Leaving claimed pen";
             return tickExitPen(level);
         }
 
-        if (recruits.isEmpty()) {
-            finishTransfer(level);
+        Animal recruit = resolveRecruit(level);
+        if (!isValidTransferAnimal(recruit)) {
+            abortRecruit(level, false);
             return false;
         }
 
         if (activeEntryGate == null || !gates.contains(activeEntryGate)) {
-            activeEntryGate = selectEntryGate(recruits);
+            activeEntryGate = selectEntryGate(recruit);
         }
 
-        if (activeEntryGate == null) {
-            finishTransfer(level);
+        if (activeEntryGate == null || holdingPoint == null) {
+            abortRecruit(level, false);
             return false;
         }
 
-        openGate(level, activeEntryGate);
-
-        for (Animal animal : recruits) {
-            if (animal.getLeashHolder() != npc) {
-                animal.setLeashedTo(npc, true);
-            }
+        // If the leash we created vanished on its own, do not immediately create
+        // another one. Vanilla drops a physical lead when a stretched leash snaps;
+        // reattaching every tick was the source of the lead-item duplication bug.
+        if (leashAttachedByNpc && recruit.getLeashHolder() != npc) {
+            debugActivity = "Leash broke; abandoning this animal";
+            abortRecruit(level, true);
+            return false;
         }
 
-        boolean allInside = recruits.stream().allMatch(this::isInsidePen);
-        if (allInside) {
-            for (Animal animal : recruits) {
-                animal.getNavigation().stop();
-                if (animal.getLeashHolder() == npc) {
-                    animal.dropLeash(true, false);
-                }
-            }
+        if (recruit.getLeashHolder() != npc) {
+            return tickApproachRecruit(level, recruit);
+        }
 
-            npc.clearUtilityItem();
-            exitingPen = true;
-            activeExitGate = selectExitGate();
-            debugActivity = "Leaving claimed pen";
-            return tickExitPen(level);
+        double leashDistance = npc.distanceToSqr(recruit);
+
+        if (leashDistance > LEASH_ABORT_DISTANCE_SQR) {
+            recruit.dropLeash(true, false);
+            leashAttachedByNpc = false;
+            debugActivity = "Animal fell too far behind";
+            abortRecruit(level, true);
+            return false;
+        }
+
+        if (leashDistance > LEASH_WAIT_DISTANCE_SQR) {
+            npc.getNavigation().stop();
+            npc.setSprinting(false);
+            debugActivity = "Waiting for leashed animal to catch up";
+            return true;
         }
 
         BlockPos outside = outsideForGate(activeEntryGate);
         BlockPos inside = insideForGate(activeEntryGate);
 
         if (outside == null || inside == null) {
-            finishTransfer(level);
+            abortRecruit(level, false);
             return false;
         }
 
-        double toOutside = npc.distanceToSqr(Vec3.atBottomCenterOf(outside));
-        if (!isNpcInsidePen() && toOutside > 6.25D) {
+        // Keep every gate shut while approaching. Only open the chosen entrance
+        // when the NPC is actually at it, reducing the chance of livestock escaping.
+        if (!isNpcInsidePen()
+                && npc.distanceToSqr(Vec3.atBottomCenterOf(outside)) > 6.25D) {
+            closeAllGates(level);
             npc.getNavigation().moveTo(
                     outside.getX() + 0.5D,
                     outside.getY(),
                     outside.getZ() + 0.5D,
-                    0.92D
+                    0.88D
             );
-        } else {
-            npc.getNavigation().moveTo(
-                    inside.getX() + 0.5D,
-                    inside.getY(),
-                    inside.getZ() + 0.5D,
-                    0.82D
-            );
+            npc.setSprinting(false);
+            debugActivity = "Bringing livestock to pen gate";
+            return true;
         }
 
+        openOnlyGate(level, activeEntryGate);
+
+        Vec3 hold = Vec3.atBottomCenterOf(holdingPoint);
+        npc.getNavigation().moveTo(hold.x, hold.y, hold.z, 0.78D);
         npc.setSprinting(false);
+        debugActivity = "Taking livestock to back of pen";
+
+        boolean npcAtHolding = npc.distanceToSqr(hold) <= HOLDING_NPC_REACHED_SQR;
+        boolean animalAtHolding = recruit.distanceToSqr(hold) <= HOLDING_ANIMAL_REACHED_SQR;
+
+        if (npcAtHolding && animalAtHolding && isInsidePen(recruit)) {
+            recruit.dropLeash(true, false);
+            leashAttachedByNpc = false;
+            recruit.getNavigation().stop();
+
+            // Hold it at the safest interior point only while the NPC exits.
+            // The restriction is cleared after all gates are closed again.
+            recruit.restrictTo(holdingPoint, 3);
+
+            npc.clearUtilityItem();
+            deliveredAnimal = true;
+            exitingPen = true;
+            activeExitGate = selectExitGate();
+
+            closeAllGates(level);
+            if (activeExitGate != null) {
+                openGate(level, activeExitGate);
+            }
+
+            debugActivity = "Livestock secured at back; leaving pen";
+            return tickExitPen(level);
+        }
+
+        return true;
+    }
+
+    private boolean tickApproachRecruit(ServerLevel level, Animal recruit) {
+        if (recruit.isLeashed() && recruit.getLeashHolder() != npc) {
+            debugActivity = "Animal already belongs to another lead";
+            abortRecruit(level, true);
+            return false;
+        }
+
+        recruitApproachTicks++;
+
+        if (recruitApproachTicks > RECRUIT_APPROACH_TIMEOUT
+                || npc.distanceToSqr(recruit) > RECRUIT_MAX_NPC_DISTANCE_SQR
+                || distanceToPen(recruit.position()) > RECRUIT_MAX_PEN_DISTANCE_SQR) {
+            debugActivity = "Animal is too far or unreachable";
+            abortRecruit(level, true);
+            return false;
+        }
+
+        closeAllGates(level);
+        npc.clearUtilityItem();
+        npc.setSprinting(false);
+
+        double distance = npc.distanceToSqr(recruit);
+        if (distance > LEASH_ATTACH_DISTANCE_SQR) {
+            npc.getNavigation().moveTo(recruit, 0.95D);
+            debugActivity = "Walking to livestock before attaching lead";
+            return true;
+        }
+
+        if (!npc.getSensing().hasLineOfSight(recruit)) {
+            npc.getNavigation().moveTo(recruit, 0.80D);
+            debugActivity = "Finding clear access to livestock";
+            return true;
+        }
+
+        npc.getNavigation().stop();
+        recruit.setLeashedTo(npc, true);
+        leashAttachedByNpc = true;
+        recruitApproachTicks = 0;
+        npc.equipUtilityItem(new ItemStack(Items.LEAD));
+        debugActivity = "Lead attached; moving livestock to pen";
         return true;
     }
 
@@ -371,23 +498,33 @@ final class WildNpcCorralBrain {
             return false;
         }
 
-        openGate(level, activeExitGate);
+        openOnlyGate(level, activeExitGate);
 
+        BlockPos inside = insideForGate(activeExitGate);
         BlockPos outside = outsideForGate(activeExitGate);
-        if (outside == null) {
+
+        if (inside == null || outside == null) {
             finishTransfer(level);
             return false;
         }
 
-        npc.getNavigation().moveTo(
-                outside.getX() + 0.5D,
-                outside.getY(),
-                outside.getZ() + 0.5D,
-                0.95D
-        );
-        npc.setSprinting(false);
+        Vec3 insideSpot = Vec3.atBottomCenterOf(inside);
+        Vec3 outsideSpot = Vec3.atBottomCenterOf(outside);
 
-        if (!isNpcInsidePen() && npc.distanceToSqr(Vec3.atBottomCenterOf(outside)) < 9.0D) {
+        // Route to the inside face first. This prevents navigation from choosing
+        // another fence edge or getting stuck trying to path straight through it.
+        if (npc.distanceToSqr(insideSpot) > 2.25D) {
+            npc.getNavigation().moveTo(insideSpot.x, insideSpot.y, insideSpot.z, 0.92D);
+            npc.setSprinting(false);
+            debugActivity = "Walking to pen exit gate";
+            return true;
+        }
+
+        npc.getNavigation().moveTo(outsideSpot.x, outsideSpot.y, outsideSpot.z, 0.95D);
+        npc.setSprinting(false);
+        debugActivity = "Passing through pen exit gate";
+
+        if (!isNpcInsidePen() && npc.distanceToSqr(outsideSpot) < 9.0D) {
             finishTransfer(level);
             return false;
         }
@@ -398,94 +535,131 @@ final class WildNpcCorralBrain {
     private void finishTransfer(ServerLevel level) {
         stopLeading(level);
         closeAllGates(level);
-        clearRecruitIds();
-        activeEntryGate = null;
-        activeExitGate = null;
-        exitingPen = false;
+        clearDeliveredRestriction(level);
+        clearTransferState();
         busy = false;
         npc.getNavigation().stop();
-        debugActivity = "Livestock secured";
+        npc.setSprinting(false);
+        debugActivity = "Livestock secured and gates closed";
     }
 
-    private void attachLeads(List<Animal> recruits) {
-        for (Animal animal : recruits) {
-            if (animal.getLeashHolder() != npc) {
-                if (animal.isLeashed()) {
-                    animal.dropLeash(true, false);
-                }
-                animal.setLeashedTo(npc, true);
-            }
+    private void abortRecruit(ServerLevel level, boolean blacklist) {
+        Animal recruit = resolveRecruit(level);
+
+        if (recruit != null && recruit.getLeashHolder() == npc) {
+            // Explicitly suppress the vanilla lead-item drop.
+            recruit.dropLeash(true, false);
+        }
+
+        if (blacklist && recruitAnimalId != null) {
+            failedRecruitId = recruitAnimalId;
+            failedRecruitCooldown = 1200;
+        }
+
+        npc.clearUtilityItem();
+        npc.getNavigation().stop();
+        closeAllGates(level);
+        clearTransferState();
+        busy = false;
+    }
+
+    private void clearTransferState() {
+        recruitAnimalId = null;
+        activeEntryGate = null;
+        activeExitGate = null;
+        recruitApproachTicks = 0;
+        leashAttachedByNpc = false;
+        exitingPen = false;
+        deliveredAnimal = false;
+    }
+
+    private void stopLeading(ServerLevel level) {
+        Animal recruit = resolveRecruit(level);
+
+        if (recruit != null && recruit.getLeashHolder() == npc) {
+            recruit.dropLeash(true, false);
+        }
+
+        leashAttachedByNpc = false;
+        npc.clearUtilityItem();
+    }
+
+    private void clearDeliveredRestriction(ServerLevel level) {
+        if (!deliveredAnimal) {
+            return;
+        }
+
+        Animal recruit = resolveRecruit(level);
+        if (recruit != null) {
+            recruit.clearRestriction();
+            recruit.getNavigation().stop();
         }
     }
 
-    private List<Animal> currentRecruits(ServerLevel level) {
-        List<Animal> animals = new ArrayList<>();
-        Animal a = resolveAnimal(level, leadAnimalA);
-        Animal b = resolveAnimal(level, leadAnimalB);
-
-        if (isValidTransferAnimal(a)) {
-            animals.add(a);
-        }
-        if (isValidTransferAnimal(b) && b != a) {
-            animals.add(b);
+    @Nullable
+    private Animal resolveRecruit(ServerLevel level) {
+        if (recruitAnimalId == null) {
+            return null;
         }
 
-        return animals;
+        Entity entity = level.getEntity(recruitAnimalId);
+        return entity instanceof Animal animal ? animal : null;
     }
 
     private boolean isValidTransferAnimal(@Nullable Animal animal) {
-        return animal != null && animal.isAlive() && !animal.isBaby();
+        return animal != null
+                && animal.isAlive()
+                && !animal.isBaby()
+                && animal.getType() == livestockType;
     }
 
-    private List<Animal> resolveOrChooseRecruits(ServerLevel level, int needed) {
-        List<Animal> resolved = currentRecruits(level);
-
-        if (resolved.size() >= needed) {
-            return resolved.subList(0, needed);
+    @Nullable
+    private Animal chooseRecruit(ServerLevel level) {
+        if (livestockType == null || primaryGate == null) {
+            return null;
         }
 
-        if (primaryGate == null) {
-            return List.of();
-        }
+        AABB searchBox = npc.getBoundingBox().inflate(
+                RECRUIT_SEARCH_RADIUS,
+                6.0D,
+                RECRUIT_SEARCH_RADIUS
+        );
 
-        AABB searchBox = new AABB(primaryGate).inflate(28.0D, 8.0D, 28.0D);
-        List<Animal> candidates = level.getEntitiesOfClass(
+        return level.getEntitiesOfClass(
                         Animal.class,
                         searchBox,
                         animal -> isValidRecruit(animal)
                                 && animal.getType() == livestockType
-                                && !resolved.contains(animal)
                 ).stream()
-                .sorted(Comparator.comparingDouble(npc::distanceToSqr))
-                .toList();
-
-        for (Animal candidate : candidates) {
-            if (resolved.size() >= needed) {
-                break;
-            }
-            resolved.add(candidate);
-        }
-
-        return resolved;
+                .filter(animal -> distanceToPen(animal.position()) <= RECRUIT_MAX_PEN_DISTANCE_SQR)
+                .min(Comparator.comparingDouble(npc::distanceToSqr))
+                .orElse(null);
     }
 
     private boolean isValidRecruit(@Nullable Animal animal) {
-        return animal != null
-                && animal.isAlive()
-                && !animal.isBaby()
-                && animal.getType().is(CyberNpcHuntingData.WILD_NPC_PREY)
-                && !isInsidePen(animal)
-                && (!animal.isLeashed() || animal.getLeashHolder() == npc);
-    }
-
-    @Nullable
-    private Animal resolveAnimal(ServerLevel level, @Nullable UUID uuid) {
-        if (uuid == null) {
-            return null;
+        if (animal == null
+                || !animal.isAlive()
+                || animal.isBaby()
+                || !animal.getType().is(CyberNpcHuntingData.WILD_NPC_PREY)
+                || isInsidePen(animal)
+                || animal.isLeashed()) {
+            return false;
         }
 
-        Entity entity = level.getEntity(uuid);
-        return entity instanceof Animal animal ? animal : null;
+        return failedRecruitId == null
+                || failedRecruitCooldown <= 0
+                || !failedRecruitId.equals(animal.getUUID());
+    }
+
+    private double distanceToPen(Vec3 position) {
+        if (penCells.isEmpty()) {
+            return Double.MAX_VALUE;
+        }
+
+        return penCells.stream()
+                .mapToDouble(cell -> position.distanceToSqr(Vec3.atBottomCenterOf(cell)))
+                .min()
+                .orElse(Double.MAX_VALUE);
     }
 
     @Nullable
@@ -509,7 +683,12 @@ final class WildNpcCorralBrain {
             return null;
         }
 
-        AABB searchBox = new AABB(primaryGate).inflate(28.0D, 8.0D, 28.0D);
+        AABB searchBox = new AABB(primaryGate).inflate(
+                RECRUIT_SEARCH_RADIUS,
+                6.0D,
+                RECRUIT_SEARCH_RADIUS
+        );
+
         Map<EntityType<?>, List<Animal>> groups = new HashMap<>();
 
         for (Animal animal : level.getEntitiesOfClass(
@@ -518,6 +697,7 @@ final class WildNpcCorralBrain {
                 animal -> animal.isAlive()
                         && !animal.isBaby()
                         && animal.getType().is(CyberNpcHuntingData.WILD_NPC_PREY)
+                        && !animal.isLeashed()
                         && !isInsidePen(animal)
         )) {
             groups.computeIfAbsent(animal.getType(), ignored -> new ArrayList<>()).add(animal);
@@ -549,12 +729,7 @@ final class WildNpcCorralBrain {
     }
 
     private boolean isInsidePen(Animal animal) {
-        if (penCells.isEmpty()) {
-            return false;
-        }
-
-        BlockPos pos = animal.blockPosition();
-        return isInsidePenPosition(pos);
+        return !penCells.isEmpty() && isInsidePenPosition(animal.blockPosition());
     }
 
     private boolean isNpcInsidePen() {
@@ -579,60 +754,86 @@ final class WildNpcCorralBrain {
     }
 
     private AABB enclosureBox() {
-        int minX = penCells.stream().mapToInt(BlockPos::getX).min().orElse(npc.blockPosition().getX());
-        int maxX = penCells.stream().mapToInt(BlockPos::getX).max().orElse(npc.blockPosition().getX());
-        int minY = penCells.stream().mapToInt(BlockPos::getY).min().orElse(npc.blockPosition().getY());
-        int maxY = penCells.stream().mapToInt(BlockPos::getY).max().orElse(npc.blockPosition().getY());
-        int minZ = penCells.stream().mapToInt(BlockPos::getZ).min().orElse(npc.blockPosition().getZ());
-        int maxZ = penCells.stream().mapToInt(BlockPos::getZ).max().orElse(npc.blockPosition().getZ());
+        int minX = penCells.stream().mapToInt(pos -> pos.getX()).min().orElse(npc.blockPosition().getX());
+        int maxX = penCells.stream().mapToInt(pos -> pos.getX()).max().orElse(npc.blockPosition().getX());
+        int minY = penCells.stream().mapToInt(pos -> pos.getY()).min().orElse(npc.blockPosition().getY());
+        int maxY = penCells.stream().mapToInt(pos -> pos.getY()).max().orElse(npc.blockPosition().getY());
+        int minZ = penCells.stream().mapToInt(pos -> pos.getZ()).min().orElse(npc.blockPosition().getZ());
+        int maxZ = penCells.stream().mapToInt(pos -> pos.getZ()).max().orElse(npc.blockPosition().getZ());
 
         return new AABB(minX, minY - 1, minZ, maxX + 1, maxY + 3, maxZ + 1);
     }
 
     private boolean ensureCorral(ServerLevel level) {
+        CyberNpcWorldClaims claims = CyberNpcWorldClaims.get(level);
+
         if (penAnchor != null && primaryGate != null) {
-            CyberNpcWorldClaims claims = CyberNpcWorldClaims.get(level);
-            if (!claims.claimPen(penAnchor, npc.getUUID())) {
-                penAnchor = null;
-                primaryGate = null;
-                penCells = Set.of();
-                gates = Set.of();
-            } else if (npc.distanceToSqr(Vec3.atBottomCenterOf(primaryGate)) > REMOTE_RETURN_DISTANCE_SQR
-                    && !level.hasChunkAt(primaryGate)) {
-                penCells = Set.of();
-                gates = Set.of(primaryGate);
-                debugActivity = "Returning to claimed pen";
-                return true;
-            } else if (level.hasChunkAt(primaryGate)) {
+            if (!claims.claimPen(penAnchor, penCells, npc.getUUID())) {
+                clearClaim();
+            } else if (penCells.isEmpty()) {
+                if (!level.hasChunkAt(primaryGate)) {
+                    debugActivity = "Claimed pen is outside loaded area";
+                    return true;
+                }
+
                 Corral rebuilt = inspectGate(level, primaryGate);
-                if (rebuilt != null && rebuilt.anchor().equals(penAnchor)) {
+                if (rebuilt != null
+                        && rebuilt.anchor().equals(penAnchor)
+                        && claims.claimPen(rebuilt.anchor(), rebuilt.cells(), npc.getUUID())) {
+                    applyCorral(rebuilt);
+                    claimValidationCooldown = CLAIM_VALIDATE_TICKS;
+                    return true;
+                }
+
+                claims.releasePen(penAnchor, npc.getUUID());
+                clearClaim();
+            } else {
+                if (claimValidationCooldown > 0) {
+                    claimValidationCooldown--;
+                    return true;
+                }
+
+                claimValidationCooldown = CLAIM_VALIDATE_TICKS;
+
+                if (!level.hasChunkAt(primaryGate)) {
+                    return true;
+                }
+
+                Corral rebuilt = inspectGate(level, primaryGate);
+                if (rebuilt != null
+                        && rebuilt.anchor().equals(penAnchor)
+                        && claims.claimPen(rebuilt.anchor(), rebuilt.cells(), npc.getUUID())) {
                     applyCorral(rebuilt);
                     return true;
                 }
 
                 claims.releasePen(penAnchor, npc.getUUID());
-                penAnchor = null;
-                primaryGate = null;
-                penCells = Set.of();
-                gates = Set.of();
+                clearClaim();
             }
         }
 
-        if (searchCooldown > 0) {
-            searchCooldown--;
-            debugActivity = "Searching cooldown for pen";
+        if (claimSearchCooldown > 0) {
+            claimSearchCooldown--;
             return false;
         }
 
-        searchCooldown = 100;
+        claimSearchCooldown = CLAIM_RESCAN_TICKS;
         return findCorral(level);
+    }
+
+    private void clearClaim() {
+        penAnchor = null;
+        primaryGate = null;
+        holdingPoint = null;
+        penCells = Set.of();
+        gates = Set.of();
+        livestockType = null;
+        claimValidationCooldown = 0;
     }
 
     private boolean findCorral(ServerLevel level) {
         BlockPos origin = npc.blockPosition();
-        Corral best = null;
-        double bestDistance = Double.MAX_VALUE;
-        CyberNpcWorldClaims claims = CyberNpcWorldClaims.get(level);
+        Map<Long, Corral> unique = new HashMap<>();
 
         for (BlockPos pos : BlockPos.betweenClosed(
                 origin.offset(-CORRAL_SEARCH_RADIUS, -4, -CORRAL_SEARCH_RADIUS),
@@ -647,36 +848,33 @@ final class WildNpcCorralBrain {
                 continue;
             }
 
-            if (!claims.claimPen(candidate.anchor(), npc.getUUID())) {
-                continue;
-            }
+            unique.putIfAbsent(candidate.anchor().asLong(), candidate);
+        }
 
-            double distance = pos.distSqr(origin);
-            if (distance < bestDistance) {
-                if (best != null && !best.anchor().equals(candidate.anchor())) {
-                    claims.releasePen(best.anchor(), npc.getUUID());
-                }
+        List<Corral> candidates = unique.values().stream()
+                .sorted(Comparator.comparingDouble(corral ->
+                        corral.primaryGate().distSqr(origin)))
+                .toList();
 
-                bestDistance = distance;
-                best = candidate;
-            } else if (best == null || !best.anchor().equals(candidate.anchor())) {
-                claims.releasePen(candidate.anchor(), npc.getUUID());
+        CyberNpcWorldClaims claims = CyberNpcWorldClaims.get(level);
+
+        for (Corral candidate : candidates) {
+            if (claims.claimPen(candidate.anchor(), candidate.cells(), npc.getUUID())) {
+                applyCorral(candidate);
+                claimValidationCooldown = CLAIM_VALIDATE_TICKS;
+                debugActivity = "Claimed entire pen";
+                return true;
             }
         }
 
-        if (best == null) {
-            debugActivity = "No claimable pen nearby";
-            return false;
-        }
-
-        applyCorral(best);
-        debugActivity = "Claimed pen";
-        return true;
+        debugActivity = "No unclaimed pen nearby";
+        return false;
     }
 
     private void applyCorral(Corral corral) {
         primaryGate = corral.primaryGate();
         penAnchor = corral.anchor();
+        holdingPoint = corral.holdingPoint();
         penCells = corral.cells();
         gates = corral.gates();
     }
@@ -734,7 +932,38 @@ final class WildNpcCorralBrain {
                 .min(Comparator.comparingDouble(pos -> pos.distSqr(npc.blockPosition())))
                 .orElse(gate.immutable());
 
-        return new Corral(primary, anchor, Set.copyOf(chosen), Set.copyOf(discoveredGates));
+        BlockPos holding = findHoldingPoint(chosen, discoveredGates);
+        if (holding == null) {
+            holding = anchor;
+        }
+
+        return new Corral(
+                primary,
+                anchor,
+                holding,
+                Set.copyOf(chosen),
+                Set.copyOf(discoveredGates)
+        );
+    }
+
+    @Nullable
+    private BlockPos findHoldingPoint(Set<BlockPos> cells, Set<BlockPos> discoveredGates) {
+        if (cells.isEmpty()) {
+            return null;
+        }
+
+        return cells.stream()
+                .max(Comparator
+                        .comparingDouble((BlockPos cell) -> distanceFromNearestGate(cell, discoveredGates))
+                        .thenComparingDouble(cell -> -cell.distSqr(npc.blockPosition())))
+                .orElse(null);
+    }
+
+    private double distanceFromNearestGate(BlockPos cell, Set<BlockPos> discoveredGates) {
+        return discoveredGates.stream()
+                .mapToDouble(cell::distSqr)
+                .min()
+                .orElse(0.0D);
     }
 
     @Nullable
@@ -799,17 +1028,19 @@ final class WildNpcCorralBrain {
     }
 
     @Nullable
-    private BlockPos selectEntryGate(List<Animal> recruits) {
+    private BlockPos selectEntryGate(Animal recruit) {
         if (gates.isEmpty()) {
             return primaryGate;
         }
 
         return gates.stream()
                 .filter(gate -> outsideForGate(gate) != null && insideForGate(gate) != null)
-                .min(Comparator.comparingDouble(gate -> recruits.stream()
-                        .mapToDouble(animal -> animal.distanceToSqr(Vec3.atBottomCenterOf(outsideForGate(gate))))
-                        .min()
-                        .orElse(Double.MAX_VALUE)))
+                .min(Comparator.comparingDouble(gate -> {
+                    BlockPos outside = outsideForGate(gate);
+                    return outside == null
+                            ? Double.MAX_VALUE
+                            : recruit.distanceToSqr(Vec3.atBottomCenterOf(outside));
+                }))
                 .orElse(primaryGate);
     }
 
@@ -820,13 +1051,14 @@ final class WildNpcCorralBrain {
         }
 
         return gates.stream()
-                .filter(gate -> outsideForGate(gate) != null)
-                .sorted(Comparator.comparingDouble(gate -> npc.distanceToSqr(Vec3.atBottomCenterOf(outsideForGate(gate)))))
-                .filter(gate -> gates.size() <= 1 || !gate.equals(activeEntryGate))
-                .findFirst()
-                .orElseGet(() -> gates.stream()
-                        .min(Comparator.comparingDouble(gate -> npc.distanceToSqr(Vec3.atBottomCenterOf(gate))))
-                        .orElse(primaryGate));
+                .filter(gate -> outsideForGate(gate) != null && insideForGate(gate) != null)
+                .min(Comparator.comparingDouble(gate -> {
+                    BlockPos inside = insideForGate(gate);
+                    return inside == null
+                            ? Double.MAX_VALUE
+                            : npc.distanceToSqr(Vec3.atBottomCenterOf(inside));
+                }))
+                .orElse(primaryGate);
     }
 
     @Nullable
@@ -889,6 +1121,16 @@ final class WildNpcCorralBrain {
         return ItemStack.EMPTY;
     }
 
+    private void openOnlyGate(ServerLevel level, BlockPos gateToOpen) {
+        for (BlockPos gate : gates) {
+            setGateOpen(level, gate, gate.equals(gateToOpen));
+        }
+
+        if (gates.isEmpty() && primaryGate != null) {
+            setGateOpen(level, primaryGate, primaryGate.equals(gateToOpen));
+        }
+    }
+
     private void openGate(ServerLevel level, @Nullable BlockPos gate) {
         setGateOpen(level, gate, true);
     }
@@ -916,39 +1158,6 @@ final class WildNpcCorralBrain {
         }
     }
 
-    private void stopLeading(@Nullable ServerLevel level) {
-        if (level != null) {
-            Animal a = resolveAnimal(level, leadAnimalA);
-            Animal b = resolveAnimal(level, leadAnimalB);
-
-            if (a != null) {
-                a.getNavigation().stop();
-                if (a.getLeashHolder() == npc) {
-                    a.dropLeash(true, false);
-                }
-            }
-
-            if (b != null && b != a) {
-                b.getNavigation().stop();
-                if (b.getLeashHolder() == npc) {
-                    b.dropLeash(true, false);
-                }
-            }
-        }
-
-        npc.clearUtilityItem();
-    }
-
-    @Nullable
-    private ServerLevel levelOrNull() {
-        return npc.level() instanceof ServerLevel level ? level : null;
-    }
-
-    private void clearRecruitIds() {
-        leadAnimalA = null;
-        leadAnimalB = null;
-    }
-
     private static String formatPos(BlockPos pos) {
         return pos.getX() + "," + pos.getY() + "," + pos.getZ();
     }
@@ -956,6 +1165,7 @@ final class WildNpcCorralBrain {
     private record Corral(
             BlockPos primaryGate,
             BlockPos anchor,
+            BlockPos holdingPoint,
             Set<BlockPos> cells,
             Set<BlockPos> gates
     ) {

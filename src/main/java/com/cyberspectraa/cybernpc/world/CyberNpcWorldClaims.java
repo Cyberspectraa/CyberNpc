@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public final class CyberNpcWorldClaims extends SavedData {
@@ -19,6 +20,7 @@ public final class CyberNpcWorldClaims extends SavedData {
 
     private final Map<Long, List<UUID>> cookingClaims = new HashMap<>();
     private final Map<Long, UUID> penClaims = new HashMap<>();
+    private final Map<Long, PenCellClaim> penCellClaims = new HashMap<>();
 
     public static CyberNpcWorldClaims get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(
@@ -61,6 +63,16 @@ public final class CyberNpcWorldClaims extends SavedData {
             }
         }
 
+        ListTag cells = tag.getList("PenCellClaims", Tag.TAG_COMPOUND);
+        for (int i = 0; i < cells.size(); i++) {
+            CompoundTag entry = cells.getCompound(i);
+            if (entry.hasUUID("Owner")) {
+                long pos = entry.getLong("Pos");
+                long anchor = entry.contains("Anchor") ? entry.getLong("Anchor") : pos;
+                data.penCellClaims.put(pos, new PenCellClaim(entry.getUUID("Owner"), anchor));
+            }
+        }
+
         return data;
     }
 
@@ -94,6 +106,17 @@ public final class CyberNpcWorldClaims extends SavedData {
         }
 
         tag.put("PenClaims", pens);
+
+        ListTag cells = new ListTag();
+        for (Map.Entry<Long, PenCellClaim> entry : penCellClaims.entrySet()) {
+            CompoundTag claim = new CompoundTag();
+            claim.putLong("Pos", entry.getKey());
+            claim.putUUID("Owner", entry.getValue().owner());
+            claim.putLong("Anchor", entry.getValue().anchor());
+            cells.add(claim);
+        }
+
+        tag.put("PenCellClaims", cells);
         return tag;
     }
 
@@ -152,31 +175,92 @@ public final class CyberNpcWorldClaims extends SavedData {
         return owners == null ? 0 : owners.size();
     }
 
-    public boolean claimPen(BlockPos anchor, UUID owner) {
-        long key = anchor.asLong();
-        UUID existing = penClaims.get(key);
+    /**
+     * Claims the pen anchor and every currently detected walkable cell atomically.
+     * If any part of the enclosure belongs to a different NPC, the whole claim fails.
+     */
+    public boolean claimPen(BlockPos anchor, Set<BlockPos> cells, UUID owner) {
+        long anchorKey = anchor.asLong();
+        UUID existingAnchorOwner = penClaims.get(anchorKey);
 
-        if (existing != null) {
-            return existing.equals(owner);
+        if (existingAnchorOwner != null && !existingAnchorOwner.equals(owner)) {
+            return false;
         }
 
-        penClaims.put(key, owner);
-        setDirty();
+        for (BlockPos cell : cells) {
+            PenCellClaim existing = penCellClaims.get(cell.asLong());
+            if (existing != null && !existing.owner().equals(owner)) {
+                return false;
+            }
+        }
+
+        boolean changed = !owner.equals(existingAnchorOwner);
+        penClaims.put(anchorKey, owner);
+
+        for (BlockPos cell : cells) {
+            long cellKey = cell.asLong();
+            PenCellClaim previous = penCellClaims.put(cellKey, new PenCellClaim(owner, anchorKey));
+            if (previous == null
+                    || !previous.owner().equals(owner)
+                    || previous.anchor() != anchorKey) {
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            setDirty();
+        }
+
         return true;
     }
 
+    public boolean claimPen(BlockPos anchor, UUID owner) {
+        return claimPen(anchor, Set.of(), owner);
+    }
+
     public void releasePen(BlockPos anchor, UUID owner) {
-        long key = anchor.asLong();
-        UUID existing = penClaims.get(key);
+        long anchorKey = anchor.asLong();
+        UUID existing = penClaims.get(anchorKey);
+        boolean changed = false;
 
         if (owner.equals(existing)) {
-            penClaims.remove(key);
+            penClaims.remove(anchorKey);
+            changed = true;
+        }
+
+        for (Long cellKey : new ArrayList<>(penCellClaims.keySet())) {
+            PenCellClaim claim = penCellClaims.get(cellKey);
+            if (claim != null && claim.anchor() == anchorKey && claim.owner().equals(owner)) {
+                penCellClaims.remove(cellKey);
+                changed = true;
+            }
+        }
+
+        if (changed) {
             setDirty();
         }
     }
 
     public boolean ownsPen(BlockPos anchor, UUID owner) {
         return owner.equals(penClaims.get(anchor.asLong()));
+    }
+
+    public boolean ownsPenCell(BlockPos pos, UUID owner) {
+        PenCellClaim claim = penCellClaims.get(pos.asLong());
+        return claim != null && claim.owner().equals(owner);
+    }
+
+    public int penClaimedCellCount(BlockPos anchor) {
+        long anchorKey = anchor.asLong();
+        int count = 0;
+
+        for (PenCellClaim claim : penCellClaims.values()) {
+            if (claim.anchor() == anchorKey) {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     @Nullable
@@ -197,18 +281,26 @@ public final class CyberNpcWorldClaims extends SavedData {
             }
         }
 
-        List<Long> ownedPens = penClaims.entrySet().stream()
-                .filter(entry -> owner.equals(entry.getValue()))
-                .map(Map.Entry::getKey)
-                .toList();
+        for (Long key : new ArrayList<>(penClaims.keySet())) {
+            if (owner.equals(penClaims.get(key))) {
+                penClaims.remove(key);
+                changed = true;
+            }
+        }
 
-        for (Long key : ownedPens) {
-            penClaims.remove(key);
-            changed = true;
+        for (Long key : new ArrayList<>(penCellClaims.keySet())) {
+            PenCellClaim claim = penCellClaims.get(key);
+            if (claim != null && owner.equals(claim.owner())) {
+                penCellClaims.remove(key);
+                changed = true;
+            }
         }
 
         if (changed) {
             setDirty();
         }
+    }
+
+    private record PenCellClaim(UUID owner, long anchor) {
     }
 }

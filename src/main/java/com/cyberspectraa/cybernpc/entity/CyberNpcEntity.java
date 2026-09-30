@@ -536,6 +536,11 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         ensureWildProfile();
+
+        // Pen ownership is discovered independently from hunger so nearby pens
+        // are reserved immediately instead of only when livestock work starts.
+        corralBrain.tickClaimDiscovery();
+
         tickMeleeSwingAnimation();
 
         if (onClimbable() && horizontalCollision) {
