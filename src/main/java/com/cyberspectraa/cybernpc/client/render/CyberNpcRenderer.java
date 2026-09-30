@@ -10,12 +10,14 @@ import com.mojang.math.Axis;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.MobRenderer;
 import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -25,10 +27,13 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
 public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpcPlayerModel> {
     private static final double REACTION_RENDER_DISTANCE_SQR = 32.0D * 32.0D;
+    private static final ResourceLocation REACTION_WHITE_TEXTURE =
+            new ResourceLocation("minecraft", "textures/misc/white.png");
 
     private final CyberNpcPlayerModel wideModel;
     private final CyberNpcPlayerModel slimModel;
@@ -117,9 +122,10 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         // needing to stand directly beside the NPC.
         poseStack.scale(-0.032F, -0.032F, 0.032F);
 
-        Matrix4f matrix = poseStack.last().pose();
+        PoseStack.Pose bubblePose = poseStack.last();
+        Matrix4f matrix = bubblePose.pose();
         VertexConsumer background = buffer.getBuffer(
-                RenderType.textBackground()
+                RenderType.entityTranslucent(REACTION_WHITE_TEXTURE)
         );
 
         int shadow = 0x80000000;
@@ -131,7 +137,7 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         // looking like a flat GUI rectangle pasted into the world.
         drawPixelBubble(
                 background,
-                matrix,
+                bubblePose,
                 halfWidth,
                 2.0F,
                 2.0F,
@@ -143,7 +149,7 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         // Dark outer silhouette.
         drawPixelBubble(
                 background,
-                matrix,
+                bubblePose,
                 halfWidth,
                 0.0F,
                 0.0F,
@@ -155,7 +161,7 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         // Bright inner panel, inset by two pixels from the outline.
         drawBubbleRect(
                 background,
-                matrix,
+                bubblePose,
                 -halfWidth + 4.0F,
                 -9.0F,
                 halfWidth - 4.0F,
@@ -166,7 +172,7 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         );
         drawBubbleRect(
                 background,
-                matrix,
+                bubblePose,
                 -halfWidth + 2.0F,
                 -6.0F,
                 halfWidth - 2.0F,
@@ -180,7 +186,7 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         // depth without making it look modern or glossy.
         drawBubbleRect(
                 background,
-                matrix,
+                bubblePose,
                 -halfWidth + 5.0F,
                 -8.0F,
                 halfWidth - 5.0F,
@@ -193,7 +199,7 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         // Fill the inside of the stepped speech tail.
         drawBubbleRect(
                 background,
-                matrix,
+                bubblePose,
                 -1.0F,
                 8.0F,
                 4.0F,
@@ -204,7 +210,7 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         );
         drawBubbleRect(
                 background,
-                matrix,
+                bubblePose,
                 1.0F,
                 11.0F,
                 4.0F,
@@ -229,7 +235,7 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
                 buffer,
                 Font.DisplayMode.POLYGON_OFFSET,
                 0,
-                packedLight
+                LightTexture.FULL_BRIGHT
         );
         font.drawInBatch(
                 glyph,
@@ -241,7 +247,7 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
                 buffer,
                 Font.DisplayMode.POLYGON_OFFSET,
                 0,
-                packedLight
+                LightTexture.FULL_BRIGHT
         );
 
         poseStack.popPose();
@@ -249,7 +255,7 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
 
     private static void drawPixelBubble(
             VertexConsumer consumer,
-            Matrix4f matrix,
+            PoseStack.Pose pose,
             float halfWidth,
             float offsetX,
             float offsetY,
@@ -257,21 +263,22 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
             int color,
             int packedLight
     ) {
-        // Three overlapping strips create chunky "rounded" pixel corners.
+        // Non-overlapping strips avoid the coplanar/z-fighting flicker that the
+        // old overlapping rectangles could produce at certain camera angles.
         drawBubbleRect(
                 consumer,
-                matrix,
+                pose,
                 -halfWidth + 3.0F + offsetX,
                 -11.0F + offsetY,
                 halfWidth - 3.0F + offsetX,
-                11.0F + offsetY,
+                -8.0F + offsetY,
                 z,
                 color,
                 packedLight
         );
         drawBubbleRect(
                 consumer,
-                matrix,
+                pose,
                 -halfWidth + offsetX,
                 -8.0F + offsetY,
                 halfWidth + offsetX,
@@ -280,13 +287,24 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
                 color,
                 packedLight
         );
-
-        // Two-step diagonal-ish tail.
         drawBubbleRect(
                 consumer,
-                matrix,
-                -2.0F + offsetX,
+                pose,
+                -halfWidth + 3.0F + offsetX,
                 8.0F + offsetY,
+                halfWidth - 3.0F + offsetX,
+                11.0F + offsetY,
+                z,
+                color,
+                packedLight
+        );
+
+        // Two-step pixel tail, also kept non-overlapping.
+        drawBubbleRect(
+                consumer,
+                pose,
+                -2.0F + offsetX,
+                11.0F + offsetY,
                 5.0F + offsetX,
                 13.0F + offsetY,
                 z,
@@ -295,9 +313,9 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
         );
         drawBubbleRect(
                 consumer,
-                matrix,
+                pose,
                 0.0F + offsetX,
-                12.0F + offsetY,
+                13.0F + offsetY,
                 5.0F + offsetX,
                 16.0F + offsetY,
                 z,
@@ -308,7 +326,7 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
 
     private static void drawBubbleRect(
             VertexConsumer consumer,
-            Matrix4f matrix,
+            PoseStack.Pose pose,
             float left,
             float top,
             float right,
@@ -317,21 +335,59 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
             int color,
             int packedLight
     ) {
-        consumer.vertex(matrix, left, top, z)
-                .color(color)
-                .uv2(packedLight)
-                .endVertex();
-        consumer.vertex(matrix, left, bottom, z)
-                .color(color)
-                .uv2(packedLight)
-                .endVertex();
-        consumer.vertex(matrix, right, bottom, z)
-                .color(color)
-                .uv2(packedLight)
-                .endVertex();
-        consumer.vertex(matrix, right, top, z)
-                .color(color)
-                .uv2(packedLight)
+        Matrix4f matrix = pose.pose();
+        Matrix3f normal = pose.normal();
+
+        int alpha = color >>> 24 & 0xFF;
+        int red = color >>> 16 & 0xFF;
+        int green = color >>> 8 & 0xFF;
+        int blue = color & 0xFF;
+
+        int light = LightTexture.FULL_BRIGHT;
+
+        bubbleVertex(
+                consumer, matrix, normal,
+                left, top, z, 0.0F, 0.0F,
+                red, green, blue, alpha, light
+        );
+        bubbleVertex(
+                consumer, matrix, normal,
+                left, bottom, z, 0.0F, 1.0F,
+                red, green, blue, alpha, light
+        );
+        bubbleVertex(
+                consumer, matrix, normal,
+                right, bottom, z, 1.0F, 1.0F,
+                red, green, blue, alpha, light
+        );
+        bubbleVertex(
+                consumer, matrix, normal,
+                right, top, z, 1.0F, 0.0F,
+                red, green, blue, alpha, light
+        );
+    }
+
+    private static void bubbleVertex(
+            VertexConsumer consumer,
+            Matrix4f matrix,
+            Matrix3f normal,
+            float x,
+            float y,
+            float z,
+            float u,
+            float v,
+            int red,
+            int green,
+            int blue,
+            int alpha,
+            int light
+    ) {
+        consumer.vertex(matrix, x, y, z)
+                .color(red, green, blue, alpha)
+                .uv(u, v)
+                .overlayCoords(OverlayTexture.NO_OVERLAY)
+                .uv2(light)
+                .normal(normal, 0.0F, 0.0F, 1.0F)
                 .endVertex();
     }
 
