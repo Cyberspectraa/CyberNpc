@@ -6,20 +6,30 @@ import net.minecraft.util.RandomSource;
 import java.util.Locale;
 
 public enum WildNpcClass {
-    CLASSLESS("classless", "Classless", 78),
-    ARCHER("archer", "Archer", 8),
-    KNIGHT("knight", "Knight", 6),
-    ROGUE("rogue", "Rogue", 5),
-    MAGE("mage", "Mage", 3);
+    CLASSLESS("classless", "Classless", 68, false),
+    ARCHER("archer", "Archer", 8, false),
+    KNIGHT("knight", "Knight", 6, false),
+    ROGUE("rogue", "Rogue", 5, false),
+    BERSERKER("berserker", "Berserker", 5, false),
+    MAGE("mage", "Mage", 3, true),
+    CLERIC("cleric", "Cleric", 2, true),
+    SPELLBLADE("spellblade", "Spellblade", 3, true);
 
     private final String serializedName;
     private final String displayName;
     private final int spawnWeight;
+    private final boolean requiresIronSpells;
 
-    WildNpcClass(String serializedName, String displayName, int spawnWeight) {
+    WildNpcClass(
+            String serializedName,
+            String displayName,
+            int spawnWeight,
+            boolean requiresIronSpells
+    ) {
         this.serializedName = serializedName;
         this.displayName = displayName;
         this.spawnWeight = spawnWeight;
+        this.requiresIronSpells = requiresIronSpells;
     }
 
     public String serializedName() {
@@ -32,6 +42,18 @@ public enum WildNpcClass {
 
     public int spawnWeight() {
         return spawnWeight;
+    }
+
+    public boolean requiresIronSpells() {
+        return requiresIronSpells;
+    }
+
+    public boolean usesSpellBook() {
+        return this == MAGE || this == CLERIC || this == SPELLBLADE;
+    }
+
+    public boolean hasMagicSchool() {
+        return this == MAGE || this == CLERIC || this == SPELLBLADE;
     }
 
     public static WildNpcClass fromSerializedName(String value) {
@@ -50,11 +72,9 @@ public enum WildNpcClass {
     }
 
     public static WildNpcClass randomSpawnClass(RandomSource random) {
-        boolean allowMage = IronSpellsCompat.isLoaded();
-
         int total = 0;
         for (WildNpcClass npcClass : values()) {
-            if (npcClass == MAGE && !allowMage) {
+            if (!npcClass.isAvailable()) {
                 continue;
             }
             total += npcClass.spawnWeight;
@@ -62,7 +82,7 @@ public enum WildNpcClass {
 
         int roll = random.nextInt(total);
         for (WildNpcClass npcClass : values()) {
-            if (npcClass == MAGE && !allowMage) {
+            if (!npcClass.isAvailable()) {
                 continue;
             }
 
@@ -76,6 +96,6 @@ public enum WildNpcClass {
     }
 
     public boolean isAvailable() {
-        return this != MAGE || IronSpellsCompat.isLoaded();
+        return !requiresIronSpells || IronSpellsCompat.isLoaded();
     }
 }
