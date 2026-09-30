@@ -246,6 +246,12 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> DATA_DEBUG_RELATIONSHIPS =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
 
+    private static final EntityDataAccessor<String> DATA_REACTION_ICON =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
+    private static final EntityDataAccessor<Long> DATA_REACTION_UNTIL =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.LONG);
+
     private int aggressionLevel = -1;
     private boolean classLoadoutInitialized;
     private int provocation;
@@ -383,6 +389,8 @@ public class CyberNpcEntity extends PathfinderMob {
         entityData.define(DATA_DEBUG_SPELLS, "Not a Mage");
         entityData.define(DATA_DEBUG_PARTY, "none");
         entityData.define(DATA_DEBUG_RELATIONSHIPS, "none");
+        entityData.define(DATA_REACTION_ICON, NpcReactionIcon.NONE.name());
+        entityData.define(DATA_REACTION_UNTIL, 0L);
     }
 
     @Override
@@ -420,6 +428,8 @@ public class CyberNpcEntity extends PathfinderMob {
             entityData.set(DATA_SPELL_CAST_TICKS, 0);
             entityData.set(DATA_SPELL_CAST_MODE, SPELL_CAST_MODE_NONE);
             entityData.set(DATA_CASTING_SPELL, "");
+            entityData.set(DATA_REACTION_ICON, NpcReactionIcon.NONE.name());
+            entityData.set(DATA_REACTION_UNTIL, 0L);
             setPersistenceRequired();
             sleepBrain.interrupt();
             calmWildNpc();
@@ -607,6 +617,55 @@ public class CyberNpcEntity extends PathfinderMob {
         socialMemory.adjustPlayerReputation(
                 player.getUUID(),
                 killed ? 6 : 1
+        );
+
+        if (killed) {
+            showReaction(NpcReactionIcon.HAPPY, 50);
+        } else if (getRandom().nextFloat() < 0.18F) {
+            showReaction(NpcReactionIcon.FRIENDLY, 35);
+        }
+    }
+
+    public NpcReactionIcon getReactionIcon() {
+        if (getNpcType() != NpcType.WILD
+                || level().getGameTime() >= entityData.get(DATA_REACTION_UNTIL)) {
+            return NpcReactionIcon.NONE;
+        }
+
+        return NpcReactionIcon.fromSerializedName(
+                entityData.get(DATA_REACTION_ICON)
+        );
+    }
+
+    public boolean hasActiveReaction() {
+        return getReactionIcon() != NpcReactionIcon.NONE;
+    }
+
+    public void showReaction(
+            NpcReactionIcon icon,
+            int durationTicks
+    ) {
+        if (level().isClientSide
+                || getNpcType() != NpcType.WILD
+                || icon == null
+                || icon == NpcReactionIcon.NONE
+                || durationTicks <= 0) {
+            return;
+        }
+
+        NpcReactionIcon current = getReactionIcon();
+        long currentUntil = entityData.get(DATA_REACTION_UNTIL);
+
+        if (current != NpcReactionIcon.NONE
+                && current.priority() > icon.priority()
+                && level().getGameTime() + 10L < currentUntil) {
+            return;
+        }
+
+        entityData.set(DATA_REACTION_ICON, icon.name());
+        entityData.set(
+                DATA_REACTION_UNTIL,
+                level().getGameTime() + durationTicks
         );
     }
 
@@ -1818,7 +1877,46 @@ public class CyberNpcEntity extends PathfinderMob {
             strengthenPeacefulBond(this, other);
             strengthenPeacefulBond(other, this);
             tryBuildPartyWith(other);
+
+            maybeShowSocialReaction(other);
         }
+    }
+
+    private void maybeShowSocialReaction(CyberNpcEntity other) {
+        if (other == null
+                || getRandom().nextFloat() >= 0.08F
+                || hasActiveReaction()
+                || other.hasActiveReaction()) {
+            return;
+        }
+
+        int thisSupport = socialMemory.supportScore(other.getUUID());
+        int otherSupport = other.socialMemory.supportScore(getUUID());
+
+        NpcReactionIcon mine;
+        NpcReactionIcon theirs;
+
+        if (thisSupport >= 35 && otherSupport >= 35) {
+            mine = getRandom().nextBoolean()
+                    ? NpcReactionIcon.FRIENDLY
+                    : NpcReactionIcon.HAPPY;
+            theirs = NpcReactionIcon.HAPPY;
+        } else if (thisSupport <= -15 || otherSupport <= -15) {
+            mine = NpcReactionIcon.ANNOYED;
+            theirs = getRandom().nextBoolean()
+                    ? NpcReactionIcon.ANNOYED
+                    : NpcReactionIcon.CONFUSED;
+        } else {
+            mine = getRandom().nextBoolean()
+                    ? NpcReactionIcon.THINKING
+                    : NpcReactionIcon.CONFUSED;
+            theirs = getRandom().nextFloat() < 0.65F
+                    ? NpcReactionIcon.HAPPY
+                    : NpcReactionIcon.THINKING;
+        }
+
+        showReaction(mine, 42);
+        other.showReaction(theirs, 42);
     }
 
     private static void strengthenPeacefulBond(
@@ -1878,6 +1976,8 @@ public class CyberNpcEntity extends PathfinderMob {
             setParty(newPartyId, leader.getUUID());
             other.setParty(newPartyId, leader.getUUID());
             reinforcePartyBond(other);
+            showReaction(NpcReactionIcon.FRIENDLY, 60);
+            other.showReaction(NpcReactionIcon.FRIENDLY, 60);
             return;
         }
 
@@ -1888,6 +1988,8 @@ public class CyberNpcEntity extends PathfinderMob {
                     socialMemory.partyLeaderId()
             );
             reinforcePartyBond(other);
+            showReaction(NpcReactionIcon.HAPPY, 50);
+            other.showReaction(NpcReactionIcon.FRIENDLY, 60);
             return;
         }
 
@@ -1898,6 +2000,8 @@ public class CyberNpcEntity extends PathfinderMob {
                     other.socialMemory.partyLeaderId()
             );
             reinforcePartyBond(other);
+            showReaction(NpcReactionIcon.FRIENDLY, 60);
+            other.showReaction(NpcReactionIcon.HAPPY, 50);
         }
     }
 
@@ -2408,6 +2512,7 @@ public class CyberNpcEntity extends PathfinderMob {
         if (getRandom().nextFloat() < suspicionChance) {
             suspiciousNpc = infected;
             infectionAvoidTicks = INFECTION_AVOID_TICKS;
+            showReaction(NpcReactionIcon.CONFUSED, 45);
             moveAwayFromSuspiciousNpc(infected);
             return true;
         }
@@ -4188,6 +4293,7 @@ public class CyberNpcEntity extends PathfinderMob {
         huntingTarget = false;
         stowWeapons();
         fleeingThreat = threat;
+        showReaction(NpcReactionIcon.SCARED, 55);
         fleeSafeTicks = 0;
         fleeRepathCooldown = 0;
         getNavigation().stop();
@@ -4647,6 +4753,14 @@ public class CyberNpcEntity extends PathfinderMob {
                     player.getUUID(),
                     -Math.max(4, Mth.ceil(amount * 2.0F))
             );
+
+            showReaction(
+                    amount >= 5.0F || previousReputation < -25
+                            ? NpcReactionIcon.ANGRY
+                            : NpcReactionIcon.ANNOYED,
+                    60
+            );
+
             notifySocialWitnessesOfPlayerAttack(player, false);
 
             if (!isCombatActive() || huntingTarget) {
@@ -4695,6 +4809,13 @@ public class CyberNpcEntity extends PathfinderMob {
             witness.socialMemory.adjustPlayerReputation(
                     player.getUUID(),
                     penalty
+            );
+
+            witness.showReaction(
+                    fatal || witness.isSameParty(this)
+                            ? NpcReactionIcon.ANGRY
+                            : NpcReactionIcon.ANNOYED,
+                    fatal ? 80 : 55
             );
         }
     }
