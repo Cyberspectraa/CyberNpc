@@ -4394,7 +4394,7 @@ public class CyberNpcEntity extends PathfinderMob {
                         displayName + " — " + getWildClassDisplayName()
                                 + " / " + getPersonalityDisplayName()
                                 + " / " + getGearTierDisplayName()
-                                + (getWildClass() == WildNpcClass.MAGE
+                                + (getWildClass().hasMagicSchool()
                                 ? " / " + getMageSchoolDisplayName()
                                 : "")
                                 + " — Hunger " + getHungerBar()
