@@ -25,7 +25,7 @@ public final class ModEntities {
     public static final RegistryObject<EntityType<ZombieCyberNpcEntity>> ZOMBIE_CYBER_NPC =
             ENTITY_TYPES.register("zombie_cyber_npc", () ->
                     EntityType.Builder.of(ZombieCyberNpcEntity::new, MobCategory.MONSTER)
-                            .sized(0.6F, 1.95F)
+                            .sized(0.6F, 1.75F)
                             .clientTrackingRange(10)
                             .updateInterval(3)
                             .build(new ResourceLocation(CyberNpc.MOD_ID, "zombie_cyber_npc").toString()));
