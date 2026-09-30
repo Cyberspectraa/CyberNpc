@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.23.1
+
+- Completely redesigned Wild NPC reaction bubbles so they no longer look like plain rectangles.
+- Increased the world-space bubble scale from 0.025 to 0.032 and raised the bubble slightly higher above NPC heads for easier reading.
+- Added stepped pixel-art corners to give each bubble a chunky rounded Minecraft-style silhouette.
+- Added a two-step shaped speech tail instead of the old straight rectangular tail.
+- Added an offset translucent shadow behind the entire bubble for visibility against bright skies, blocks and foliage.
+- Replaced the dark translucent fill with a bright cream/white interior and a strong dark pixel outline.
+- Added a subtle top highlight for depth while keeping the design deliberately pixel-art rather than glossy UI.
+- Increased minimum bubble width and icon padding so short symbols such as ! and ? no longer look cramped.
+- Added an icon drop shadow and brighter, more saturated reaction colours for much stronger contrast.
+- Added a very small idle bob animation so reaction bubbles feel attached to a living NPC rather than a static debug label.
+- Existing icon-only/non-verbal reaction behaviour is unchanged.
+
+
 ## 0.23.0
 
 - Added Minecraft-style world-space reaction bubbles for Wild NPCs.
