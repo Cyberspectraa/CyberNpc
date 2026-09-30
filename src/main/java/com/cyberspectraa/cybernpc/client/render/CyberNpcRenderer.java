@@ -142,18 +142,6 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
 
         font.drawInBatch(
                 glyph,
-                iconX + 1.0F,
-                iconY + 1.0F,
-                0x90000000,
-                false,
-                matrix,
-                buffer,
-                Font.DisplayMode.POLYGON_OFFSET,
-                0,
-                LightTexture.FULL_BRIGHT
-        );
-        font.drawInBatch(
-                glyph,
                 iconX,
                 iconY,
                 iconColor,
