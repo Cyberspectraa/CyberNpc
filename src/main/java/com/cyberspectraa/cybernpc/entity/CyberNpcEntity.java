@@ -3289,7 +3289,18 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
-        spawnAtLocation(stack.copy());
+        ItemStack droppedStack = stack.copy();
+
+        // Mage NPCs fight using a real populated Iron's spellbook, but killing
+        // one rewards the underlying book rather than handing the player the
+        // NPC's pre-rolled combat spells.
+        if (isMageSpellBook(droppedStack)) {
+            droppedStack = IronSpellsCompat.createEmptyLootSpellBook(droppedStack);
+        }
+
+        if (!droppedStack.isEmpty()) {
+            spawnAtLocation(droppedStack);
+        }
     }
 
     @Override

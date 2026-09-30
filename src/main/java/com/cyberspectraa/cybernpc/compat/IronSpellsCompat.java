@@ -168,6 +168,30 @@ public final class IronSpellsCompat {
         return book;
     }
 
+    /**
+     * Converts the NPC's populated combat spellbook into the normal empty
+     * Iron's spellbook that a player should receive as loot.
+     *
+     * The NPC-only marker and school marker are removed as well, so the
+     * dropped item behaves exactly like an ordinary empty Iron's book.
+     */
+    public static ItemStack createEmptyLootSpellBook(ItemStack npcSpellBook) {
+        if (npcSpellBook == null || npcSpellBook.isEmpty()) {
+            return ItemStack.EMPTY;
+        }
+
+        ItemStack droppedBook = npcSpellBook.copy();
+        CompoundTag tag = droppedBook.getTag();
+
+        if (tag != null) {
+            tag.remove(SPELL_CONTAINER);
+            tag.remove("CyberNpcMageSpellbook");
+            tag.remove("CyberNpcMageSchool");
+        }
+
+        return droppedBook;
+    }
+
     public static List<SpellEntry> getBookSpells(ItemStack spellBook) {
         List<SpellEntry> result = new ArrayList<>();
         if (spellBook == null || spellBook.isEmpty()) {

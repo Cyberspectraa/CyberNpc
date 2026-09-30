@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.2
+
+- Mage NPC spellbooks remain populated with a randomized set of usable spells while the NPC is alive.
+- Mage combat continues to read the NPC's actual spellbook, so a Mage can only cast spells that were rolled into that individual book.
+- Killing a Mage now drops its real Iron's spellbook item as an empty book instead of leaking the NPC's preloaded combat spells.
+- Empty Mage book drops have CyberNpc-only spellbook and school markers removed so they behave like normal player-owned Iron's spellbooks.
+
 ## 0.14.1
 
 - Fixed a server crash when an Evocation Mage cast Iron's Spectral Hammer as a non-player entity.
