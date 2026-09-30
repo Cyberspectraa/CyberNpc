@@ -11,7 +11,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Base64;
@@ -21,7 +20,8 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 public final class CyberNpcSkinCache {
-    private static final int APPEARANCE_PACK_PARTS = 8;
+    private static final ResourceLocation APPEARANCE_PACK =
+            new ResourceLocation(CyberNpc.MOD_ID, "appearance/lunarskins.b64");
 
     private static final ResourceLocation FALLBACK_STEVE =
             new ResourceLocation("minecraft", "textures/entity/player/wide/steve.png");
@@ -140,30 +140,21 @@ public final class CyberNpcSkinCache {
             return packedAssets;
         }
 
+        Resource resource = Minecraft.getInstance()
+                .getResourceManager()
+                .getResource(APPEARANCE_PACK)
+                .orElseThrow(() -> new IOException(
+                        "Missing CyberNpc appearance pack " + APPEARANCE_PACK
+                ));
+
         Map<String, byte[]> loaded = new HashMap<>();
-        ByteArrayOutputStream encoded = new ByteArrayOutputStream();
 
-        for (int part = 1; part <= APPEARANCE_PACK_PARTS; part++) {
-            ResourceLocation location = new ResourceLocation(
-                    CyberNpc.MOD_ID,
-                    "appearance/lunarskins_" + part + ".b64"
-            );
-
-            Resource resource = Minecraft.getInstance()
-                    .getResourceManager()
-                    .getResource(location)
-                    .orElseThrow(() -> new IOException(
-                            "Missing CyberNpc appearance pack part " + location
-                    ));
-
-            try (InputStream raw = resource.open()) {
-                raw.transferTo(encoded);
-            }
+        byte[] encoded;
+        try (InputStream raw = resource.open()) {
+            encoded = raw.readAllBytes();
         }
 
-        byte[] archive = Base64.getMimeDecoder().decode(
-                encoded.toByteArray()
-        );
+        byte[] archive = Base64.getMimeDecoder().decode(encoded);
 
         try (ZipInputStream zip = new ZipInputStream(
                 new ByteArrayInputStream(archive)
