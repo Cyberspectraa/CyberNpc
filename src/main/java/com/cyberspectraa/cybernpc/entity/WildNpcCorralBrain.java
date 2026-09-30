@@ -721,9 +721,9 @@ final class WildNpcCorralBrain {
 
         BlockPos anchor = chosen.stream()
                 .min(Comparator
-                        .comparingInt(BlockPos::getX)
-                        .thenComparingInt(BlockPos::getY)
-                        .thenComparingInt(BlockPos::getZ))
+                        .comparingInt((BlockPos pos) -> pos.getX())
+                        .thenComparingInt(pos -> pos.getY())
+                        .thenComparingInt(pos -> pos.getZ()))
                 .orElse(null);
 
         if (anchor == null) {
