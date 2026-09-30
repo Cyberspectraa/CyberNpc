@@ -270,8 +270,12 @@ public class CyberNpcEntity extends PathfinderMob {
 
     private int socialTickCooldown;
     private int socialConversationCooldown;
+    private int socialConversationHoldTicks;
     private int partyInviteCooldown;
     private int pendingPartyInviteTicks;
+
+    @Nullable
+    private UUID socialConversationPartnerId;
 
     @Nullable
     private UUID pendingPartyInviteFrom;
@@ -1864,17 +1868,22 @@ public class CyberNpcEntity extends PathfinderMob {
                 || fleeingThreat != null
                 || isSleeping()
                 || isZombifying()) {
+            clearSocialConversationHold();
             return;
         }
 
-        if (socialTickCooldown > 0) {
-            socialTickCooldown--;
-        } else {
-            socialTickCooldown = SOCIAL_SCAN_INTERVAL;
-            updateNearbySocialBonds();
+        boolean conversing = tickSocialConversationHold();
+
+        if (!conversing) {
+            if (socialTickCooldown > 0) {
+                socialTickCooldown--;
+            } else {
+                socialTickCooldown = SOCIAL_SCAN_INTERVAL;
+                updateNearbySocialBonds();
+            }
         }
 
-        if (!isBusyWithNeeds()) {
+        if (!conversing && !isBusyWithNeeds()) {
             tickPartyCohesion();
         }
     }
@@ -1926,6 +1935,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         socialConversationCooldown = SOCIAL_CONVERSATION_COOLDOWN;
         other.socialConversationCooldown = SOCIAL_CONVERSATION_COOLDOWN;
+        startSocialConversationHold(other, 52);
 
         strengthenPeacefulBond(this, other);
         strengthenPeacefulBond(other, this);
@@ -2060,6 +2070,7 @@ public class CyberNpcEntity extends PathfinderMob {
         invitee.partyInviteCooldown = PARTY_INVITE_COOLDOWN_TICKS;
         invitee.pendingPartyInviteFrom = inviter.getUUID();
         invitee.pendingPartyInviteTicks = PARTY_INVITE_RESPONSE_TICKS;
+        inviter.startSocialConversationHold(invitee, 72);
 
         inviter.showReaction(NpcReactionIcon.GROUP_INVITE, 60);
         invitee.showReaction(NpcReactionIcon.THINKING, 30);
@@ -2117,6 +2128,71 @@ public class CyberNpcEntity extends PathfinderMob {
 
         return inviter.socialMemory.isPartyLeader(inviter.getUUID())
                 && inviter.getLoadedPartySize() < PARTY_MAX_SIZE;
+    }
+
+    private void startSocialConversationHold(
+            CyberNpcEntity other,
+            int ticks
+    ) {
+        if (other == null || other == this || ticks <= 0) {
+            return;
+        }
+
+        socialConversationPartnerId = other.getUUID();
+        socialConversationHoldTicks = Math.max(
+                socialConversationHoldTicks,
+                ticks
+        );
+
+        other.socialConversationPartnerId = getUUID();
+        other.socialConversationHoldTicks = Math.max(
+                other.socialConversationHoldTicks,
+                ticks
+        );
+
+        getNavigation().stop();
+        other.getNavigation().stop();
+        setSprinting(false);
+        other.setSprinting(false);
+    }
+
+    private boolean tickSocialConversationHold() {
+        if (socialConversationHoldTicks <= 0
+                || socialConversationPartnerId == null) {
+            clearSocialConversationHold();
+            return false;
+        }
+
+        CyberNpcEntity partner = findLoadedWildNpc(
+                socialConversationPartnerId
+        );
+
+        if (partner == null
+                || distanceToSqr(partner)
+                > SOCIAL_RADIUS * SOCIAL_RADIUS
+                || partner.isCombatActive()
+                || partner.fleeingThreat != null
+                || partner.isZombifying()) {
+            clearSocialConversationHold();
+            return false;
+        }
+
+        socialConversationHoldTicks--;
+        getNavigation().stop();
+        setSprinting(false);
+        setShiftKeyDown(false);
+        getLookControl().setLookAt(partner, 30.0F, 30.0F);
+
+        if (socialConversationHoldTicks <= 0) {
+            clearSocialConversationHold();
+        }
+
+        return true;
+    }
+
+    private void clearSocialConversationHold() {
+        socialConversationHoldTicks = 0;
+        socialConversationPartnerId = null;
     }
 
     private void tickPendingPartyInvite() {
@@ -3132,7 +3208,7 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void tickHuntingAndFood() {
-        if (isCombatActive()) {
+        if (isCombatActive() || socialConversationHoldTicks > 0) {
             return;
         }
 
@@ -4895,6 +4971,11 @@ public class CyberNpcEntity extends PathfinderMob {
         if (getHunger() <= HUNT_HUNGER_THRESHOLD) {
             return "Looking for food";
         }
+        if (socialConversationHoldTicks > 0) {
+            return pendingPartyInviteFrom != null
+                    ? "Considering party invite"
+                    : "Socializing";
+        }
         if (regroupingWithParty) {
             return "Regrouping with party";
         }
@@ -4987,6 +5068,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 || groundFoodTargetId != null
                 || foodChestTarget != null
                 || emergencyEating
+                || socialConversationHoldTicks > 0
                 || (suspiciousNpc != null && infectionAvoidTicks > 0);
     }
 
@@ -5793,6 +5875,8 @@ public class CyberNpcEntity extends PathfinderMob {
         threatScanCooldown = 0;
         socialTickCooldown = 0;
         socialConversationCooldown = 0;
+        socialConversationHoldTicks = 0;
+        socialConversationPartnerId = null;
         partyInviteCooldown = 0;
         pendingPartyInviteTicks = 0;
         pendingPartyInviteFrom = null;
