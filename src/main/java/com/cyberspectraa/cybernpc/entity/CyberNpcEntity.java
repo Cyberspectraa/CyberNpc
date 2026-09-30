@@ -58,6 +58,7 @@ public class CyberNpcEntity extends PathfinderMob {
     public static final int RANGED_STATE_CROSSBOW_CHARGE = 2;
     public static final int RANGED_STATE_CROSSBOW_HOLD = 3;
 
+    private static final int MELEE_SWING_DURATION = 6;
     private static final double WILD_HELP_RADIUS = 20.0D;
     private static final double WILD_DISENGAGE_DISTANCE = 40.0D;
     private static final int WILD_DISENGAGE_TICKS = 100;
@@ -96,6 +97,9 @@ public class CyberNpcEntity extends PathfinderMob {
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.INT);
 
     private static final EntityDataAccessor<Integer> DATA_RANGED_STATE =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.INT);
+
+    private static final EntityDataAccessor<Integer> DATA_MELEE_SWING_TICKS =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.INT);
 
     private int aggressionLevel = -1;
@@ -166,6 +170,7 @@ public class CyberNpcEntity extends PathfinderMob {
         entityData.define(DATA_COMBAT_ACTIVE, false);
         entityData.define(DATA_HUNGER, MAX_HUNGER);
         entityData.define(DATA_RANGED_STATE, RANGED_STATE_NONE);
+        entityData.define(DATA_MELEE_SWING_TICKS, 0);
     }
 
     @Override
@@ -174,8 +179,8 @@ public class CyberNpcEntity extends PathfinderMob {
         goalSelector.addGoal(1, new OpenDoorGoal(this, true));
         goalSelector.addGoal(2, new WildNpcCombatGoal(this));
         goalSelector.addGoal(5, new ConditionalRandomStrollGoal(this, 0.6D, 120));
-        goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
-        goalSelector.addGoal(7, new RandomLookAroundGoal(this));
+        goalSelector.addGoal(6, new ConditionalLookAtPlayerGoal(this, 8.0F));
+        goalSelector.addGoal(7, new ConditionalRandomLookAroundGoal(this));
     }
 
     public String getRole() {
@@ -241,6 +246,34 @@ public class CyberNpcEntity extends PathfinderMob {
 
     public boolean isHoldingChargedCrossbow() {
         return getRangedState() == RANGED_STATE_CROSSBOW_HOLD;
+    }
+
+    private void startMeleeSwingAnimation() {
+        entityData.set(DATA_MELEE_SWING_TICKS, MELEE_SWING_DURATION);
+        swing(InteractionHand.MAIN_HAND, true);
+    }
+
+    private void tickMeleeSwingAnimation() {
+        if (level().isClientSide) {
+            return;
+        }
+
+        int remaining = entityData.get(DATA_MELEE_SWING_TICKS);
+        if (remaining > 0) {
+            entityData.set(DATA_MELEE_SWING_TICKS, remaining - 1);
+        }
+    }
+
+    @Override
+    public float getAttackAnim(float partialTick) {
+        int remaining = entityData.get(DATA_MELEE_SWING_TICKS);
+
+        if (remaining > 0) {
+            float elapsed = MELEE_SWING_DURATION - remaining + partialTick;
+            return Mth.clamp(elapsed / (float) MELEE_SWING_DURATION, 0.0F, 1.0F);
+        }
+
+        return super.getAttackAnim(partialTick);
     }
 
     public int getAggressionLevel() {
@@ -429,6 +462,7 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         ensureWildProfile();
+        tickMeleeSwingAnimation();
 
         if (onClimbable() && horizontalCollision) {
             Vec3 movement = getDeltaMovement();
@@ -580,7 +614,8 @@ public class CyberNpcEntity extends PathfinderMob {
     private boolean canHuntPrey(LivingEntity prey) {
         if (prey == this
                 || !prey.isAlive()
-                || !prey.getType().is(CyberNpcHuntingData.WILD_NPC_PREY)) {
+                || !prey.getType().is(CyberNpcHuntingData.WILD_NPC_PREY)
+                || corralBrain.isProtectedLivestock(prey)) {
             return false;
         }
 
@@ -1238,6 +1273,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         setCombatActive(false);
         setRangedState(RANGED_STATE_NONE);
+        entityData.set(DATA_MELEE_SWING_TICKS, 0);
         huntingTarget = false;
         provocation = 0;
         outOfRangeTicks = 0;
@@ -1279,6 +1315,44 @@ public class CyberNpcEntity extends PathfinderMob {
                     && !npc.isBusyWithNeeds()
                     && npc.canWander()
                     && super.canContinueToUse();
+        }
+    }
+
+    private static final class ConditionalLookAtPlayerGoal extends LookAtPlayerGoal {
+        private final CyberNpcEntity npc;
+
+        private ConditionalLookAtPlayerGoal(CyberNpcEntity npc, float lookDistance) {
+            super(npc, Player.class, lookDistance);
+            this.npc = npc;
+        }
+
+        @Override
+        public boolean canUse() {
+            return !npc.isSleeping() && super.canUse();
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            return !npc.isSleeping() && super.canContinueToUse();
+        }
+    }
+
+    private static final class ConditionalRandomLookAroundGoal extends RandomLookAroundGoal {
+        private final CyberNpcEntity npc;
+
+        private ConditionalRandomLookAroundGoal(CyberNpcEntity npc) {
+            super(npc);
+            this.npc = npc;
+        }
+
+        @Override
+        public boolean canUse() {
+            return !npc.isSleeping() && super.canUse();
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            return !npc.isSleeping() && super.canContinueToUse();
         }
     }
 
@@ -1372,7 +1446,7 @@ public class CyberNpcEntity extends PathfinderMob {
             npc.getNavigation().moveTo(target, 1.20D);
 
             if (distanceSqr <= MELEE_DISTANCE_SQR && meleeCooldown <= 0) {
-                npc.swing(InteractionHand.MAIN_HAND, true);
+                npc.startMeleeSwingAnimation();
                 npc.doHurtTarget(target);
                 meleeCooldown = 16;
             }

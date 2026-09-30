@@ -2,44 +2,64 @@
 
 CyberNpc is a custom NPC framework for **Minecraft 1.20.1 Forge**, built for the CyberSpectra modpack.
 
-## Current release: 0.7.0
+## Current release: 0.8.0
 
-### Wild NPC combat
+### Player-style animation system
 
-- Wild NPCs own one sword plus one bow or crossbow.
-- Bow users visibly draw before firing.
-- Crossbow users visibly charge, hold, and fire.
-- Ranged aim predicts target movement and compensates for projectile drop.
-- NPCs switch to their sword at close range.
-- **Sword attacks now play the normal main-hand swing animation on the same tick as the melee hit.**
-- Wild NPCs can call nearby Wild NPCs for help when player aggression crosses their personal threshold.
-- Hunting NPCs sneak while stalking prey.
+CyberNpc now drives its humanoid model through Minecraft's player animation states instead of relying on generic mob defaults.
 
-### Hunger, hunting, cooking, and corrals
+Current animation coverage includes:
 
-- Persistent hunger from 0 to 20.
-- Hungry NPCs hunt manageable adult prey and never deliberately hunt babies.
-- Killed prey is collected as real dropped food.
-- Raw food is inserted into real furnaces/smokers or placed on real lit campfires.
-- NPCs wait for Minecraft's real cooking process, retrieve the cooked result, hold it, and eat it.
-- Existing fenced corrals can be detected and managed without allowing NPC building/mining.
-- NPCs can lead in a breeding pair, breed them, preserve at least two adult breeders, and hunt surplus adults.
+- Walking and normal limb movement.
+- Faster movement/sprinting animation driven by actual movement speed.
+- Crouching/sneaking with the player-style render offset.
+- Swimming arm/leg animation and player-style swimming body rotation.
+- Jumping/falling movement through the normal living-entity/player model pipeline.
+- Riding pose when the NPC is a passenger.
+- Main-hand melee attack animation.
+- Normal held-item pose.
+- Shield/blocking pose when a used item reports the BLOCK animation.
+- Bow draw pose.
+- Crossbow charge and charged-hold poses.
+- Spear/trident-use pose.
+- Spyglass pose.
+- Goat-horn pose.
+- Brush pose.
+- Food/item-use state while eating.
+- Normal hurt/death rendering inherited from Minecraft's living-entity renderer.
+- Real sleeping body rotation aligned to the bed.
 
-### Bed claiming and sleep
+The renderer now shows any item the NPC is actively holding, including combat weapons, food, and animal-lure items.
 
-Wild NPCs can now establish a persistent personal bed:
+### Reliable sword swing
 
-- At night, a Wild NPC that is not fighting and is not hungry enough to need immediate hunting can look for a nearby bed.
-- The selected bed position is saved with that NPC and reused on later nights.
-- Loaded nearby Wild NPCs will not deliberately claim the same bed.
-- The NPC physically walks to its claimed bed and uses Minecraft's real sleeping state and bed orientation.
-- The bed's vanilla occupied flag is only set while the NPC is actually asleep; the persistent claim itself is stored by CyberNpc.
-- The NPC wakes when daytime arrives, if its bed is removed, if combat starts, or if it takes damage.
-- Hunger continues to function while sleeping, so an NPC that becomes too hungry can eventually be forced back into its survival loop.
+Wild NPC melee attacks use a dedicated synchronized swing timer. The client no longer depends only on the generic mob swing event to decide whether the PlayerModel should animate an attack.
 
-### Player-like movement
+The synchronized attack progress is fed directly into Minecraft's normal humanoid attack animation on the same attack that deals damage.
 
-Wild NPCs can walk, sprint, sneak, swim, jump normal terrain, use wooden doors, traverse climbable blocks, use weapons, collect food, cook, eat, manage livestock, and sleep.
+### Sleeping
+
+- Wild NPCs keep their persistent claimed bed.
+- They use Minecraft's real sleeping pose and bed orientation.
+- Look-at-player and random-look goals are disabled while sleeping.
+- The custom player model locks the sleeping head straight with the body, so the head no longer tracks entities or visibly moves around in bed.
+- NPCs still wake for daytime, combat, damage, a removed bed, or urgent hunger.
+
+### Corrals and hunting
+
+Managed corral animals are now protected from the normal hunting target search.
+
+- A Wild NPC no longer sees animals inside its managed pen as ordinary prey.
+- The corral can still be stocked and bred.
+- Hungry NPCs search for suitable adult prey **outside** the managed pen.
+- Babies remain protected.
+- The old behavior that immediately selected a surplus penned adult for hunting has been removed.
+
+This avoids the NPC maintaining a breeding pen and then treating the same herd as its first/default hunting target.
+
+### Existing survival AI
+
+Wild NPCs retain hunger, starvation, adaptive bow/crossbow combat, stalking, food pickup, real furnace/smoker/campfire cooking, eating, door use, swimming, climbing support, corrals, bed claiming, and nearby-Wild-NPC combat assistance.
 
 Building and mining remain intentionally excluded.
 

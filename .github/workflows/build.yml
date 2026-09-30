@@ -36,6 +36,6 @@ jobs:
       - name: Upload compiled JAR
         uses: actions/upload-artifact@v4
         with:
-          name: CyberNpc-0.7.0
-          path: build/libs/CyberNpc-0.7.0-forge-1.20.1.jar
+          name: CyberNpc-0.8.0
+          path: build/libs/CyberNpc-0.8.0-forge-1.20.1.jar
           if-no-files-found: error

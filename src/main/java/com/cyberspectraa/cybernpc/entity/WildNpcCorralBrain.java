@@ -5,6 +5,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -66,6 +67,18 @@ final class WildNpcCorralBrain {
         return busy;
     }
 
+    boolean isProtectedLivestock(LivingEntity entity) {
+        return entity instanceof Animal animal
+                && validateCurrentCorralForProtection()
+                && isInsidePen(animal);
+    }
+
+    private boolean validateCurrentCorralForProtection() {
+        return gatePos != null
+                && insidePos != null
+                && !penCells.isEmpty();
+    }
+
     boolean tick() {
         if (!(npc.level() instanceof ServerLevel level)
                 || npc.isCombatActive()
@@ -106,19 +119,6 @@ final class WildNpcCorralBrain {
                 .filter(animal -> animal.getType() == livestockType)
                 .filter(animal -> !animal.isBaby())
                 .toList();
-
-        if (adultsInside.size() >= 3 && npc.getHunger() <= CyberNpcEntity.HUNT_HUNGER_THRESHOLD) {
-            Animal surplus = adultsInside.stream()
-                    .filter(animal -> !animal.isInLove())
-                    .max(Comparator.comparingDouble(npc::distanceToSqr))
-                    .orElse(adultsInside.get(adultsInside.size() - 1));
-
-            stopLeading(level);
-            closeGate(level);
-            busy = false;
-            npc.beginCorralHunt(surplus);
-            return true;
-        }
 
         if (adultsInside.size() >= 2) {
             stopLeading(level);
