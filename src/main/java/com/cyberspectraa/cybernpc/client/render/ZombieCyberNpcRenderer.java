@@ -1,7 +1,5 @@
-
 package com.cyberspectraa.cybernpc.client.render;
 
-import com.cyberspectraa.cybernpc.client.model.CyberNpcModelLayers;
 import com.cyberspectraa.cybernpc.client.model.ZombieCyberNpcModel;
 import com.cyberspectraa.cybernpc.entity.ZombieCyberNpcEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -23,16 +21,20 @@ public final class ZombieCyberNpcRenderer
         super(
                 context,
                 new ZombieCyberNpcModel(
-                        context.bakeLayer(ModelLayers.ZOMBIE)
+                        context.bakeLayer(ModelLayers.ZOMBIE),
+                        false
                 ),
                 0.5F
         );
 
         this.wideModel = getModel();
+
+        // Important: female zombies intentionally bake the SAME vanilla zombie
+        // layer. EMF/Fresh Animations therefore see the normal zombie model
+        // path instead of CyberNpc's former custom/player-derived slim layer.
         this.slimModel = new ZombieCyberNpcModel(
-                context.bakeLayer(
-                        CyberNpcModelLayers.ZOMBIE_CYBER_NPC_SLIM
-                )
+                context.bakeLayer(ModelLayers.ZOMBIE),
+                true
         );
 
         addLayer(new HumanoidArmorLayer<>(
@@ -61,8 +63,6 @@ public final class ZombieCyberNpcRenderer
             MultiBufferSource buffer,
             int packedLight
     ) {
-        // Both models are ZombieModel instances. The slim model only changes
-        // arm geometry; it does not opt into player/FA+Player animations.
         this.model = entity.isSlimModel() ? slimModel : wideModel;
 
         super.render(
