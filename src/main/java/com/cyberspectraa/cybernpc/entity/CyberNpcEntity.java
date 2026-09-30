@@ -317,6 +317,9 @@ public class CyberNpcEntity extends PathfinderMob {
 
     private int beastTamerSearchCooldown;
 
+    @Nullable
+    private UUID beastTamerWolfTargetId;
+
     private boolean huntingTarget;
     private int huntSearchCooldown;
     private int dropSearchTicks;
@@ -2071,9 +2074,426 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
+        if (tickBeastTamer()) {
+            finishAiTick();
+            return;
+        }
+
+        if (tickHorseUse()) {
+            finishAiTick();
+            return;
+        }
+
         tickSocialLife();
         tickHuntingAndFood();
         finishAiTick();
+    }
+
+    private boolean tickBeastTamer() {
+        if (getWildClass() != WildNpcClass.BEAST_TAMER
+                || isCombatActive()
+                || fleeingThreat != null
+                || isSleeping()
+                || isZombifying()
+                || socialConversationHoldTicks > 0) {
+            beastTamerWolfTargetId = null;
+            return false;
+        }
+
+        int owned = countOwnedWolves();
+        if (owned >= beastTamerWolfLimit()) {
+            beastTamerWolfTargetId = null;
+            return false;
+        }
+
+        Wolf target = findLoadedWolf(beastTamerWolfTargetId);
+
+        if (target == null
+                || !target.isAlive()
+                || target.isTame()
+                || target.isBaby()) {
+            beastTamerWolfTargetId = null;
+
+            if (beastTamerSearchCooldown > 0) {
+                beastTamerSearchCooldown--;
+                return false;
+            }
+
+            beastTamerSearchCooldown = BEAST_TAMER_SEARCH_INTERVAL;
+
+            target = level().getEntitiesOfClass(
+                            Wolf.class,
+                            getBoundingBox().inflate(
+                                    BEAST_TAMER_WOLF_RADIUS,
+                                    6.0D,
+                                    BEAST_TAMER_WOLF_RADIUS
+                            ),
+                            wolf -> wolf.isAlive()
+                                    && !wolf.isTame()
+                                    && !wolf.isBaby()
+                    ).stream()
+                    .min(Comparator.comparingDouble(this::distanceToSqr))
+                    .orElse(null);
+
+            if (target == null) {
+                return false;
+            }
+
+            beastTamerWolfTargetId = target.getUUID();
+        }
+
+        if (distanceToSqr(target)
+                > BEAST_TAMER_TAME_DISTANCE_SQR) {
+            getNavigation().moveTo(target, 0.95D);
+            getLookControl().setLookAt(target, 30.0F, 30.0F);
+            return true;
+        }
+
+        ItemStack bone = inventory.takeOne(
+                stack -> stack.is(Items.BONE)
+        );
+
+        if (bone.isEmpty()) {
+            beastTamerWolfTargetId = null;
+            return false;
+        }
+
+        getNavigation().stop();
+        target.setTame(true);
+        target.setOwnerUUID(getUUID());
+        target.setOrderedToSit(false);
+        target.setTarget(null);
+        target.setHealth(target.getMaxHealth());
+        target.setPersistenceRequired();
+
+        beastTamerWolfTargetId = null;
+        beastTamerSearchCooldown = BEAST_TAMER_SEARCH_INTERVAL * 2;
+
+        showReaction(NpcReactionIcon.BEAST, 70);
+
+        return true;
+    }
+
+    private int beastTamerWolfLimit() {
+        return switch (getGearTier()) {
+            case STANDARD -> 1;
+            case FINE, RARE -> 2;
+            case ELITE -> 3;
+        };
+    }
+
+    private int countOwnedWolves() {
+        return level().getEntitiesOfClass(
+                Wolf.class,
+                getBoundingBox().inflate(48.0D),
+                wolf -> wolf.isAlive()
+                        && wolf.isTame()
+                        && getUUID().equals(wolf.getOwnerUUID())
+        ).size();
+    }
+
+    @Nullable
+    private Wolf findLoadedWolf(@Nullable UUID id) {
+        if (id == null
+                || !(level() instanceof ServerLevel serverLevel)) {
+            return null;
+        }
+
+        var entity = serverLevel.getEntity(id);
+        return entity instanceof Wolf wolf ? wolf : null;
+    }
+
+    private void commandTamedBeasts(LivingEntity target) {
+        if (getWildClass() != WildNpcClass.BEAST_TAMER
+                || target == null
+                || !target.isAlive()) {
+            return;
+        }
+
+        for (Wolf wolf : level().getEntitiesOfClass(
+                Wolf.class,
+                getBoundingBox().inflate(WILD_HELP_RADIUS),
+                candidate -> candidate.isAlive()
+                        && candidate.isTame()
+                        && getUUID().equals(candidate.getOwnerUUID())
+        )) {
+            wolf.setOrderedToSit(false);
+            wolf.setTarget(target);
+        }
+    }
+
+    private void releaseTamedBeasts() {
+        if (getWildClass() != WildNpcClass.BEAST_TAMER) {
+            return;
+        }
+
+        for (Wolf wolf : level().getEntitiesOfClass(
+                Wolf.class,
+                getBoundingBox().inflate(64.0D),
+                candidate -> candidate.isAlive()
+                        && candidate.isTame()
+                        && getUUID().equals(candidate.getOwnerUUID())
+        )) {
+            wolf.setTarget(null);
+            wolf.setOrderedToSit(false);
+            wolf.setOwnerUUID(null);
+            wolf.setTame(false);
+        }
+    }
+
+    private boolean tickHorseUse() {
+        if (isPassenger()) {
+            if (getVehicle() instanceof AbstractHorse horse) {
+                return tickRidingHorse(horse);
+            }
+            return false;
+        }
+
+        if (isCombatActive()
+                || fleeingThreat != null
+                || isSleeping()
+                || isZombifying()
+                || socialConversationHoldTicks > 0
+                || getHunger() <= HUNT_HUNGER_THRESHOLD) {
+            clearHorseTarget();
+            return false;
+        }
+
+        AbstractHorse target = findLoadedHorse(horseTargetId);
+
+        if (target != null && !canUseHorse(target, true)) {
+            clearHorseTarget();
+            target = null;
+        }
+
+        if (target == null) {
+            if (horseSearchCooldown > 0) {
+                horseSearchCooldown--;
+                return false;
+            }
+
+            horseSearchCooldown = HORSE_SEARCH_INTERVAL;
+
+            // Not every idle NPC needs to become mounted immediately. This
+            // keeps horses feeling useful and special rather than mandatory.
+            if (getRandom().nextFloat() >= 0.40F) {
+                return false;
+            }
+
+            target = level().getEntitiesOfClass(
+                            AbstractHorse.class,
+                            getBoundingBox().inflate(
+                                    HORSE_SEARCH_RADIUS,
+                                    6.0D,
+                                    HORSE_SEARCH_RADIUS
+                            ),
+                            horse -> canUseHorse(horse, false)
+                    ).stream()
+                    .min(Comparator.comparingDouble(this::distanceToSqr))
+                    .orElse(null);
+
+            if (target == null) {
+                return false;
+            }
+
+            claimHorse(target);
+            horseTargetId = target.getUUID();
+        }
+
+        if (distanceToSqr(target) > HORSE_MOUNT_DISTANCE_SQR) {
+            getNavigation().moveTo(target, 0.92D);
+            getLookControl().setLookAt(target, 30.0F, 30.0F);
+            return true;
+        }
+
+        getNavigation().stop();
+
+        if (!startRiding(target, true)) {
+            clearHorseTarget();
+            return false;
+        }
+
+        horseRideOrigin = target.blockPosition().immutable();
+        horseRideTicks = HORSE_RIDE_MIN_TICKS
+                + getRandom().nextInt(HORSE_RIDE_RANDOM_TICKS + 1);
+        horseRepathCooldown = 0;
+
+        showReaction(NpcReactionIcon.MOUNT, 60);
+        return true;
+    }
+
+    private boolean tickRidingHorse(AbstractHorse horse) {
+        if (!horse.isAlive()
+                || isCombatActive()
+                || fleeingThreat != null
+                || isSleeping()
+                || isZombifying()
+                || getHunger() <= HUNT_HUNGER_THRESHOLD
+                || ownerReturnedForHorse(horse)) {
+            stopUsingHorse(horse);
+            return false;
+        }
+
+        horseRideTicks--;
+        if (horseRideTicks <= 0) {
+            stopUsingHorse(horse);
+            return false;
+        }
+
+        CyberNpcEntity partyLeader = getLoadedPartyLeader();
+        if (partyLeader != null
+                && distanceToSqr(partyLeader)
+                > PARTY_FOLLOW_DISTANCE * PARTY_FOLLOW_DISTANCE) {
+            horse.getNavigation().moveTo(partyLeader, 1.18D);
+            return true;
+        }
+
+        if (horseRepathCooldown > 0) {
+            horseRepathCooldown--;
+            return true;
+        }
+
+        horseRepathCooldown = HORSE_REPATH_INTERVAL;
+
+        if (horseRideOrigin != null
+                && horse.blockPosition().distSqr(horseRideOrigin) > 900.0D) {
+            horse.getNavigation().moveTo(
+                    horseRideOrigin.getX() + 0.5D,
+                    horseRideOrigin.getY(),
+                    horseRideOrigin.getZ() + 0.5D,
+                    1.12D
+            );
+            return true;
+        }
+
+        Vec3 travel = DefaultRandomPos.getPos(horse, 18, 6);
+        if (travel != null) {
+            horse.getNavigation().moveTo(
+                    travel.x,
+                    travel.y,
+                    travel.z,
+                    1.12D
+            );
+        }
+
+        return true;
+    }
+
+    private boolean canUseHorse(
+            AbstractHorse horse,
+            boolean alreadyClaimedByThisNpc
+    ) {
+        if (horse == null
+                || !horse.isAlive()
+                || horse.isBaby()
+                || !horse.isTamed()
+                || !horse.isSaddled()
+                || horse.isVehicle()
+                || BetterHorsesCompat.hasCartGear(horse)) {
+            return false;
+        }
+
+        CompoundTag persistent = horse.getPersistentData();
+
+        if (persistent.hasUUID("CyberNpcHorseClaim")) {
+            UUID claim = persistent.getUUID("CyberNpcHorseClaim");
+            if (!getUUID().equals(claim)) {
+                return false;
+            }
+        } else if (alreadyClaimedByThisNpc) {
+            return false;
+        }
+
+        UUID owner = BetterHorsesCompat.getBetterHorsesOwner(horse);
+        if (owner == null) {
+            owner = horse.getOwnerUUID();
+        }
+
+        if (owner != null
+                && !owner.equals(getUUID())
+                && level() instanceof ServerLevel serverLevel) {
+            var ownerEntity = serverLevel.getEntity(owner);
+            if (ownerEntity instanceof CyberNpcEntity) {
+                return false;
+            }
+
+            Player playerOwner = serverLevel.getPlayerByUUID(owner);
+            if (playerOwner != null
+                    && playerOwner.distanceToSqr(horse)
+                    <= HORSE_OWNER_RETURN_RADIUS_SQR) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean ownerReturnedForHorse(AbstractHorse horse) {
+        UUID owner = BetterHorsesCompat.getBetterHorsesOwner(horse);
+        if (owner == null) {
+            owner = horse.getOwnerUUID();
+        }
+
+        if (owner == null
+                || owner.equals(getUUID())
+                || !(level() instanceof ServerLevel serverLevel)) {
+            return false;
+        }
+
+        Player playerOwner = serverLevel.getPlayerByUUID(owner);
+        return playerOwner != null
+                && playerOwner.distanceToSqr(horse)
+                <= HORSE_OWNER_RETURN_RADIUS_SQR;
+    }
+
+    private void claimHorse(AbstractHorse horse) {
+        horse.getPersistentData().putUUID(
+                "CyberNpcHorseClaim",
+                getUUID()
+        );
+    }
+
+    private void releaseHorseClaim(AbstractHorse horse) {
+        CompoundTag persistent = horse.getPersistentData();
+
+        if (persistent.hasUUID("CyberNpcHorseClaim")
+                && getUUID().equals(
+                persistent.getUUID("CyberNpcHorseClaim")
+        )) {
+            persistent.remove("CyberNpcHorseClaim");
+        }
+    }
+
+    private void stopUsingHorse(AbstractHorse horse) {
+        stopRiding();
+        horse.getNavigation().stop();
+        releaseHorseClaim(horse);
+        horseTargetId = null;
+        horseRideOrigin = null;
+        horseRideTicks = 0;
+        horseRepathCooldown = 0;
+        horseSearchCooldown = HORSE_SEARCH_INTERVAL;
+    }
+
+    private void clearHorseTarget() {
+        AbstractHorse horse = findLoadedHorse(horseTargetId);
+        if (horse != null) {
+            releaseHorseClaim(horse);
+        }
+
+        horseTargetId = null;
+        horseRideOrigin = null;
+    }
+
+    @Nullable
+    private AbstractHorse findLoadedHorse(@Nullable UUID id) {
+        if (id == null
+                || !(level() instanceof ServerLevel serverLevel)) {
+            return null;
+        }
+
+        var entity = serverLevel.getEntity(id);
+        return entity instanceof AbstractHorse horse ? horse : null;
     }
 
     private void tickSocialLife() {
@@ -5581,6 +6001,12 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
+        if (getVehicle() instanceof AbstractHorse horse) {
+            stopUsingHorse(horse);
+        } else {
+            clearHorseTarget();
+        }
+
         fleeingThreat = null;
         fleeSafeTicks = 0;
         fleeRepathCooldown = 0;
@@ -5593,6 +6019,7 @@ public class CyberNpcEntity extends PathfinderMob {
         provocation = isHunt ? provocation : 100;
         outOfRangeTicks = 0;
         getNavigation().stop();
+        commandTamedBeasts(target);
 
         if (callForHelp) {
             alertNearbyWildNpcs(target, MAX_COMBAT_HELPERS);
@@ -5694,6 +6121,13 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         zombieConversionStarted = true;
+
+        if (getVehicle() instanceof AbstractHorse horse) {
+            stopUsingHorse(horse);
+        } else {
+            clearHorseTarget();
+        }
+        releaseTamedBeasts();
 
         corralBrain.interrupt();
         sleepBrain.wakeUp();
@@ -5908,6 +6342,13 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         if (!level().isClientSide) {
+            if (getVehicle() instanceof AbstractHorse horse) {
+                stopUsingHorse(horse);
+            } else {
+                clearHorseTarget();
+            }
+            releaseTamedBeasts();
+
             corralBrain.interrupt();
             sleepBrain.wakeUp();
             fleeingThreat = null;
