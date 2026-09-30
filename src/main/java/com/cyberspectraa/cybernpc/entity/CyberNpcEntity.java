@@ -153,6 +153,9 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final double BEAST_TAMER_WOLF_RADIUS = 20.0D;
     private static final int BEAST_TAMER_SEARCH_INTERVAL = 80;
     private static final double BEAST_TAMER_TAME_DISTANCE_SQR = 9.0D;
+    private static final double BEAST_TAMER_COMMAND_RADIUS = 96.0D;
+    private static final double BEAST_TAMER_FOLLOW_DISTANCE_SQR = 16.0D;
+    private static final double BEAST_TAMER_FOLLOW_SPEED = 1.15D;
 
     private static final int CHAT_REACTION_COOLDOWN_TICKS = 40;
 
@@ -2165,29 +2168,67 @@ public class CyberNpcEntity extends PathfinderMob {
         boolean hasAttackOrder = isCombatActive()
                 && activeTarget != null
                 && activeTarget.isAlive();
-        boolean shouldSit = !hasAttackOrder
-                && (isSleeping() || socialConversationHoldTicks > 0);
 
         for (Wolf wolf : level().getEntitiesOfClass(
                 Wolf.class,
-                getBoundingBox().inflate(64.0D),
+                getBoundingBox().inflate(BEAST_TAMER_COMMAND_RADIUS),
                 candidate -> candidate.isAlive()
                         && candidate.isTame()
                         && getUUID().equals(candidate.getOwnerUUID())
         )) {
+            // Sleeping is the one normal state where the pack should stay put.
+            // The moment the Beast Tamer wakes, the default branch below
+            // explicitly unsits the wolf again.
+            if (isSleeping()) {
+                wolf.setTarget(null);
+                wolf.getNavigation().stop();
+                wolf.setOrderedToSit(true);
+                continue;
+            }
+
+            // Owner combat and hunting orders always override following.
             if (hasAttackOrder) {
                 wolf.setOrderedToSit(false);
                 wolf.setTarget(activeTarget);
                 continue;
             }
 
+            // A fleeing Beast Tamer recalls the pack instead of letting a wolf
+            // remain behind fighting or sitting.
             if (fleeingThreat != null) {
                 wolf.setTarget(null);
                 wolf.setOrderedToSit(false);
+
+                if (wolf.distanceToSqr(this)
+                        > BEAST_TAMER_FOLLOW_DISTANCE_SQR) {
+                    wolf.getNavigation().moveTo(
+                            this,
+                            BEAST_TAMER_FOLLOW_SPEED
+                    );
+                }
                 continue;
             }
 
-            wolf.setOrderedToSit(shouldSit);
+            // Follow is the default pack state. Do not use socialising, idle
+            // time or other normal activities as reasons to sit.
+            wolf.setOrderedToSit(false);
+
+            LivingEntity wolfTarget = wolf.getTarget();
+            if (wolfTarget != null && !wolfTarget.isAlive()) {
+                wolf.setTarget(null);
+                wolfTarget = null;
+            }
+
+            // Preserve a live self-defence target, otherwise actively path back
+            // to the Beast Tamer so companions do not look permanently parked.
+            if (wolfTarget == null
+                    && wolf.distanceToSqr(this)
+                    > BEAST_TAMER_FOLLOW_DISTANCE_SQR) {
+                wolf.getNavigation().moveTo(
+                        this,
+                        BEAST_TAMER_FOLLOW_SPEED
+                );
+            }
         }
     }
 
