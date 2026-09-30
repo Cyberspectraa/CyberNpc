@@ -1,5 +1,6 @@
 package com.cyberspectraa.cybernpc.entity;
 
+import com.cyberspectraa.cybernpc.compat.BetterHorsesCompat;
 import com.cyberspectraa.cybernpc.compat.IronSpellsCompat;
 import com.cyberspectraa.cybernpc.effect.ZombificationEffect;
 import com.cyberspectraa.cybernpc.registry.ModEffects;
@@ -44,6 +45,8 @@ import net.minecraft.world.entity.ai.goal.RandomStrollGoal;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.animal.Wolf;
+import net.minecraft.world.entity.animal.horse.AbstractHorse;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.monster.warden.Warden;
@@ -134,6 +137,25 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final float NATURAL_PARTY_SEED_CHANCE = 0.65F;
     private static final double PARTY_FOLLOW_DISTANCE = 8.0D;
     private static final double PARTY_FOLLOW_LIMIT = 40.0D;
+
+    private static final double FRIEND_APPROACH_DISTANCE = 10.0D;
+    private static final double FRIEND_APPROACH_LIMIT = 24.0D;
+    private static final int FRIEND_SHARE_HUNGER_THRESHOLD = 6;
+
+    private static final double HORSE_SEARCH_RADIUS = 18.0D;
+    private static final int HORSE_SEARCH_INTERVAL = 200;
+    private static final double HORSE_MOUNT_DISTANCE_SQR = 6.25D;
+    private static final int HORSE_RIDE_MIN_TICKS = 300;
+    private static final int HORSE_RIDE_RANDOM_TICKS = 300;
+    private static final int HORSE_REPATH_INTERVAL = 40;
+    private static final double HORSE_OWNER_RETURN_RADIUS_SQR = 24.0D * 24.0D;
+
+    private static final double BEAST_TAMER_WOLF_RADIUS = 20.0D;
+    private static final int BEAST_TAMER_SEARCH_INTERVAL = 80;
+    private static final double BEAST_TAMER_TAME_DISTANCE_SQR = 9.0D;
+
+    private static final int CHAT_REACTION_COOLDOWN_TICKS = 40;
+
     private static final double FIGHT_CONFIDENCE = 55.0D;
     private static final double HELP_CONFIDENCE = 35.0D;
     private static final double FLEE_CONFIDENCE = 22.0D;
@@ -281,6 +303,19 @@ public class CyberNpcEntity extends PathfinderMob {
     private UUID pendingPartyInviteFrom;
 
     private boolean regroupingWithParty;
+    private int chatReactionCooldown;
+
+    @Nullable
+    private UUID horseTargetId;
+
+    @Nullable
+    private BlockPos horseRideOrigin;
+
+    private int horseSearchCooldown;
+    private int horseRideTicks;
+    private int horseRepathCooldown;
+
+    private int beastTamerSearchCooldown;
 
     private boolean huntingTarget;
     private int huntSearchCooldown;
