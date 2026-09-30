@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.20.0
+
+- Added persistent randomized visual identities for CyberNpc entities.
+- Added Male and Female appearance variants. Female NPCs use the slim/Alex player model while Male NPCs use the classic/Steve player model.
+- Bundled the supplied Lunar/Starlight skin components: 7 skin tones per gender, 3 eye-alignment variants and 6 brown hairstyles.
+- Each NPC rolls its appearance once and stores the result in synchronized entity data and NBT, so the same NPC keeps its identity after world reloads.
+- Added a cached client-side skin compositor. Each unique combination is assembled from the bundled 64x64 layers once, registered as a dynamic texture and then reused.
+- Added an Appearance page to Developer Glasses showing gender/model, skin tone, eye alignment, hairstyle, hair colour and appearance ID.
+- Converted CyberNpc zombies now use player-proportioned classic/slim models rather than the generic zombie renderer.
+- Added the corrected slim female zombie base and preserved the NPC's hairstyle and eyes after zombification.
+- Zombie conversion now transfers the NPC's name, gender, appearance, armour, held equipment and carried inventory.
+- Converted zombies persist their inherited carried inventory in NBT and release it when they are killed.
+- Zombie-kill conversion suppresses the original NPC equipment/inventory drop so transferred items are not duplicated.
+- Updated the custom zombie dimensions to match CyberNpc's 1.75-block player-like body.
+
+
 ## 0.19.0
 
 - Added three new Wild NPC classes: Berserker, Cleric and Spellblade.
