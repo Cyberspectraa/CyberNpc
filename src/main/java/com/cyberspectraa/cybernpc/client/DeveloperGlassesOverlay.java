@@ -2,8 +2,12 @@ package com.cyberspectraa.cybernpc.client;
 
 import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
+import com.cyberspectraa.cybernpc.entity.WildNpcClass;
 import com.cyberspectraa.cybernpc.registry.ModItems;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
@@ -11,8 +15,10 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderGuiEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,52 +26,248 @@ import java.util.List;
 @Mod.EventBusSubscriber(modid = CyberNpc.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public final class DeveloperGlassesOverlay {
     private static final double DEBUG_RANGE = 64.0D;
+    private static final int PANEL_WIDTH = 286;
+    private static final int TEXT_WIDTH = PANEL_WIDTH - 18;
+
+    public static final KeyMapping CYCLE_TAB = new KeyMapping(
+            "key.cybernpc.developer_glasses_cycle",
+            InputConstants.Type.KEYSYM,
+            GLFW.GLFW_KEY_V,
+            "key.categories.cybernpc"
+    );
+
+    private static int currentTab;
+
+    @SubscribeEvent
+    public static void onClientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player == null
+                || minecraft.screen != null
+                || !isWearingGlasses(minecraft)) {
+            return;
+        }
+
+        while (CYCLE_TAB.consumeClick()) {
+            currentTab = (currentTab + 1) % Tab.values().length;
+        }
+    }
 
     @SubscribeEvent
     public static void renderOverlay(RenderGuiEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null
                 || minecraft.level == null
-                || !minecraft.player.getItemBySlot(EquipmentSlot.HEAD).is(ModItems.DEVELOPER_GLASSES.get())) {
+                || !isWearingGlasses(minecraft)) {
             return;
         }
 
         CyberNpcEntity npc = findLookedAtNpc(minecraft);
         GuiGraphics gui = event.getGuiGraphics();
+        Font font = minecraft.font;
 
         int x = 8;
         int y = 8;
 
         if (npc == null) {
-            gui.fill(x - 4, y - 4, x + 202, y + 19, 0xA0101010);
-            gui.drawString(minecraft.font, "CyberNpc Dev Glasses", x, y, 0x55FFFF, true);
-            gui.drawString(minecraft.font, "Look at an NPC to inspect its AI.", x, y + 10, 0xDDDDDD, false);
+            int height = 39;
+            drawPanel(gui, x, y, PANEL_WIDTH, height);
+            gui.drawString(font, "CYBERNPC // DEV GLASSES", x + 8, y + 7, 0x55FFFF, true);
+            gui.drawString(font, "Look at a Wild NPC to inspect it.", x + 8, y + 20, 0xE0E0E0, false);
+            gui.drawString(
+                    font,
+                    keyHint() + "  Cycle tab",
+                    x + 8,
+                    y + 29,
+                    0x9A9A9A,
+                    false
+            );
             return;
         }
 
-        List<String> lines = new ArrayList<>();
-        lines.add("CyberNpc Dev Glasses");
-        lines.add(npc.getName().getString() + "  [" + npc.getNpcType().serializedName() + "]");
-        lines.add(String.format("Health: %.1f / %.1f   Hunger: %d / 20", npc.getHealth(), npc.getMaxHealth(), npc.getHunger()));
-        lines.add("Role: " + npc.getRole() + "   Aggression: " + npc.getAggressionLevel());
-        lines.add("Activity: " + npc.getDebugActivity());
-        lines.add("Target: " + npc.getDebugTarget());
-        lines.add("Path: " + npc.getDebugPath());
-        lines.add("Claims: " + npc.getDebugClaims());
-        lines.add("Inventory: " + npc.getDebugInventory());
+        Tab tab = Tab.values()[currentTab];
+        List<DebugLine> lines = buildLines(npc, tab);
 
-        int width = 0;
-        for (String line : lines) {
-            width = Math.max(width, minecraft.font.width(line));
+        int headerHeight = 41;
+        int bodyHeight = Math.max(46, lines.size() * 11 + 10);
+        int footerHeight = 16;
+        int height = headerHeight + bodyHeight + footerHeight;
+
+        drawPanel(gui, x, y, PANEL_WIDTH, height);
+
+        gui.drawString(font, "CYBERNPC // " + tab.displayName.toUpperCase(), x + 8, y + 7, 0x55FFFF, true);
+        gui.drawString(
+                font,
+                trim(font, npc.getName().getString(), TEXT_WIDTH),
+                x + 8,
+                y + 19,
+                0xFFFFFF,
+                true
+        );
+
+        drawTabs(gui, font, x + 8, y + 31);
+
+        int lineY = y + headerHeight + 4;
+        for (DebugLine line : lines) {
+            gui.drawString(
+                    font,
+                    trim(font, line.text, TEXT_WIDTH),
+                    x + 8,
+                    lineY,
+                    line.color,
+                    false
+            );
+            lineY += 11;
         }
 
-        int height = lines.size() * 10 + 8;
-        gui.fill(x - 4, y - 4, x + width + 6, y + height, 0xB0101010);
+        gui.fill(x + 6, y + height - footerHeight, x + PANEL_WIDTH - 6, y + height - footerHeight + 1, 0x553C3C3C);
+        gui.drawString(
+                font,
+                keyHint() + "  Next tab",
+                x + 8,
+                y + height - 11,
+                0x9A9A9A,
+                false
+        );
+    }
 
-        for (int i = 0; i < lines.size(); i++) {
-            int color = i == 0 ? 0x55FFFF : (i == 4 ? 0xFFFF55 : 0xFFFFFF);
-            gui.drawString(minecraft.font, lines.get(i), x, y + i * 10, color, true);
+    private static List<DebugLine> buildLines(CyberNpcEntity npc, Tab tab) {
+        List<DebugLine> lines = new ArrayList<>();
+
+        switch (tab) {
+            case OVERVIEW -> {
+                lines.add(new DebugLine(
+                        "Class: " + npc.getWildClassDisplayName()
+                                + "    Personality: " + npc.getPersonalityDisplayName(),
+                        classColor(npc.getWildClass())
+                ));
+                lines.add(new DebugLine(
+                        String.format("Health: %.1f / %.1f", npc.getHealth(), npc.getMaxHealth()),
+                        healthColor(npc)
+                ));
+                lines.add(new DebugLine(
+                        "Hunger: " + npc.getHunger() + " / 20",
+                        npc.getHunger() <= 6 ? 0xFF7777 : 0xE8E8E8
+                ));
+                lines.add(new DebugLine("Activity: " + npc.getDebugActivity(), 0xFFFF77));
+                lines.add(new DebugLine(
+                        npc.isZombifying()
+                                ? String.format("Zombification: %.0f%%", npc.getZombificationProgress() * 100.0F)
+                                : "Zombification: none",
+                        npc.isZombifying() ? 0x7FCB65 : 0xB8B8B8
+                ));
+            }
+            case COMBAT -> {
+                lines.add(new DebugLine(
+                        "Style: " + combatStyle(npc.getWildClass()),
+                        classColor(npc.getWildClass())
+                ));
+                lines.add(new DebugLine("Personality: " + npc.getPersonalityDisplayName(), 0xDADADA));
+                lines.add(new DebugLine("Aggression: " + npc.getAggressionLevel() + " / 80", 0xE8E8E8));
+                lines.add(new DebugLine("Target: " + npc.getDebugTarget(), 0xFFB866));
+                lines.add(new DebugLine("State: " + npc.getDebugActivity(), 0xFFFF77));
+                lines.add(new DebugLine(
+                        String.format("Health: %.1f / %.1f", npc.getHealth(), npc.getMaxHealth()),
+                        healthColor(npc)
+                ));
+            }
+            case SURVIVAL -> {
+                lines.add(new DebugLine("Hunger: " + npc.getHunger() + " / 20", 0xE8E8E8));
+                lines.add(new DebugLine("Inventory: " + npc.getDebugInventory(), 0xD7E8FF));
+                lines.add(new DebugLine("Claims: " + npc.getDebugClaims(), 0xB9E6B9));
+                lines.add(new DebugLine("Current task: " + npc.getDebugActivity(), 0xFFFF77));
+            }
+            case DEBUG -> {
+                lines.add(new DebugLine("Activity: " + npc.getDebugActivity(), 0xFFFF77));
+                lines.add(new DebugLine("Target: " + npc.getDebugTarget(), 0xFFB866));
+                lines.add(new DebugLine("Path: " + npc.getDebugPath(), 0xB7D7FF));
+                lines.add(new DebugLine("Claims: " + npc.getDebugClaims(), 0xB9E6B9));
+                lines.add(new DebugLine("Inventory: " + npc.getDebugInventory(), 0xD7E8FF));
+                lines.add(new DebugLine(
+                        "Class ID: " + npc.getWildClass().serializedName()
+                                + "    Personality ID: " + npc.getPersonality().serializedName(),
+                        0x8F8F8F
+                ));
+            }
         }
+
+        return lines;
+    }
+
+    private static void drawPanel(GuiGraphics gui, int x, int y, int width, int height) {
+        gui.fill(x, y, x + width, y + height, 0xD20B0F14);
+        gui.fill(x, y, x + width, y + 2, 0xFF35DDE8);
+        gui.fill(x, y, x + 2, y + height, 0x8835DDE8);
+        gui.fill(x + width - 2, y, x + width, y + height, 0x4435DDE8);
+    }
+
+    private static void drawTabs(GuiGraphics gui, Font font, int x, int y) {
+        int cursor = x;
+
+        for (int i = 0; i < Tab.values().length; i++) {
+            Tab tab = Tab.values()[i];
+            boolean active = i == currentTab;
+            int color = active ? 0x55FFFF : 0x858585;
+
+            gui.drawString(font, tab.displayName, cursor, y, color, active);
+            cursor += font.width(tab.displayName) + 12;
+        }
+    }
+
+    private static String combatStyle(WildNpcClass npcClass) {
+        return switch (npcClass) {
+            case ARCHER -> "Ranged control / kiting";
+            case KNIGHT -> "Armored committed melee";
+            case ROGUE -> "Fast flanking melee";
+            case MAGE -> "Ranged magic / distance control";
+            default -> "Mixed sword + ranged";
+        };
+    }
+
+    private static int classColor(WildNpcClass npcClass) {
+        return switch (npcClass) {
+            case ARCHER -> 0x7FD67F;
+            case KNIGHT -> 0x8DB9FF;
+            case ROGUE -> 0xD39BFF;
+            case MAGE -> 0xFF8EF3;
+            default -> 0xDADADA;
+        };
+    }
+
+    private static int healthColor(CyberNpcEntity npc) {
+        float fraction = npc.getMaxHealth() <= 0.0F
+                ? 0.0F
+                : npc.getHealth() / npc.getMaxHealth();
+
+        if (fraction <= 0.30F) {
+            return 0xFF6868;
+        }
+        if (fraction <= 0.60F) {
+            return 0xFFD36A;
+        }
+        return 0x7CFF8A;
+    }
+
+    private static String keyHint() {
+        return "[" + CYCLE_TAB.getTranslatedKeyMessage().getString() + "]";
+    }
+
+    private static String trim(Font font, String text, int maxWidth) {
+        if (font.width(text) <= maxWidth) {
+            return text;
+        }
+
+        String ellipsis = "...";
+        int allowed = Math.max(0, maxWidth - font.width(ellipsis));
+        return font.plainSubstrByWidth(text, allowed) + ellipsis;
+    }
+
+    private static boolean isWearingGlasses(Minecraft minecraft) {
+        return minecraft.player != null
+                && minecraft.player.getItemBySlot(EquipmentSlot.HEAD).is(ModItems.DEVELOPER_GLASSES.get());
     }
 
     private static CyberNpcEntity findLookedAtNpc(Minecraft minecraft) {
@@ -83,6 +285,22 @@ public final class DeveloperGlassesOverlay {
         );
 
         return hit != null && hit.getEntity() instanceof CyberNpcEntity npc ? npc : null;
+    }
+
+    private enum Tab {
+        OVERVIEW("Overview"),
+        COMBAT("Combat"),
+        SURVIVAL("Survival"),
+        DEBUG("Debug");
+
+        private final String displayName;
+
+        Tab(String displayName) {
+            this.displayName = displayName;
+        }
+    }
+
+    private record DebugLine(String text, int color) {
     }
 
     private DeveloperGlassesOverlay() {

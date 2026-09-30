@@ -5,11 +5,13 @@ import com.cyberspectraa.cybernpc.registry.ModEffects;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.cyberspectraa.cybernpc.world.CyberNpcWorldClaims;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
@@ -125,6 +127,12 @@ public class CyberNpcEntity extends PathfinderMob {
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.BOOLEAN);
 
     private static final EntityDataAccessor<String> DATA_NPC_TYPE =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
+    private static final EntityDataAccessor<String> DATA_WILD_CLASS =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
+    private static final EntityDataAccessor<String> DATA_PERSONALITY =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
 
     private static final EntityDataAccessor<Boolean> DATA_COMBAT_ACTIVE =
@@ -249,6 +257,8 @@ public class CyberNpcEntity extends PathfinderMob {
         entityData.define(DATA_ROLE, "Citizen");
         entityData.define(DATA_CAN_WANDER, true);
         entityData.define(DATA_NPC_TYPE, NpcType.MAIN.serializedName());
+        entityData.define(DATA_WILD_CLASS, "");
+        entityData.define(DATA_PERSONALITY, "");
         entityData.define(DATA_COMBAT_ACTIVE, false);
         entityData.define(DATA_HUNGER, MAX_HUNGER);
         entityData.define(DATA_RANGED_STATE, RANGED_STATE_NONE);
@@ -289,10 +299,40 @@ public class CyberNpcEntity extends PathfinderMob {
         entityData.set(DATA_NPC_TYPE, safeType.serializedName());
 
         if (safeType != NpcType.WILD) {
+            entityData.set(DATA_WILD_CLASS, "");
+            entityData.set(DATA_PERSONALITY, "");
             setPersistenceRequired();
             sleepBrain.interrupt();
             calmWildNpc();
         }
+    }
+
+    public WildNpcClass getWildClass() {
+        return WildNpcClass.fromSerializedName(entityData.get(DATA_WILD_CLASS));
+    }
+
+    public String getWildClassDisplayName() {
+        return getWildClass().displayName();
+    }
+
+    private void setWildClass(WildNpcClass wildClass) {
+        WildNpcClass safe = wildClass == null ? WildNpcClass.CLASSLESS : wildClass;
+        entityData.set(DATA_WILD_CLASS, safe.serializedName());
+    }
+
+    public WildNpcPersonality getPersonality() {
+        return WildNpcPersonality.fromSerializedName(entityData.get(DATA_PERSONALITY));
+    }
+
+    public String getPersonalityDisplayName() {
+        return getPersonality().displayName();
+    }
+
+    private void setPersonality(WildNpcPersonality personality) {
+        WildNpcPersonality safe = personality == null
+                ? WildNpcPersonality.BALANCED
+                : personality;
+        entityData.set(DATA_PERSONALITY, safe.serializedName());
     }
 
     public boolean canWander() {
@@ -439,25 +479,154 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
+        if (entityData.get(DATA_WILD_CLASS).isBlank()) {
+            setWildClass(WildNpcClass.randomSpawnClass(getRandom()));
+        }
+
+        if (entityData.get(DATA_PERSONALITY).isBlank()) {
+            setPersonality(WildNpcPersonality.randomPersonality(getRandom()));
+        }
+
+        applyClassAttributes();
+
         if (aggressionLevel < 0) {
             aggressionLevel = WILD_MIN_AGGRESSION
                     + getRandom().nextInt(WILD_MAX_AGGRESSION - WILD_MIN_AGGRESSION + 1);
+
+            if (getPersonality() == WildNpcPersonality.AGGRESSIVE) {
+                aggressionLevel = Math.min(WILD_MAX_AGGRESSION, aggressionLevel + 15);
+            } else if (getPersonality() == WildNpcPersonality.CAUTIOUS) {
+                aggressionLevel = Math.max(WILD_MIN_AGGRESSION, aggressionLevel - 12);
+            }
+
             entityData.set(DATA_AGGRESSION, aggressionLevel);
         } else if (entityData.get(DATA_AGGRESSION) != aggressionLevel) {
             entityData.set(DATA_AGGRESSION, aggressionLevel);
         }
 
-        if (getStoredSword().isEmpty()) {
-            inventory.add(CyberNpcWeaponPool.randomWildSword(getRandom()));
-        }
-
-        if (getStoredRangedWeapon().isEmpty()) {
-            inventory.add(CyberNpcWeaponPool.randomWildRangedWeapon(getRandom()));
+        switch (getWildClass()) {
+            case CLASSLESS, ARCHER -> {
+                if (getStoredSword().isEmpty()) {
+                    inventory.add(CyberNpcWeaponPool.randomWildSword(getRandom()));
+                }
+                if (getStoredRangedWeapon().isEmpty()) {
+                    inventory.add(CyberNpcWeaponPool.randomWildRangedWeapon(getRandom()));
+                }
+            }
+            case KNIGHT, ROGUE, MAGE -> {
+                if (getStoredSword().isEmpty()) {
+                    inventory.add(CyberNpcWeaponPool.randomWildSword(getRandom()));
+                }
+            }
         }
 
         if (!isCombatActive() && !utilityItemActive && !getMainHandItem().isEmpty()) {
             stowWeapons();
         }
+    }
+
+    private void applyClassAttributes() {
+        double maxHealth;
+        double movementSpeed;
+        double armor;
+
+        switch (getWildClass()) {
+            case ARCHER -> {
+                maxHealth = 20.0D;
+                movementSpeed = 0.285D;
+                armor = 1.0D;
+            }
+            case KNIGHT -> {
+                maxHealth = 26.0D;
+                movementSpeed = 0.255D;
+                armor = 5.0D;
+            }
+            case ROGUE -> {
+                maxHealth = 18.0D;
+                movementSpeed = 0.31D;
+                armor = 1.0D;
+            }
+            case MAGE -> {
+                maxHealth = 22.0D;
+                movementSpeed = 0.275D;
+                armor = 2.0D;
+            }
+            default -> {
+                maxHealth = 20.0D;
+                movementSpeed = 0.27D;
+                armor = 0.0D;
+            }
+        }
+
+        var healthAttribute = getAttribute(Attributes.MAX_HEALTH);
+        var speedAttribute = getAttribute(Attributes.MOVEMENT_SPEED);
+        var armorAttribute = getAttribute(Attributes.ARMOR);
+
+        if (healthAttribute != null && healthAttribute.getBaseValue() != maxHealth) {
+            double previousMax = healthAttribute.getBaseValue();
+            boolean wasFullHealth = getHealth() >= previousMax - 0.01D;
+            healthAttribute.setBaseValue(maxHealth);
+
+            if (wasFullHealth) {
+                setHealth((float) maxHealth);
+            } else if (getHealth() > maxHealth) {
+                setHealth((float) maxHealth);
+            }
+        }
+
+        if (speedAttribute != null && speedAttribute.getBaseValue() != movementSpeed) {
+            speedAttribute.setBaseValue(movementSpeed);
+        }
+
+        if (armorAttribute != null && armorAttribute.getBaseValue() != armor) {
+            armorAttribute.setBaseValue(armor);
+        }
+    }
+
+    private float getEmergencyHealthThreshold() {
+        float base = switch (getPersonality()) {
+            case BRAVE -> 6.0F;
+            case CAUTIOUS -> 10.0F;
+            case AGGRESSIVE -> 5.0F;
+            case TACTICAL -> 8.0F;
+            default -> EMERGENCY_HEALTH_THRESHOLD;
+        };
+
+        if (getWildClass() == WildNpcClass.KNIGHT) {
+            base -= 1.0F;
+        } else if (getWildClass() == WildNpcClass.MAGE) {
+            base += 1.0F;
+        }
+
+        return Math.max(4.0F, base);
+    }
+
+    private float getHelpHealthFraction() {
+        return switch (getPersonality()) {
+            case BRAVE -> 0.45F;
+            case CAUTIOUS -> 0.75F;
+            case AGGRESSIVE -> 0.40F;
+            case TACTICAL -> 0.70F;
+            default -> 0.60F;
+        };
+    }
+
+    private double getThreatRequiredRatio() {
+        double ratio = switch (getPersonality()) {
+            case BRAVE -> 0.88D;
+            case CAUTIOUS -> 1.18D;
+            case AGGRESSIVE -> 0.82D;
+            case TACTICAL -> 1.00D;
+            default -> 0.95D;
+        };
+
+        if (getWildClass() == WildNpcClass.KNIGHT) {
+            ratio -= 0.08D;
+        } else if (getWildClass() == WildNpcClass.MAGE) {
+            ratio += 0.05D;
+        }
+
+        return Math.max(0.70D, ratio);
     }
 
     public ItemStack getStoredSword() {
@@ -755,7 +924,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         ItemStack recoveryFood = getBestReadyFoodStack();
 
-        if (getHealth() > EMERGENCY_HEALTH_THRESHOLD
+        if (getHealth() > getEmergencyHealthThreshold()
                 || isCombatActive()
                 || fleeingThreat != null
                 || recoveryFood.isEmpty()) {
@@ -1001,7 +1170,7 @@ public class CyberNpcEntity extends PathfinderMob {
             }
 
             if (combatHelpCooldown <= 0
-                    && (getHealth() <= getMaxHealth() * 0.60F || !shouldFightHostile(hostile))) {
+                    && (getHealth() <= getMaxHealth() * getHelpHealthFraction() || !shouldFightHostile(hostile))) {
                 int helpers = alertNearbyWildNpcs(target, MAX_COMBAT_HELPERS);
                 combatHelpCooldown = COMBAT_HELP_COOLDOWN_TICKS;
 
@@ -1400,7 +1569,7 @@ public class CyberNpcEntity extends PathfinderMob {
             }
 
             if (isReadyFoodStack(stack)) {
-                int score = getHealth() <= EMERGENCY_HEALTH_THRESHOLD
+                int score = getHealth() <= getEmergencyHealthThreshold()
                         ? emergencyFoodScore(stack)
                         : normalFoodScore(stack);
                 if (score > readyScore) {
@@ -2036,7 +2205,7 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         if (fleeingThreat != null) {
-            if (getHealth() <= EMERGENCY_HEALTH_THRESHOLD
+            if (getHealth() <= getEmergencyHealthThreshold()
                     && hasReadyFood()
                     && (!fleeingThreat.isAlive()
                     || distanceToSqr(fleeingThreat) >= EMERGENCY_EAT_SAFE_DISTANCE_SQR)) {
@@ -2088,7 +2257,7 @@ public class CyberNpcEntity extends PathfinderMob {
             return false;
         }
 
-        if (getHealth() <= EMERGENCY_HEALTH_THRESHOLD) {
+        if (getHealth() <= getEmergencyHealthThreshold()) {
             startFleeingFrom(threat);
 
             if (hasReadyFood()
@@ -2129,7 +2298,7 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private boolean shouldFightHostile(Mob threat) {
-        if (threat instanceof Creeper || getHealth() < 8.0F) {
+        if (threat instanceof Creeper || getHealth() < getEmergencyHealthThreshold()) {
             return false;
         }
 
@@ -2140,7 +2309,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 + (getStoredSword().isEmpty() ? 0.0D : 8.0D)
                 + (getStoredRangedWeapon().isEmpty() ? 0.0D : 8.0D);
 
-        return npcPower >= threatPower * 0.95D;
+        return npcPower >= threatPower * getThreatRequiredRatio();
     }
 
     private void startFleeingFrom(LivingEntity threat) {
@@ -2670,7 +2839,8 @@ public class CyberNpcEntity extends PathfinderMob {
 
             if (getNpcType() == NpcType.WILD) {
                 player.sendSystemMessage(Component.literal(
-                        displayName + " — " + getRole() + " — Hunger " + getHungerBar()
+                        displayName + " — " + getWildClassDisplayName() + " / "
+                                + getPersonalityDisplayName() + " — Hunger " + getHungerBar()
                 ));
             } else {
                 player.sendSystemMessage(Component.literal(displayName + " — " + getRole()));
@@ -2686,6 +2856,11 @@ public class CyberNpcEntity extends PathfinderMob {
         tag.putString("CyberNpcRole", getRole());
         tag.putBoolean("CyberNpcCanWander", canWander());
         tag.putString("CyberNpcType", getNpcType().serializedName());
+
+        if (getNpcType() == NpcType.WILD) {
+            tag.putString("CyberNpcWildClass", getWildClass().serializedName());
+            tag.putString("CyberNpcPersonality", getPersonality().serializedName());
+        }
 
         if (aggressionLevel >= 0) {
             tag.putInt("CyberNpcAggression", aggressionLevel);
@@ -2733,6 +2908,23 @@ public class CyberNpcEntity extends PathfinderMob {
             setNpcType(NpcType.fromSerializedName(tag.getString("CyberNpcType")));
         } else {
             setNpcType(NpcType.MAIN);
+        }
+
+        if (getNpcType() == NpcType.WILD) {
+            if (tag.contains("CyberNpcWildClass")) {
+                setWildClass(WildNpcClass.fromSerializedName(tag.getString("CyberNpcWildClass")));
+            } else {
+                setWildClass(WildNpcClass.randomSpawnClass(getRandom()));
+            }
+
+            if (tag.contains("CyberNpcPersonality")) {
+                setPersonality(WildNpcPersonality.fromSerializedName(tag.getString("CyberNpcPersonality")));
+            } else {
+                setPersonality(WildNpcPersonality.randomPersonality(getRandom()));
+            }
+        } else {
+            entityData.set(DATA_WILD_CLASS, "");
+            entityData.set(DATA_PERSONALITY, "");
         }
 
         if (tag.contains("CyberNpcAggression")) {
@@ -2911,6 +3103,7 @@ public class CyberNpcEntity extends PathfinderMob {
         private int meleeStrafeDirection = 1;
         private int meleeStrafeTicks;
         private int rangedCooldown;
+        private int mageCooldown;
         private int bowDrawTicks;
         private int crossbowChargeTicks;
         private int crossbowHoldTicks;
@@ -2984,12 +3177,32 @@ public class CyberNpcEntity extends PathfinderMob {
                 npc.setShiftKeyDown(false);
             }
 
-            if (distanceSqr <= MELEE_ENGAGE_DISTANCE_SQR) {
-                tickMelee(target, distanceSqr);
-                return;
-            }
+            switch (npc.getWildClass()) {
+                case KNIGHT, ROGUE -> {
+                    tickMelee(target, distanceSqr);
+                    return;
+                }
+                case ARCHER -> {
+                    if (distanceSqr <= 16.0D && !npc.getStoredSword().isEmpty()) {
+                        tickMelee(target, distanceSqr);
+                    } else {
+                        tickRanged(target, distanceSqr, lineOfSight);
+                    }
+                    return;
+                }
+                case MAGE -> {
+                    tickMage(target, distanceSqr, lineOfSight);
+                    return;
+                }
+                default -> {
+                    if (distanceSqr <= MELEE_ENGAGE_DISTANCE_SQR) {
+                        tickMelee(target, distanceSqr);
+                        return;
+                    }
 
-            tickRanged(target, distanceSqr, lineOfSight);
+                    tickRanged(target, distanceSqr, lineOfSight);
+                }
+            }
         }
 
         private void tickMelee(LivingEntity target, double distanceSqr) {
@@ -2997,31 +3210,63 @@ public class CyberNpcEntity extends PathfinderMob {
             npc.setShiftKeyDown(false);
             npc.equipSword();
 
-            // After each hit, create space instead of standing inside the hostile
-            // and trading damage. This makes sword combat behave much closer to a
-            // player timing hits and backing out during the cooldown.
+            WildNpcClass npcClass = npc.getWildClass();
+            WildNpcPersonality personality = npc.getPersonality();
+
+            int attackCooldown = switch (npcClass) {
+                case ROGUE -> 9;
+                case KNIGHT -> 13;
+                default -> MELEE_ATTACK_COOLDOWN;
+            };
+
+            int recoveryTicks = switch (npcClass) {
+                case ROGUE -> 4;
+                case KNIGHT -> 6;
+                default -> MELEE_RECOVERY_TICKS;
+            };
+
+            if (personality == WildNpcPersonality.AGGRESSIVE) {
+                attackCooldown = Math.max(7, attackCooldown - 2);
+                recoveryTicks = Math.max(3, recoveryTicks - 1);
+            } else if (personality == WildNpcPersonality.CAUTIOUS) {
+                attackCooldown += 2;
+                recoveryTicks += 2;
+            } else if (personality == WildNpcPersonality.TACTICAL) {
+                recoveryTicks += 1;
+            }
+
+            double attackDistanceSqr = npcClass == WildNpcClass.ROGUE ? 8.41D : MELEE_ATTACK_DISTANCE_SQR;
+            double tooCloseSqr = npcClass == WildNpcClass.KNIGHT ? 4.0D : MELEE_TOO_CLOSE_SQR;
+            double approachSpeed = switch (npcClass) {
+                case ROGUE -> 1.20D;
+                case KNIGHT -> 1.02D;
+                default -> 1.06D;
+            };
+
             if (meleeRecoveryTicks > 0) {
                 npc.setSprinting(false);
                 moveForMeleeSpacing(target, true);
                 return;
             }
 
-            if (distanceSqr < MELEE_TOO_CLOSE_SQR) {
+            if (distanceSqr < tooCloseSqr) {
                 npc.setSprinting(false);
                 moveForMeleeSpacing(target, true);
 
                 if (meleeCooldown <= 0) {
                     npc.startMeleeSwingAnimation();
                     npc.doHurtTarget(target);
-                    meleeCooldown = MELEE_ATTACK_COOLDOWN;
-                    meleeRecoveryTicks = MELEE_RECOVERY_TICKS;
+                    meleeCooldown = attackCooldown;
+                    meleeRecoveryTicks = recoveryTicks;
                 }
                 return;
             }
 
-            if (distanceSqr > MELEE_ATTACK_DISTANCE_SQR) {
-                boolean moving = npc.getNavigation().moveTo(target, 1.06D);
-                npc.setSprinting(moving && distanceSqr > 10.24D);
+            if (distanceSqr > attackDistanceSqr) {
+                boolean moving = npc.getNavigation().moveTo(target, approachSpeed);
+                npc.setSprinting(moving
+                        && distanceSqr > 10.24D
+                        && npcClass != WildNpcClass.KNIGHT);
                 return;
             }
 
@@ -3030,8 +3275,8 @@ public class CyberNpcEntity extends PathfinderMob {
             if (meleeCooldown <= 0) {
                 npc.startMeleeSwingAnimation();
                 npc.doHurtTarget(target);
-                meleeCooldown = MELEE_ATTACK_COOLDOWN;
-                meleeRecoveryTicks = MELEE_RECOVERY_TICKS;
+                meleeCooldown = attackCooldown;
+                meleeRecoveryTicks = recoveryTicks;
                 moveForMeleeSpacing(target, true);
             } else {
                 moveForMeleeSpacing(target, false);
@@ -3055,19 +3300,45 @@ public class CyberNpcEntity extends PathfinderMob {
             }
 
             away = away.normalize();
-            Vec3 side = new Vec3(-away.z, 0.0D, away.x)
-                    .scale(0.75D * meleeStrafeDirection);
 
-            double radius = retreat ? 3.6D : 2.85D;
+            double sideStrength = npc.getWildClass() == WildNpcClass.ROGUE ? 1.25D : 0.75D;
+            if (npc.getPersonality() == WildNpcPersonality.TACTICAL) {
+                sideStrength += 0.35D;
+            } else if (npc.getPersonality() == WildNpcPersonality.AGGRESSIVE) {
+                sideStrength *= 0.75D;
+            }
+
+            Vec3 side = new Vec3(-away.z, 0.0D, away.x)
+                    .scale(sideStrength * meleeStrafeDirection);
+
+            double radius;
+            if (npc.getWildClass() == WildNpcClass.KNIGHT) {
+                radius = retreat ? 3.0D : 2.55D;
+            } else if (npc.getWildClass() == WildNpcClass.ROGUE) {
+                radius = retreat ? 4.2D : 3.1D;
+            } else {
+                radius = retreat ? 3.6D : 2.85D;
+            }
+
+            if (npc.getPersonality() == WildNpcPersonality.CAUTIOUS) {
+                radius += 0.8D;
+            } else if (npc.getPersonality() == WildNpcPersonality.AGGRESSIVE) {
+                radius -= 0.45D;
+            }
+
             Vec3 desired = target.position()
-                    .add(away.scale(radius))
+                    .add(away.scale(Math.max(2.2D, radius)))
                     .add(side);
+
+            double speed = npc.getWildClass() == WildNpcClass.ROGUE
+                    ? (retreat ? 1.20D : 0.96D)
+                    : (retreat ? 1.08D : 0.82D);
 
             boolean moving = npc.getNavigation().moveTo(
                     desired.x,
                     npc.getY(),
                     desired.z,
-                    retreat ? 1.08D : 0.82D
+                    speed
             );
 
             if (!moving && retreat) {
@@ -3083,10 +3354,43 @@ public class CyberNpcEntity extends PathfinderMob {
                             fallback.x,
                             fallback.y,
                             fallback.z,
-                            1.05D
+                            speed
                     );
                 }
             }
+        }
+
+        private void moveForRangedSpacing(LivingEntity target, double radius) {
+            Vec3 away = new Vec3(
+                    npc.getX() - target.getX(),
+                    0.0D,
+                    npc.getZ() - target.getZ()
+            );
+
+            if (away.lengthSqr() < 0.001D) {
+                away = new Vec3(1.0D, 0.0D, 0.0D);
+            }
+
+            away = away.normalize();
+            Vec3 side = new Vec3(-away.z, 0.0D, away.x)
+                    .scale(npc.getPersonality() == WildNpcPersonality.TACTICAL ? 1.5D : 0.8D);
+
+            if (npc.getPersonality() == WildNpcPersonality.CAUTIOUS) {
+                radius += 2.0D;
+            } else if (npc.getPersonality() == WildNpcPersonality.AGGRESSIVE) {
+                radius -= 1.5D;
+            }
+
+            Vec3 desired = target.position()
+                    .add(away.scale(Math.max(6.0D, radius)))
+                    .add(side);
+
+            npc.getNavigation().moveTo(
+                    desired.x,
+                    npc.getY(),
+                    desired.z,
+                    npc.getWildClass() == WildNpcClass.ARCHER ? 1.05D : 0.95D
+            );
         }
 
         private void tickRanged(LivingEntity target, double distanceSqr, boolean lineOfSight) {
@@ -3101,8 +3405,17 @@ public class CyberNpcEntity extends PathfinderMob {
 
             npc.setSprinting(false);
 
-            if (distanceSqr > RANGED_STOP_DISTANCE_SQR) {
-                npc.getNavigation().moveTo(target, npc.huntingTarget ? 0.62D : 0.92D);
+            boolean archer = npc.getWildClass() == WildNpcClass.ARCHER;
+            double preferredStopSqr = archer ? 144.0D : RANGED_STOP_DISTANCE_SQR;
+            double tooCloseSqr = archer ? 64.0D : 0.0D;
+
+            if (archer && distanceSqr < tooCloseSqr) {
+                moveForRangedSpacing(target, 11.0D);
+            } else if (distanceSqr > preferredStopSqr) {
+                npc.getNavigation().moveTo(
+                        target,
+                        npc.huntingTarget ? 0.62D : (archer ? 1.00D : 0.92D)
+                );
             } else {
                 npc.getNavigation().stop();
             }
@@ -3114,6 +3427,100 @@ public class CyberNpcEntity extends PathfinderMob {
             } else {
                 tickBow(target, distanceSqr);
             }
+        }
+
+        private void tickMage(LivingEntity target, double distanceSqr, boolean lineOfSight) {
+            resetRangedUse();
+            npc.clearUtilityItem();
+            npc.stowWeapons();
+            npc.setSprinting(false);
+            npc.setShiftKeyDown(false);
+
+            if (mageCooldown > 0) {
+                mageCooldown--;
+            }
+
+            if (!lineOfSight || distanceSqr > 324.0D) {
+                npc.getNavigation().moveTo(target, 0.95D);
+                return;
+            }
+
+            if (distanceSqr < 49.0D) {
+                moveForRangedSpacing(target, 11.0D);
+            } else if (distanceSqr > 196.0D) {
+                npc.getNavigation().moveTo(target, 0.86D);
+            } else if (npc.getPersonality() == WildNpcPersonality.TACTICAL) {
+                moveForRangedSpacing(target, 11.5D);
+            } else {
+                npc.getNavigation().stop();
+            }
+
+            if (mageCooldown > 0) {
+                return;
+            }
+
+            float damage = switch (npc.getPersonality()) {
+                case AGGRESSIVE -> 5.5F;
+                case CAUTIOUS -> 4.0F;
+                case TACTICAL -> 5.0F;
+                default -> 4.5F;
+            };
+
+            target.hurt(
+                    npc.damageSources().indirectMagic(npc, npc),
+                    damage
+            );
+
+            if (npc.level() instanceof ServerLevel serverLevel) {
+                Vec3 from = npc.getEyePosition();
+                Vec3 to = target.getEyePosition();
+                Vec3 delta = to.subtract(from);
+
+                for (int i = 1; i <= 8; i++) {
+                    double t = i / 9.0D;
+                    Vec3 point = from.add(delta.scale(t));
+                    serverLevel.sendParticles(
+                            ParticleTypes.ENCHANT,
+                            point.x,
+                            point.y,
+                            point.z,
+                            2,
+                            0.08D,
+                            0.08D,
+                            0.08D,
+                            0.02D
+                    );
+                }
+
+                serverLevel.sendParticles(
+                        ParticleTypes.WITCH,
+                        target.getX(),
+                        target.getEyeY(),
+                        target.getZ(),
+                        8,
+                        0.25D,
+                        0.35D,
+                        0.25D,
+                        0.02D
+                );
+            }
+
+            npc.level().playSound(
+                    null,
+                    npc.blockPosition(),
+                    SoundEvents.EVOKER_CAST_SPELL,
+                    SoundSource.NEUTRAL,
+                    0.9F,
+                    1.05F + npc.getRandom().nextFloat() * 0.15F
+            );
+
+            mageCooldown = switch (npc.getPersonality()) {
+                case AGGRESSIVE -> 24;
+                case CAUTIOUS -> 38;
+                case TACTICAL -> 28;
+                case BRAVE -> 27;
+                default -> 32;
+            };
         }
 
         private void tickBow(LivingEntity target, double distanceSqr) {
@@ -3155,7 +3562,9 @@ public class CyberNpcEntity extends PathfinderMob {
             );
 
             bowDrawTicks = 0;
-            rangedCooldown = 12;
+            rangedCooldown = npc.getWildClass() == WildNpcClass.ARCHER
+                    ? (npc.getPersonality() == WildNpcPersonality.AGGRESSIVE ? 8 : 10)
+                    : 12;
         }
 
         private void tickCrossbow(LivingEntity target, ItemStack crossbow, double distanceSqr) {
@@ -3231,7 +3640,9 @@ public class CyberNpcEntity extends PathfinderMob {
                 npc.setRangedState(RANGED_STATE_NONE);
                 crossbowChargeTicks = 0;
                 crossbowHoldTicks = 0;
-                rangedCooldown = 28;
+                rangedCooldown = npc.getWildClass() == WildNpcClass.ARCHER
+                        ? (npc.getPersonality() == WildNpcPersonality.AGGRESSIVE ? 20 : 24)
+                        : 28;
             }
         }
 
@@ -3256,6 +3667,7 @@ public class CyberNpcEntity extends PathfinderMob {
             meleeStrafeTicks = 0;
             meleeStrafeDirection = 1;
             rangedCooldown = 0;
+            mageCooldown = 0;
         }
     }
 }

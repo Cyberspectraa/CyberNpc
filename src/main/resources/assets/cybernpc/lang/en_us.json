@@ -5,5 +5,7 @@
   "item.cybernpc.main_npc_spawn_egg": "Main NPC Spawn Egg",
   "item.cybernpc.quest_npc_spawn_egg": "Quest NPC Spawn Egg",
   "item.cybernpc.wild_npc_spawn_egg": "Wild NPC Spawn Egg",
-  "item.cybernpc.developer_glasses": "Developer Glasses"
+  "item.cybernpc.developer_glasses": "Developer Glasses",
+  "key.cybernpc.developer_glasses_cycle": "Cycle Developer Glasses Tab",
+  "key.categories.cybernpc": "CyberNpc"
 }
