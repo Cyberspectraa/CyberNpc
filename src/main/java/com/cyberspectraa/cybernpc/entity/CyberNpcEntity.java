@@ -1847,20 +1847,25 @@ public class CyberNpcEntity extends PathfinderMob {
         if (huntingTarget) {
             target = maybeSwitchHuntTarget(target);
         } else if (target instanceof Mob hostile && hostile instanceof Enemy) {
-            if (getHealth() <= 4.0F) {
-                startFleeingFrom(hostile);
-                return;
-            }
+            CombatConfidence solo = evaluateCombatConfidence(hostile, false);
+            CombatConfidence group = evaluateCombatConfidence(hostile, true);
+            float healthFraction = getMaxHealth() <= 0.0F
+                    ? 0.0F
+                    : getHealth() / getMaxHealth();
 
             if (combatHelpCooldown <= 0
-                    && (getHealth() <= getMaxHealth() * getHelpHealthFraction() || !shouldFightHostile(hostile))) {
-                int helpers = alertNearbyWildNpcs(target, MAX_COMBAT_HELPERS);
+                    && group.helpers > 0
+                    && (solo.groupScore < FIGHT_CONFIDENCE
+                    || healthFraction <= getHelpHealthFraction())) {
+                alertNearbyWildNpcs(target, MAX_COMBAT_HELPERS);
                 combatHelpCooldown = COMBAT_HELP_COOLDOWN_TICKS;
+            }
 
-                if (helpers == 0 && !shouldFightHostile(hostile)) {
-                    startFleeingFrom(hostile);
-                    return;
-                }
+            boolean critical = healthFraction <= 0.18F;
+            if (group.groupScore < FLEE_CONFIDENCE
+                    || (critical && group.groupScore < HELP_CONFIDENCE)) {
+                startFleeingFrom(hostile);
+                return;
             }
         }
 
