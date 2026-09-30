@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public final class IronSpellsCompat {
@@ -30,6 +31,13 @@ public final class IronSpellsCompat {
     private static final String SPELL_CONTAINER = "ISB_Spells";
     private static final String SPELL_DATA = "data";
     private static final Map<UUID, ActiveCast> ACTIVE_CASTS = new HashMap<>();
+
+    // Some Iron's spells are valid player spells but are not safe for a foreign
+    // LivingEntity caster. Spectral Hammer later fires Forge's BreakEvent with
+    // a null Player when cast by CyberNpc, which crashes on the hammer entity tick.
+    private static final Set<String> MOB_UNSAFE_SPELLS = Set.of(
+            MOD_ID + ":spectral_hammer"
+    );
 
     private static boolean attemptedInit;
     private static boolean ready;
@@ -277,6 +285,12 @@ public final class IronSpellsCompat {
         for (int offset = 0; offset < spells.size(); offset++) {
             SpellEntry entry = spells.get((start + offset) % spells.size());
 
+            // Saved 0.14.0 Mage books may already contain a spell that was later
+            // classified as unsafe, so guard again at cast time as well as book creation.
+            if (isExplicitlyUnsafeMobSpell(entry.spellId())) {
+                continue;
+            }
+
             try {
                 Object spell = getSpell.invoke(null, entry.spellId());
                 if (!isSupportedSpellObject(spell)) {
@@ -404,7 +418,11 @@ public final class IronSpellsCompat {
     }
 
     public static boolean isSupportedCombatSpell(String spellId) {
-        if (!isLoaded() || spellId == null || spellId.isBlank() || !initialize()) {
+        if (!isLoaded()
+                || spellId == null
+                || spellId.isBlank()
+                || isExplicitlyUnsafeMobSpell(spellId)
+                || !initialize()) {
             return false;
         }
 
@@ -414,6 +432,17 @@ public final class IronSpellsCompat {
         } catch (ReflectiveOperationException | RuntimeException ignored) {
             return false;
         }
+    }
+
+    private static boolean isExplicitlyUnsafeMobSpell(String spellId) {
+        if (spellId == null || spellId.isBlank()) {
+            return true;
+        }
+
+        String normalized = spellId.contains(":")
+                ? spellId.trim()
+                : MOD_ID + ":" + spellId.trim();
+        return MOB_UNSAFE_SPELLS.contains(normalized);
     }
 
     private static boolean isSupportedSpellObject(Object spell)

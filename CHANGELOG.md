@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.1
+
+- Fixed a server crash when an Evocation Mage cast Iron's Spectral Hammer as a non-player entity.
+- Added an explicit NPC-unsafe Iron's spell guard to both spellbook generation and live casting, so existing saved 0.14.0 Mage books are protected too.
+- Replaced Spectral Hammer in the Evocation Mage pool with Fang Swirl while keeping Spectral Hammer available to normal players.
+
 ## 0.14.0
 
 - Added persistent Wild NPC gear tiers: Standard 70%, Fine 20%, Rare 8%, Elite 2%.

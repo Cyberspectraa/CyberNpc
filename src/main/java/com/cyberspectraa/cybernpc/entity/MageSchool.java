@@ -60,7 +60,7 @@ public enum MageSchool {
             "Evocation",
             "archevoker",
             "evoker_spell_book",
-            List.of("fang_strike", "spectral_hammer", "slow", "firecracker")
+            List.of("fang_strike", "fang_swirl", "slow", "firecracker")
     );
 
     private final String serializedName;
