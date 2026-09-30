@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.24.1
+
+- Fixed reaction bubbles still appearing black in 0.24.0.
+- Root cause: the dark outline was actually rendered as a complete filled bubble silhouette, while the white interior was rendered as a second depth layer above it. Depending on camera-facing depth ordering, the dark silhouette could win the depth test and cover the fill.
+- Rebuilt reaction-bubble geometry so the dark border and white interior occupy completely separate XY regions on the same Z plane.
+- There is now no black surface underneath the white center, so a depth-order reversal cannot turn the whole bubble black.
+- Removed the layered bubble shadow/highlight surfaces that could contribute to depth-order ambiguity.
+- Kept the stepped Minecraft-style corners, shaped speech tail, full-bright rendering, larger scale, icon colours and subtle bob animation.
+- The bubble interior is now true opaque white rather than a translucent cream tone.
+- The social/friendship/group-invitation systems from 0.24.0 are unchanged.
+
+
 ## 0.24.0
 
 - Reworked reaction-bubble rendering so the bubble body uses Minecraft's white texture with a normal translucent entity render path instead of the dark name-tag background shader.
