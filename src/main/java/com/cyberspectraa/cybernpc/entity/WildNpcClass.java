@@ -1,17 +1,19 @@
 package com.cyberspectraa.cybernpc.entity;
 
+import com.cyberspectraa.cybernpc.compat.BetterHorsesCompat;
 import com.cyberspectraa.cybernpc.compat.IronSpellsCompat;
 import net.minecraft.util.RandomSource;
 
 import java.util.Locale;
 
 public enum WildNpcClass {
-    CLASSLESS("classless", "Classless", 65, false),
+    CLASSLESS("classless", "Classless", 62, false),
     ARCHER("archer", "Archer", 8, false),
     KNIGHT("knight", "Knight", 6, false),
     ROGUE("rogue", "Rogue", 5, false),
     BERSERKER("berserker", "Berserker", 5, false),
     BEAST_TAMER("beast_tamer", "Beast Tamer", 3, false),
+    HORSE_TAMER("horse_tamer", "Horse Tamer", 3, false),
     MAGE("mage", "Mage", 3, true),
     CLERIC("cleric", "Cleric", 2, true),
     SPELLBLADE("spellblade", "Spellblade", 3, true);
@@ -97,6 +99,10 @@ public enum WildNpcClass {
     }
 
     public boolean isAvailable() {
+        if (this == HORSE_TAMER && !BetterHorsesCompat.isLoaded()) {
+            return false;
+        }
+
         return !requiresIronSpells || IronSpellsCompat.isLoaded();
     }
 }

@@ -322,6 +322,8 @@ public final class DeveloperGlassesOverlay {
             case KNIGHT -> "Armored committed melee";
             case ROGUE -> "Fast flanking melee";
             case BERSERKER -> "Heavy axe pressure / low-health rage";
+            case BEAST_TAMER -> "Melee + coordinated wolf pack";
+            case HORSE_TAMER -> "Mounted melee / horse handling";
             case MAGE -> "Iron's Spells caster / distance control";
             case CLERIC -> "Holy support / healing + ranged pressure";
             case SPELLBLADE -> "Sword + spell hybrid";
@@ -335,6 +337,8 @@ public final class DeveloperGlassesOverlay {
             case KNIGHT -> 0x8DB9FF;
             case ROGUE -> 0xD39BFF;
             case BERSERKER -> 0xFF7A6E;
+            case BEAST_TAMER -> 0xE0B36A;
+            case HORSE_TAMER -> 0xC99A68;
             case MAGE -> 0xFF8EF3;
             case CLERIC -> 0xFFF0A6;
             case SPELLBLADE -> 0x9FD8FF;
