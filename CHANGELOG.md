@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.22.0
+
+- Added separate male and female Wild NPC name pools. New Wild NPCs now choose their persistent appearance gender before receiving a name, so names always come from the matching pool.
+- Existing named NPCs keep their saved names; this change only affects NPCs that still need a generated default name.
+- Female converted zombies now bake Minecraft's normal ModelLayers.ZOMBIE just like male converted zombies, giving EMF/Fresh Animations the same vanilla zombie model entry point for both genders.
+- Female zombies keep an Alex-like slimmer arm silhouette by narrowing the zombie arm parts after normal ZombieModel animation setup rather than using a PlayerModel/custom player-derived layer.
+- Removed the obsolete female custom zombie model-layer registration from the active renderer path.
+- Fixed crossbow charge audio duplication by removing CyberNpc's manual CROSSBOW_LOADING_START and CROSSBOW_LOADING_END sounds. Vanilla CrossbowItem now owns the loading sequence.
+- Crossbow charging now tolerates short line-of-sight interruptions instead of immediately cancelling and restarting the use action, preventing repeated loading sounds when a target briefly passes behind another entity or block.
+- Charged crossbows will wait for line of sight before firing rather than releasing through an obstruction.
+
+
 ## 0.21.0
 
 - Added persistent NPC-to-NPC relationships with Friendship, Trust, Respect, Fear and Rivalry values.
