@@ -7,7 +7,7 @@ import net.minecraft.util.RandomSource;
 import java.util.Locale;
 
 public enum WildNpcClass {
-    CLASSLESS("classless", "Classless", 65, false),
+    CLASSLESS("classless", "Classless", 62, false),
     ARCHER("archer", "Archer", 8, false),
     KNIGHT("knight", "Knight", 6, false),
     ROGUE("rogue", "Rogue", 5, false),
