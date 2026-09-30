@@ -1,5 +1,7 @@
+
 package com.cyberspectraa.cybernpc.client.render;
 
+import com.cyberspectraa.cybernpc.client.model.CyberNpcModelLayers;
 import com.cyberspectraa.cybernpc.client.model.ZombieCyberNpcModel;
 import com.cyberspectraa.cybernpc.entity.ZombieCyberNpcEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -21,25 +23,25 @@ public final class ZombieCyberNpcRenderer
         super(
                 context,
                 new ZombieCyberNpcModel(
-                        context.bakeLayer(ModelLayers.PLAYER),
-                        false
+                        context.bakeLayer(ModelLayers.ZOMBIE)
                 ),
                 0.5F
         );
 
         this.wideModel = getModel();
         this.slimModel = new ZombieCyberNpcModel(
-                context.bakeLayer(ModelLayers.PLAYER_SLIM),
-                true
+                context.bakeLayer(
+                        CyberNpcModelLayers.ZOMBIE_CYBER_NPC_SLIM
+                )
         );
 
         addLayer(new HumanoidArmorLayer<>(
                 this,
                 new HumanoidModel<>(
-                        context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)
+                        context.bakeLayer(ModelLayers.ZOMBIE_INNER_ARMOR)
                 ),
                 new HumanoidModel<>(
-                        context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)
+                        context.bakeLayer(ModelLayers.ZOMBIE_OUTER_ARMOR)
                 ),
                 context.getModelManager()
         ));
@@ -59,7 +61,10 @@ public final class ZombieCyberNpcRenderer
             MultiBufferSource buffer,
             int packedLight
     ) {
+        // Both models are ZombieModel instances. The slim model only changes
+        // arm geometry; it does not opt into player/FA+Player animations.
         this.model = entity.isSlimModel() ? slimModel : wideModel;
+
         super.render(
                 entity,
                 entityYaw,
