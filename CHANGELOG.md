@@ -2,6 +2,8 @@
 
 ## 0.20.1
 
+- Fixed the top-left Starlight/Lunar export artifact by clearing Minecraft's unused 8x8 skin corner after composition, so stray creator/editor pixels cannot render on NPCs or converted zombies.
+- Verified the revised Lunarskins pack remains compatible with the existing appearance slots and 64x64 layout.
 - Replaced the bundled female zombie appearance with the corrected slim/Alex-compatible ZombieFemale texture from the latest Lunarskins pack.
 - Female converted zombies now explicitly load that corrected raw resource before applying their preserved eyes and hairstyle.
 - No living-NPC appearance combinations changed from 0.20.0.
