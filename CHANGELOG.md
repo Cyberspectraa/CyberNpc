@@ -1,5 +1,76 @@
 # Changelog
 
+## 0.26.0
+
+### Expanded reaction-bubble language
+- Expanded Wild NPC icon-only communication with dedicated symbols for greeting, food/help, sleep, mounting, beast taming, danger and combat.
+- Existing friend/group/emotion reactions remain intact.
+- Friends can greet each other with a distinct greeting bubble rather than looking like strangers having the same generic interaction.
+- NPCs show a food reaction when hunger reaches the hunting threshold.
+- NPCs show a sleep reaction when they successfully claim a bed for the night.
+- NPCs show a mount reaction when mounting a horse.
+- Beast Tamers show a beast reaction when they tame a wolf.
+- Normal non-hunt combat can show a combat warning reaction.
+- Threatening chat that does not immediately trigger retaliation can produce a danger or scared reaction depending on personality.
+- HOME remains reserved for the future home/settlement system.
+
+### Friendship now unlocks behaviour
+- Persistent mutual Friends now qualify as guaranteed combat helpers when healthy enough, even when they are not in the same party.
+- Friends react more strongly when a player attacks or kills one of their friends.
+- Non-party friends loosely seek each other out while idle instead of behaving as unrelated strangers.
+- Friends can share one prepared food item when one friend is well-fed and the other is very hungry.
+- Sharing food strengthens friendship/trust/respect and produces visible reaction bubbles.
+- Existing party formation still requires mutual friendship and remains persistent.
+
+### Beast Tamer class
+- Added the new rare Beast Tamer Wild NPC class at a 3% class weight, keeping total class weighting at 100%.
+- Beast Tamers use melee weapons and practical light-to-medium armour appropriate to their gear tier.
+- Beast Tamers spawn with a supply of bones.
+- An idle Beast Tamer searches for nearby adult untamed wolves, approaches them and tames them.
+- Wolf companion limit scales with gear tier: Standard 1, Fine/Rare 2, Elite 3.
+- Tamed wolves are owned by the Beast Tamer NPC, follow normal wolf-owner behaviour and are ordered into the Beast Tamer's fights.
+- Beast Tamer companions are released back to wild status if their NPC owner dies or zombifies, preventing permanently orphaned wolf ownership.
+
+### Horse riding
+- Wild NPCs can now locate and ride adult tamed saddled horses while otherwise idle.
+- Horse use is intentionally occasional rather than making every nearby NPC mount immediately.
+- Mounted NPCs can travel around and mounted party members can use the horse to catch up with their party leader.
+- NPCs remember where a temporary ride started and avoid carrying a borrowed horse indefinitely away from that area.
+- NPCs dismount for combat, fleeing, sleep, zombification, urgent hunger/food work or when the riding period ends.
+- Added temporary per-horse NPC claims so multiple NPCs do not race for the same mount.
+- Stale claims automatically clean themselves up after NPC unload/death/reload situations.
+- Developer Glasses now reports Approaching horse and Riding horse states.
+
+### Icy's Better Horses compatibility
+- Added optional soft compatibility for the `icys_better_horses` mod with no hard dependency.
+- CyberNpc recognises Better Horses ownership and cart state reflectively.
+- NPCs do not mount horses currently fitted as cart horses.
+- NPCs never overwrite Better Horses owner, bond or gear data.
+- Player-owned horses are treated as borrowed mounts rather than reassigned to the NPC.
+- If the horse's player owner returns nearby, the NPC dismounts and releases its temporary claim.
+- Better Horses custom breed horses are naturally included through the shared AbstractHorse riding logic.
+
+### Player chat affects NPC relationships
+- Wild NPCs can now understand a small conservative set of positive, negative and threatening chat intents.
+- Chat only affects an NPC when its name is explicitly mentioned near the relevant phrase, or when the player says "you" while visibly addressing a nearby NPC.
+- Named/direct intent detection uses a local word window so unrelated sentiment elsewhere in the message is much less likely to be misattributed.
+- Examples such as "I hate Leo" lower Leo's opinion of that player and produce an upset/annoyed reaction.
+- Positive phrases such as liking, thanking or praising an NPC improve player reputation.
+- Threat phrases such as kill, hurt, attack, fight, beat, destroy or murder reduce reputation heavily.
+- Simple negations such as "don't kill Leo", "do not attack Leo", "never hurt Leo" are not treated as threats.
+- Nearby friends of a named target can also take offence or react positively because the player is talking about their friend.
+- A threatened NPC has a personality/aggression/reputation-dependent chance to retaliate immediately.
+- Aggressive, reckless, brave and protective personalities are more willing to retaliate; cautious, skittish and patient personalities are less likely.
+- A retaliating NPC uses the normal CyberNpc combat/help systems rather than a special scripted attack.
+- Chat reactions have a cooldown to prevent reputation spam from a single burst of messages.
+- Normal Minecraft chat and the 0.25.0 player speech-bubble system remain unchanged.
+
+### Debugging and lifecycle
+- Developer Glasses can now expose Taming wolf, Approaching horse and Riding horse activity states.
+- New chat, mount and Beast Tamer task state is transient and resets cleanly when the NPC reloads.
+- Horse claims are coordination hints only and do not become ownership data.
+
+
 ## 0.25.0
 
 - Removed the text/icon drop shadow from Wild NPC reaction bubbles for a cleaner Minecraft-style look.
