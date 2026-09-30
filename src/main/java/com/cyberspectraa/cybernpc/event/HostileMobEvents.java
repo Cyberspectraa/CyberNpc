@@ -4,6 +4,7 @@ import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.registry.ModEffects;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -27,6 +28,7 @@ public final class HostileMobEvents {
         if (!(event.getEntity() instanceof Mob mob)
                 || mob instanceof CyberNpcEntity
                 || mob.level().isClientSide
+                || mob.getType() == EntityType.WARDEN
                 || !(mob instanceof Enemy)
                 || !mob.isAlive()
                 || mob.tickCount % 10 != 0) {

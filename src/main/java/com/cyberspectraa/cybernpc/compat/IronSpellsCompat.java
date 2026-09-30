@@ -560,6 +560,12 @@ public final class IronSpellsCompat {
                 continue;
             }
 
+            if ((tactics.role == SpellRole.RANGED
+                    || tactics.role == SpellRole.CONTROL)
+                    && !caster.hasClearFriendlyFireLane(target)) {
+                continue;
+            }
+
             try {
                 Object spell = getSpell.invoke(null, entry.spellId());
                 if (!isSupportedSpellObject(spell)) {

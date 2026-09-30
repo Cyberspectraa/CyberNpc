@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.17.0
+
+- Reduced gap jumping to a conservative 1-block walking gap and up to 3 blocks while sprinting; larger/unsafe gaps remain pathfinding detours.
+- Reduced hostile threat reevaluation interval from 10 ticks to 4 ticks so NPCs react much faster when combat conditions suddenly change.
+- Wardens are treated as exceptional threats in confidence calculations and now overwhelm ordinary backup confidence much more strongly.
+- Starting a flee now immediately cancels an active Mage cast and switches to sprint escape behaviour.
+- Wardens are excluded from CyberNpc's generic hostile-target injection so their normal vanilla vibration/anger/smell behaviour remains authoritative.
+- Added visible-sculk awareness during normal movement: Wild NPCs crouch only when a nearby sculk sensor/calibrated sensor is actually visible rather than through walls.
+- CyberNpc crouching explicitly counts as careful stepping, allowing vanilla vibration mechanics to suppress appropriate movement vibrations; normal/noisy movement still uses vanilla entity game events.
+- Wild NPC ranged attacks now detect friendly NPCs in the firing corridor and reposition instead of firing through them.
+- Friendly Wild NPC damage is ignored as a final safety net for arrows and Iron's spell/AoE crossfire.
+- Mage ranged/control spells re-check the friendly-fire lane immediately before casting.
+- Mage casting visuals now reuse the existing rendered offhand spellbook instead of replacing it every tick, reducing unnecessary modded-model render churn.
+- Hunting prey now also passes through the combat-confidence system rather than using health alone.
+
 ## 0.16.0
 
 - Added combat confidence scoring for Wild NPCs using mob aggression class, current health, estimated damage, NPC health/damage and nearby backup.

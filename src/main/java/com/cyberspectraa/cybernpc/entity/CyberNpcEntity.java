@@ -52,6 +52,7 @@ import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.SwordItem;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.Blocks;
@@ -61,6 +62,8 @@ import net.minecraft.world.level.block.entity.CampfireBlockEntity;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
@@ -103,7 +106,7 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final int COOK_SEARCH_RADIUS = 12;
     private static final int GROUND_FOOD_SEARCH_INTERVAL = 20;
     private static final int HUNT_TARGET_RECHECK_INTERVAL = 20;
-    private static final int THREAT_SCAN_INTERVAL = 10;
+    private static final int THREAT_SCAN_INTERVAL = 4;
     private static final int FLEE_SAFE_TICKS = 60;
     private static final double THREAT_SCAN_RADIUS = 20.0D;
     private static final double FLEE_RELEASE_DISTANCE = 30.0D;
@@ -114,11 +117,15 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final double HELP_CONFIDENCE = 35.0D;
     private static final double FLEE_CONFIDENCE = 22.0D;
 
-    // Vanilla player-scale gap limits: ordinary movement can clear a 2-block
-    // gap, while sprint jumping can reach 4. We never attempt beyond these.
-    private static final int WALK_GAP_JUMP_BLOCKS = 2;
-    private static final int SPRINT_GAP_JUMP_BLOCKS = 4;
+    // Conservative player-like gap limits requested for CyberNpc: one-block
+    // gaps while walking and up to three blocks while sprint-jumping.
+    private static final int WALK_GAP_JUMP_BLOCKS = 1;
+    private static final int SPRINT_GAP_JUMP_BLOCKS = 3;
     private static final int GAP_JUMP_COOLDOWN_TICKS = 10;
+
+    private static final int SCULK_SCAN_INTERVAL = 20;
+    private static final int SCULK_STEALTH_HOLD_TICKS = 30;
+    private static final int SCULK_SCAN_RADIUS = 16;
 
     private static final int SPRINT_STALL_TICKS = 8;
     private static final double SPRINT_MOVEMENT_EPSILON_SQR = 0.0025D;
@@ -250,6 +257,9 @@ public class CyberNpcEntity extends PathfinderMob {
     private int combatHelpCooldown;
     private int sprintStallTicks;
     private int gapJumpCooldown;
+    private int sculkScanCooldown;
+    private int sculkStealthTicks;
+    private boolean sculkSneaking;
 
     @Nullable
     private BlockPos foodChestTarget;
@@ -1221,9 +1231,16 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
-        ItemStack visualBook = spellBook.copy();
-        visualBook.setCount(1);
-        setItemSlot(EquipmentSlot.OFFHAND, visualBook);
+        // Do not replace the rendered offhand stack every server tick. Reusing
+        // the same stack reduces model-resolution churn for modded item models
+        // and is friendlier to EMF/ETF-style render interception.
+        ItemStack currentOffhand = getOffhandItem();
+        if (!ItemStack.isSameItemSameTags(currentOffhand, spellBook)) {
+            ItemStack visualBook = spellBook.copy();
+            visualBook.setCount(1);
+            setItemSlot(EquipmentSlot.OFFHAND, visualBook);
+        }
+
         entityData.set(DATA_CASTING_SPELL, spellId == null ? "" : spellId);
         entityData.set(
                 DATA_SPELL_CAST_MODE,
@@ -1432,8 +1449,97 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void finishAiTick() {
+        updateSculkStealth();
         fixStuckSprintAnimation();
         updateDebugState();
+    }
+
+    private void updateSculkStealth() {
+        boolean normalMovement = !isCombatActive()
+                && fleeingThreat == null
+                && !emergencyEating
+                && !isSleeping()
+                && !isZombifying()
+                && !isSprinting();
+
+        if (!normalMovement) {
+            sculkStealthTicks = 0;
+            if (sculkSneaking) {
+                sculkSneaking = false;
+                setShiftKeyDown(false);
+            }
+            return;
+        }
+
+        if (sculkScanCooldown > 0) {
+            sculkScanCooldown--;
+        } else {
+            sculkScanCooldown = SCULK_SCAN_INTERVAL;
+            if (findVisibleSculkSensor() != null) {
+                sculkStealthTicks = SCULK_STEALTH_HOLD_TICKS;
+            }
+        }
+
+        if (sculkStealthTicks > 0) {
+            sculkStealthTicks--;
+            sculkSneaking = true;
+            setSprinting(false);
+            setShiftKeyDown(true);
+        } else if (sculkSneaking) {
+            sculkSneaking = false;
+            setShiftKeyDown(false);
+        }
+    }
+
+    @Nullable
+    private BlockPos findVisibleSculkSensor() {
+        BlockPos origin = blockPosition();
+
+        for (BlockPos candidate : BlockPos.withinManhattan(
+                origin,
+                SCULK_SCAN_RADIUS,
+                6,
+                SCULK_SCAN_RADIUS
+        )) {
+            var state = level().getBlockState(candidate);
+            boolean normal = state.is(Blocks.SCULK_SENSOR);
+            boolean calibrated = state.is(Blocks.CALIBRATED_SCULK_SENSOR);
+
+            if (!normal && !calibrated) {
+                continue;
+            }
+
+            double awarenessRange = calibrated ? 16.0D : 9.5D;
+            if (distanceToSqr(Vec3.atCenterOf(candidate))
+                    > awarenessRange * awarenessRange) {
+                continue;
+            }
+
+            if (canSeeSculkBlock(candidate)) {
+                return candidate.immutable();
+            }
+        }
+
+        return null;
+    }
+
+    private boolean canSeeSculkBlock(BlockPos pos) {
+        Vec3 target = Vec3.atCenterOf(pos);
+        BlockHitResult hit = level().clip(new ClipContext(
+                getEyePosition(),
+                target,
+                ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE,
+                this
+        ));
+
+        return hit.getType() == HitResult.Type.MISS
+                || hit.getBlockPos().equals(pos);
+    }
+
+    @Override
+    public boolean isSteppingCarefully() {
+        return isShiftKeyDown() || super.isSteppingCarefully();
     }
 
     private void fixStuckSprintAnimation() {
@@ -1980,6 +2086,13 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (prey instanceof AgeableMob ageableMob && ageableMob.isBaby()) {
             return false;
+        }
+
+        if (prey instanceof Mob mob) {
+            CombatConfidence confidence = evaluateCombatConfidence(mob, true);
+            if (confidence.groupScore < HELP_CONFIDENCE) {
+                return false;
+            }
         }
 
         float confidenceHealth = getHealth() + 6.0F;
@@ -3119,6 +3232,13 @@ public class CyberNpcEntity extends PathfinderMob {
             power *= 1.10D;
         }
 
+        if (threat.getType() == EntityType.WARDEN) {
+            // Wardens are intentionally exceptional threats. Their enormous
+            // health, melee damage and sonic attack should overwhelm normal
+            // "backup makes me brave" behaviour.
+            power *= 2.50D;
+        }
+
         return power;
     }
 
@@ -3172,6 +3292,7 @@ public class CyberNpcEntity extends PathfinderMob {
         corralBrain.interrupt();
         stopUsingItem();
         clearUtilityItem();
+        cancelMageCast();
         setTarget(null);
         setCombatActive(false);
         huntingTarget = false;
@@ -3180,6 +3301,7 @@ public class CyberNpcEntity extends PathfinderMob {
         fleeSafeTicks = 0;
         fleeRepathCooldown = 0;
         getNavigation().stop();
+        setShiftKeyDown(false);
         setSprinting(true);
     }
 
@@ -3196,7 +3318,7 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
-        fleeRepathCooldown = 10;
+        fleeRepathCooldown = 4;
 
         BlockPos shelter = findNearbyShelter(fleeingThreat);
         if (shelter != null) {
@@ -3377,6 +3499,9 @@ public class CyberNpcEntity extends PathfinderMob {
         if (isSleeping()) {
             return "Sleeping";
         }
+        if (sculkSneaking) {
+            return "Sneaking near visible sculk sensor";
+        }
         if (isCombatActive()) {
             LivingEntity target = getTarget();
             String name = target == null ? "target" : target.getName().getString();
@@ -3505,6 +3630,11 @@ public class CyberNpcEntity extends PathfinderMob {
 
     @Override
     public boolean hurt(DamageSource source, float amount) {
+        if (source.getEntity() instanceof CyberNpcEntity attacker
+                && isFriendlyWildNpc(attacker)) {
+            return false;
+        }
+
         boolean damaged = super.hurt(source, amount);
 
         if (!damaged || level().isClientSide || getNpcType() != NpcType.WILD) {
@@ -3551,6 +3681,59 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         return damaged;
+    }
+
+    private boolean isFriendlyWildNpc(CyberNpcEntity other) {
+        return other != null
+                && other != this
+                && getNpcType() == NpcType.WILD
+                && other.getNpcType() == NpcType.WILD
+                && getTarget() != other
+                && other.getTarget() != this;
+    }
+
+    public boolean hasClearFriendlyFireLane(LivingEntity target) {
+        if (target == null || !target.isAlive()) {
+            return false;
+        }
+
+        Vec3 start = getEyePosition();
+        Vec3 end = target.getEyePosition();
+        Vec3 segment = end.subtract(start);
+        double lengthSqr = segment.lengthSqr();
+
+        if (lengthSqr < 0.0001D) {
+            return true;
+        }
+
+        AABB corridor = new AABB(start, end).inflate(1.35D);
+        List<CyberNpcEntity> allies = level().getEntitiesOfClass(
+                CyberNpcEntity.class,
+                corridor,
+                this::isFriendlyWildNpc
+        );
+
+        for (CyberNpcEntity ally : allies) {
+            Vec3 center = ally.getBoundingBox().getCenter();
+            double t = Mth.clamp(
+                    center.subtract(start).dot(segment) / lengthSqr,
+                    0.0D,
+                    1.0D
+            );
+
+            if (t <= 0.05D || t >= 0.95D) {
+                continue;
+            }
+
+            Vec3 closest = start.add(segment.scale(t));
+            double safeRadius = ally.getBbWidth() * 0.5D + 0.65D;
+
+            if (center.distanceToSqr(closest) <= safeRadius * safeRadius) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void beginWildCombat(LivingEntity target, boolean callForHelp, boolean isHunt) {
@@ -3606,12 +3789,25 @@ public class CyberNpcEntity extends PathfinderMob {
         outOfRangeTicks = 0;
     }
 
-    private void fireAdaptiveArrow(LivingEntity target, float speed, float inaccuracy, double baseDamage) {
+    private boolean fireAdaptiveArrow(
+            LivingEntity target,
+            float speed,
+            float inaccuracy,
+            double baseDamage
+    ) {
+        if (!hasClearFriendlyFireLane(target)) {
+            return false;
+        }
+
         Arrow arrow = new Arrow(level(), this);
 
         Vec3 targetVelocity = target.getDeltaMovement();
         double directDistance = position().distanceTo(target.position());
-        double flightTicks = Mth.clamp(directDistance / Math.max(speed, 0.1F), 1.0D, 30.0D);
+        double flightTicks = Mth.clamp(
+                directDistance / Math.max(speed, 0.1F),
+                1.0D,
+                30.0D
+        );
 
         Vec3 predictedTarget = target.position()
                 .add(targetVelocity.scale(flightTicks * 0.85D));
@@ -3621,12 +3817,14 @@ public class CyberNpcEntity extends PathfinderMob {
         double horizontal = Math.sqrt(dx * dx + dz * dz);
         double targetY = predictedTarget.y + target.getBbHeight() * 0.45D;
 
-        double gravityCompensation = 0.5D * 0.05D * flightTicks * flightTicks;
+        double gravityCompensation =
+                0.5D * 0.05D * flightTicks * flightTicks;
         double dy = targetY - arrow.getY() + gravityCompensation;
 
         arrow.setBaseDamage(baseDamage);
         arrow.shoot(dx, dy, dz, speed, inaccuracy);
         level().addFreshEntity(arrow);
+        return true;
     }
 
     public void completeZombification() {
@@ -4572,6 +4770,16 @@ public class CyberNpcEntity extends PathfinderMob {
                 return;
             }
 
+            if (("RANGED".equals(plan.role())
+                    || "CONTROL".equals(plan.role()))
+                    && !npc.hasClearFriendlyFireLane(target)) {
+                moveForRangedSpacing(
+                        target,
+                        Math.max(8.0D, plan.preferredRange())
+                );
+                return;
+            }
+
             npc.getNavigation().stop();
             npc.setSprinting(false);
 
@@ -4661,7 +4869,19 @@ public class CyberNpcEntity extends PathfinderMob {
 
             npc.stopUsingItem();
             npc.setRangedState(RANGED_STATE_NONE);
-            npc.fireAdaptiveArrow(target, speed, inaccuracy, 3.0D + drawPower);
+
+            if (!npc.fireAdaptiveArrow(
+                    target,
+                    speed,
+                    inaccuracy,
+                    3.0D + drawPower
+            )) {
+                bowDrawTicks = 0;
+                rangedCooldown = 4;
+                moveForRangedSpacing(target, 10.0D);
+                return;
+            }
+
             npc.level().playSound(
                     null,
                     npc.blockPosition(),
@@ -4736,7 +4956,17 @@ public class CyberNpcEntity extends PathfinderMob {
                 float speed = 3.15F;
                 float inaccuracy = Mth.clamp(3.0F - (float) distance * 0.04F, 0.8F, 2.5F);
 
-                npc.fireAdaptiveArrow(target, speed, inaccuracy, 4.5D);
+                if (!npc.fireAdaptiveArrow(
+                        target,
+                        speed,
+                        inaccuracy,
+                        4.5D
+                )) {
+                    crossbowHoldTicks = 4;
+                    moveForRangedSpacing(target, 11.0D);
+                    return;
+                }
+
                 npc.level().playSound(
                         null,
                         npc.blockPosition(),
