@@ -1100,6 +1100,7 @@ public class CyberNpcEntity extends PathfinderMob {
             case ROGUE -> initializeRogueLoadout();
             case BERSERKER -> initializeBerserkerLoadout();
             case BEAST_TAMER -> initializeBeastTamerLoadout();
+            case HORSE_TAMER -> initializeHorseTamerLoadout();
             case MAGE -> initializeMageLoadout();
             case CLERIC -> initializeClericLoadout();
             case SPELLBLADE -> initializeSpellbladeLoadout();
@@ -1380,6 +1381,59 @@ public class CyberNpcEntity extends PathfinderMob {
         }
     }
 
+    private void initializeHorseTamerLoadout() {
+        if (!BetterHorsesCompat.isLoaded()) {
+            setWildClass(WildNpcClass.CLASSLESS);
+            classLoadoutInitialized = false;
+            initializeClasslessLoadout();
+            return;
+        }
+
+        WildNpcGearTier tier = getGearTier();
+
+        ItemStack sword = switch (tier) {
+            case STANDARD -> new ItemStack(Items.STONE_SWORD);
+            case FINE -> new ItemStack(Items.IRON_SWORD);
+            case RARE -> new ItemStack(Items.DIAMOND_SWORD);
+            case ELITE -> new ItemStack(Items.NETHERITE_SWORD);
+        };
+
+        applyWeaponEnchantments(sword, tier);
+        inventory.add(sword);
+
+        ItemStack upgradedSaddle = BetterHorsesCompat.createUpgradedSaddle();
+        if (!upgradedSaddle.isEmpty()) {
+            inventory.add(upgradedSaddle);
+        }
+
+        switch (tier) {
+            case STANDARD -> equipArmorSet(
+                    Items.LEATHER_HELMET,
+                    Items.LEATHER_CHESTPLATE,
+                    Items.LEATHER_LEGGINGS,
+                    Items.LEATHER_BOOTS
+            );
+            case FINE -> equipArmorSet(
+                    Items.CHAINMAIL_HELMET,
+                    Items.CHAINMAIL_CHESTPLATE,
+                    Items.CHAINMAIL_LEGGINGS,
+                    Items.CHAINMAIL_BOOTS
+            );
+            case RARE -> equipArmorSet(
+                    Items.IRON_HELMET,
+                    Items.IRON_CHESTPLATE,
+                    Items.IRON_LEGGINGS,
+                    Items.IRON_BOOTS
+            );
+            case ELITE -> equipArmorSet(
+                    Items.DIAMOND_HELMET,
+                    Items.DIAMOND_CHESTPLATE,
+                    Items.DIAMOND_LEGGINGS,
+                    Items.DIAMOND_BOOTS
+            );
+        }
+    }
+
     private void initializeClericLoadout() {
         if (!IronSpellsCompat.isLoaded()) {
             setWildClass(WildNpcClass.CLASSLESS);
@@ -1619,6 +1673,12 @@ public class CyberNpcEntity extends PathfinderMob {
                 attackDamage = 4.0D;
             }
             case BEAST_TAMER -> {
+                maxHealth = 22.0D;
+                movementSpeed = 0.440D;
+                armor = 0.5D;
+                attackDamage = 2.8D;
+            }
+            case HORSE_TAMER -> {
                 maxHealth = 22.0D;
                 movementSpeed = 0.440D;
                 armor = 0.5D;
@@ -2039,6 +2099,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         tickMeleeSwingAnimation();
         tickSpellCastingVisual();
+        tickBeastTamerCompanionCommands();
 
         if (gapJumpCooldown > 0) {
             gapJumpCooldown--;
@@ -2093,6 +2154,41 @@ public class CyberNpcEntity extends PathfinderMob {
         tickSocialLife();
         tickHuntingAndFood();
         finishAiTick();
+    }
+
+    private void tickBeastTamerCompanionCommands() {
+        if (getWildClass() != WildNpcClass.BEAST_TAMER) {
+            return;
+        }
+
+        LivingEntity activeTarget = getTarget();
+        boolean hasAttackOrder = isCombatActive()
+                && activeTarget != null
+                && activeTarget.isAlive();
+        boolean shouldSit = !hasAttackOrder
+                && (isSleeping() || socialConversationHoldTicks > 0);
+
+        for (Wolf wolf : level().getEntitiesOfClass(
+                Wolf.class,
+                getBoundingBox().inflate(64.0D),
+                candidate -> candidate.isAlive()
+                        && candidate.isTame()
+                        && getUUID().equals(candidate.getOwnerUUID())
+        )) {
+            if (hasAttackOrder) {
+                wolf.setOrderedToSit(false);
+                wolf.setTarget(activeTarget);
+                continue;
+            }
+
+            if (fleeingThreat != null) {
+                wolf.setTarget(null);
+                wolf.setOrderedToSit(false);
+                continue;
+            }
+
+            wolf.setOrderedToSit(shouldSit);
+        }
     }
 
     private boolean tickBeastTamer() {
@@ -2218,7 +2314,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         for (Wolf wolf : level().getEntitiesOfClass(
                 Wolf.class,
-                getBoundingBox().inflate(WILD_HELP_RADIUS),
+                getBoundingBox().inflate(64.0D),
                 candidate -> candidate.isAlive()
                         && candidate.isTame()
                         && getUUID().equals(candidate.getOwnerUUID())
@@ -2248,6 +2344,16 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private boolean tickHorseUse() {
+        if (getWildClass() != WildNpcClass.HORSE_TAMER
+                || !BetterHorsesCompat.isLoaded()) {
+            if (getVehicle() instanceof AbstractHorse horse) {
+                stopUsingHorse(horse);
+            } else {
+                clearHorseTarget();
+            }
+            return false;
+        }
+
         if (isPassenger()) {
             if (getVehicle() instanceof AbstractHorse horse) {
                 return tickRidingHorse(horse);
@@ -2268,7 +2374,9 @@ public class CyberNpcEntity extends PathfinderMob {
 
         AbstractHorse target = findLoadedHorse(horseTargetId);
 
-        if (target != null && !canUseHorse(target, true)) {
+        if (target != null
+                && !canUseHorse(target, true)
+                && !canTameHorse(target, true)) {
             clearHorseTarget();
             target = null;
         }
@@ -2281,12 +2389,9 @@ public class CyberNpcEntity extends PathfinderMob {
 
             horseSearchCooldown = HORSE_SEARCH_INTERVAL;
 
-            // Not every idle NPC needs to become mounted immediately. This
-            // keeps horses feeling useful and special rather than mandatory.
-            if (getRandom().nextFloat() >= 0.40F) {
-                return false;
-            }
-
+            // Prefer the Horse Tamer's existing horse before looking for a new
+            // wild horse. Better Horses ownership persists independently of
+            // CyberNpc's temporary coordination claim.
             target = level().getEntitiesOfClass(
                             AbstractHorse.class,
                             getBoundingBox().inflate(
@@ -2298,6 +2403,20 @@ public class CyberNpcEntity extends PathfinderMob {
                     ).stream()
                     .min(Comparator.comparingDouble(this::distanceToSqr))
                     .orElse(null);
+
+            if (target == null && hasUpgradedSaddleForTaming()) {
+                target = level().getEntitiesOfClass(
+                                AbstractHorse.class,
+                                getBoundingBox().inflate(
+                                        HORSE_SEARCH_RADIUS,
+                                        6.0D,
+                                        HORSE_SEARCH_RADIUS
+                                ),
+                                horse -> canTameHorse(horse, false)
+                        ).stream()
+                        .min(Comparator.comparingDouble(this::distanceToSqr))
+                        .orElse(null);
+            }
 
             if (target == null) {
                 return false;
@@ -2315,7 +2434,13 @@ public class CyberNpcEntity extends PathfinderMob {
 
         getNavigation().stop();
 
-        if (!startRiding(target, true)) {
+        if (!target.isTamed() && !tameHorseWithUpgradedSaddle(target)) {
+            clearHorseTarget();
+            return false;
+        }
+
+        if (!canUseHorse(target, true)
+                || !startRiding(target, true)) {
             clearHorseTarget();
             return false;
         }
@@ -2326,6 +2451,103 @@ public class CyberNpcEntity extends PathfinderMob {
         horseRepathCooldown = 0;
 
         showReaction(NpcReactionIcon.MOUNT, 60);
+        return true;
+    }
+
+    private boolean hasUpgradedSaddleForTaming() {
+        return !inventory.findFirst(
+                BetterHorsesCompat::isUpgradedSaddle
+        ).isEmpty();
+    }
+
+    private boolean tameHorseWithUpgradedSaddle(AbstractHorse horse) {
+        if (!canTameHorse(horse, true)) {
+            return false;
+        }
+
+        ItemStack saddle = inventory.takeOne(
+                BetterHorsesCompat::isUpgradedSaddle
+        );
+        if (saddle.isEmpty()) {
+            return false;
+        }
+
+        horse.setTamed(true);
+        horse.setOwnerUUID(getUUID());
+
+        boolean ownerSet = BetterHorsesCompat.setBetterHorsesOwner(
+                horse,
+                getUUID()
+        );
+        boolean saddleEquipped = ownerSet
+                && BetterHorsesCompat.equipUpgradedSaddle(
+                horse,
+                saddle
+        );
+
+        if (!saddleEquipped) {
+            BetterHorsesCompat.setBetterHorsesOwner(horse, null);
+            horse.setOwnerUUID(null);
+            horse.setTamed(false);
+            inventory.add(saddle);
+            return false;
+        }
+
+        horse.setHealth(horse.getMaxHealth());
+        horse.setPersistenceRequired();
+
+        level().playSound(
+                null,
+                horse.blockPosition(),
+                SoundEvents.HORSE_SADDLE,
+                SoundSource.NEUTRAL,
+                0.5F,
+                1.0F
+        );
+
+        showReaction(NpcReactionIcon.MOUNT, 70);
+        return true;
+    }
+
+    private boolean canTameHorse(
+            AbstractHorse horse,
+            boolean alreadyClaimedByThisNpc
+    ) {
+        if (horse == null
+                || !horse.isAlive()
+                || horse.isBaby()
+                || horse.isTamed()
+                || horse.isVehicle()
+                || BetterHorsesCompat.hasCartGear(horse)
+                || BetterHorsesCompat.getBetterHorsesOwner(horse) != null
+                || horse.getOwnerUUID() != null) {
+            return false;
+        }
+
+        CompoundTag persistent = horse.getPersistentData();
+
+        if (persistent.hasUUID("CyberNpcHorseClaim")) {
+            UUID claim = persistent.getUUID("CyberNpcHorseClaim");
+
+            if (!getUUID().equals(claim)) {
+                boolean liveClaim = false;
+
+                if (level() instanceof ServerLevel serverLevel) {
+                    var claimant = serverLevel.getEntity(claim);
+                    liveClaim = claimant instanceof CyberNpcEntity npc
+                            && npc.isAlive();
+                }
+
+                if (liveClaim) {
+                    return false;
+                }
+
+                persistent.remove("CyberNpcHorseClaim");
+            }
+        } else if (alreadyClaimedByThisNpc) {
+            return false;
+        }
+
         return true;
     }
 
@@ -2403,11 +2625,13 @@ public class CyberNpcEntity extends PathfinderMob {
             AbstractHorse horse,
             boolean alreadyClaimedByThisNpc
     ) {
-        if (horse == null
+        if (getWildClass() != WildNpcClass.HORSE_TAMER
+                || horse == null
                 || !horse.isAlive()
                 || horse.isBaby()
                 || !horse.isTamed()
                 || !horse.isSaddled()
+                || !BetterHorsesCompat.hasUpgradedSaddle(horse)
                 || horse.isVehicle()
                 || BetterHorsesCompat.hasCartGear(horse)) {
             return false;
@@ -2431,9 +2655,6 @@ public class CyberNpcEntity extends PathfinderMob {
                     return false;
                 }
 
-                // Claims are only coordination hints, not ownership. If the
-                // claimant is no longer loaded/alive, clear the stale claim so
-                // this horse cannot become permanently locked after a reload.
                 persistent.remove("CyberNpcHorseClaim");
             }
         } else if (alreadyClaimedByThisNpc) {
@@ -2445,23 +2666,7 @@ public class CyberNpcEntity extends PathfinderMob {
             owner = horse.getOwnerUUID();
         }
 
-        if (owner != null
-                && !owner.equals(getUUID())
-                && level() instanceof ServerLevel serverLevel) {
-            var ownerEntity = serverLevel.getEntity(owner);
-            if (ownerEntity instanceof CyberNpcEntity) {
-                return false;
-            }
-
-            Player playerOwner = serverLevel.getPlayerByUUID(owner);
-            if (playerOwner != null
-                    && playerOwner.distanceToSqr(horse)
-                    <= HORSE_OWNER_RETURN_RADIUS_SQR) {
-                return false;
-            }
-        }
-
-        return true;
+        return getUUID().equals(owner);
     }
 
     private boolean ownerReturnedForHorse(AbstractHorse horse) {
