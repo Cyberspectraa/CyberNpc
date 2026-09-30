@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.15.0
+
+- Added tactical spell awareness to Wild Mage NPCs.
+- Mage AI now profiles its rolled Iron's spells as close-range, ranged, control, healing or defensive abilities.
+- Mages choose only from spells actually present in their own randomized spellbook.
+- Spell choice is now scored by target distance, Mage health and spell role instead of random selection.
+- Close-range spellbooks make the Mage close distance; long-range spellbooks make the Mage create space.
+- Healing is prioritized when the Mage is injured, while defensive magic becomes more attractive under pressure.
+- Long casts are cancelled if the target escapes far outside that spell's tactical range.
+- Unknown future Iron's spells use a conservative mid-range fallback rather than breaking Mage AI.
+
 ## 0.14.3
 
 - Fixed Mage spellbooks appearing empty and leaving Mages unable to cast.

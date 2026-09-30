@@ -39,6 +39,63 @@ public final class IronSpellsCompat {
             MOD_ID + ":spectral_hammer"
     );
 
+    /*
+     * Iron's spells do not expose one universal range/usage API. CyberNpc only
+     * rolls a controlled pool of Mage spells, so profile those spells here.
+     * Distances are tactical AI distances, not replacements for Iron's own
+     * spell checks. Unknown future spells fall back to a conservative mid-range
+     * profile instead of being treated as point-blank or infinite-range.
+     */
+    private static final Map<String, SpellTactics> SPELL_TACTICS = Map.ofEntries(
+            // Fire
+            Map.entry(MOD_ID + ":firebolt", SpellTactics.mid()),
+            Map.entry(MOD_ID + ":fireball", SpellTactics.longRange()),
+            Map.entry(MOD_ID + ":flaming_strike", SpellTactics.closeAoe()),
+            Map.entry(MOD_ID + ":magma_bomb", SpellTactics.longRange()),
+
+            // Ice
+            Map.entry(MOD_ID + ":icicle", new SpellTactics(2.0D, 11.0D, 28.0D, SpellRole.RANGED, true)),
+            Map.entry(MOD_ID + ":frostwave", SpellTactics.closeAoe()),
+            Map.entry(MOD_ID + ":snowball", SpellTactics.mid()),
+            Map.entry(MOD_ID + ":ray_of_frost", new SpellTactics(4.0D, 15.0D, 30.0D, SpellRole.RANGED, true)),
+
+            // Lightning
+            Map.entry(MOD_ID + ":lightning_bolt", SpellTactics.longRange()),
+            Map.entry(MOD_ID + ":chain_lightning", new SpellTactics(4.0D, 14.0D, 30.0D, SpellRole.RANGED, true)),
+            Map.entry(MOD_ID + ":electrocute", new SpellTactics(0.0D, 6.0D, 10.0D, SpellRole.CLOSE, true)),
+            Map.entry(MOD_ID + ":shockwave", new SpellTactics(0.0D, 5.0D, 11.0D, SpellRole.CLOSE, false)),
+
+            // Nature
+            Map.entry(MOD_ID + ":acid_orb", new SpellTactics(4.0D, 12.0D, 28.0D, SpellRole.RANGED, true)),
+            Map.entry(MOD_ID + ":poison_arrow", SpellTactics.longRange()),
+            Map.entry(MOD_ID + ":root", new SpellTactics(4.0D, 14.0D, 30.0D, SpellRole.CONTROL, true)),
+            Map.entry(MOD_ID + ":poison_splash", new SpellTactics(6.0D, 16.0D, 30.0D, SpellRole.CONTROL, true)),
+
+            // Holy
+            Map.entry(MOD_ID + ":guiding_bolt", SpellTactics.longRange()),
+            Map.entry(MOD_ID + ":divine_smite", new SpellTactics(0.0D, 2.0D, 4.0D, SpellRole.CLOSE, true)),
+            Map.entry(MOD_ID + ":heal", new SpellTactics(0.0D, 0.0D, 64.0D, SpellRole.HEAL, false)),
+            Map.entry(MOD_ID + ":wisp", new SpellTactics(5.0D, 18.0D, 40.0D, SpellRole.RANGED, true)),
+
+            // Ender
+            Map.entry(MOD_ID + ":magic_missile", SpellTactics.mid()),
+            Map.entry(MOD_ID + ":magic_arrow", SpellTactics.longRange()),
+            Map.entry(MOD_ID + ":dragon_breath", new SpellTactics(0.0D, 6.0D, 10.0D, SpellRole.CLOSE, true)),
+            Map.entry(MOD_ID + ":evasion", new SpellTactics(0.0D, 0.0D, 64.0D, SpellRole.DEFENSE, false)),
+
+            // Blood
+            Map.entry(MOD_ID + ":blood_needles", SpellTactics.mid()),
+            Map.entry(MOD_ID + ":blood_slash", new SpellTactics(2.0D, 8.0D, 18.0D, SpellRole.RANGED, true)),
+            Map.entry(MOD_ID + ":wither_skull", SpellTactics.longRange()),
+            Map.entry(MOD_ID + ":ray_of_siphoning", new SpellTactics(3.0D, 12.0D, 24.0D, SpellRole.RANGED, true)),
+
+            // Evocation
+            Map.entry(MOD_ID + ":fang_strike", new SpellTactics(2.0D, 7.0D, 14.0D, SpellRole.CLOSE, true)),
+            Map.entry(MOD_ID + ":fang_swirl", new SpellTactics(4.0D, 14.0D, 30.0D, SpellRole.RANGED, true)),
+            Map.entry(MOD_ID + ":slow", new SpellTactics(4.0D, 14.0D, 30.0D, SpellRole.CONTROL, true)),
+            Map.entry(MOD_ID + ":firecracker", new SpellTactics(4.0D, 12.0D, 24.0D, SpellRole.RANGED, true))
+    );
+
     private static boolean attemptedInit;
     private static boolean ready;
     private static Method getSpell;
@@ -306,6 +363,43 @@ public final class IronSpellsCompat {
         return false;
     }
 
+    public static CombatPlan getCombatPlan(
+            CyberNpcEntity caster,
+            LivingEntity target,
+            ItemStack spellBook
+    ) {
+        if (caster == null
+                || target == null
+                || !target.isAlive()
+                || spellBook == null
+                || spellBook.isEmpty()) {
+            return CombatPlan.none();
+        }
+
+        SpellEntry selected = selectBestTacticalSpell(
+                caster,
+                target,
+                getBookSpells(spellBook),
+                false
+        );
+        if (selected == null) {
+            return CombatPlan.none();
+        }
+
+        SpellTactics tactics = tacticsFor(selected.spellId());
+        double distance = caster.distanceTo(target);
+        return new CombatPlan(
+                true,
+                canUseAtCurrentDistance(caster, tactics, distance),
+                tactics.minRange,
+                tactics.preferredRange,
+                tactics.maxRange,
+                tactics.requiresLineOfSight,
+                selected.spellId(),
+                tactics.role.name()
+        );
+    }
+
     public static boolean hasActiveCast(CyberNpcEntity caster) {
         return ACTIVE_CASTS.containsKey(caster.getUUID());
     }
@@ -326,6 +420,15 @@ public final class IronSpellsCompat {
         ActiveCast active = ACTIVE_CASTS.get(caster.getUUID());
         if (active != null) {
             if (!caster.isAlive() || target == null || !target.isAlive()) {
+                cancelCast(caster);
+                return CastResult.failed();
+            }
+
+            SpellTactics activeTactics = tacticsFor(active.spellId);
+            double activeDistance = caster.distanceTo(target);
+            if (activeTactics.role != SpellRole.HEAL
+                    && activeTactics.role != SpellRole.DEFENSE
+                    && activeDistance > activeTactics.maxRange * 1.30D) {
                 cancelCast(caster);
                 return CastResult.failed();
             }
@@ -394,13 +497,22 @@ public final class IronSpellsCompat {
 
         faceTarget(caster, target);
 
-        int start = caster.getRandom().nextInt(spells.size());
-        for (int offset = 0; offset < spells.size(); offset++) {
-            SpellEntry entry = spells.get((start + offset) % spells.size());
+        List<SpellEntry> candidates = new ArrayList<>(spells);
+        candidates.sort((left, right) -> Double.compare(
+                tacticalScore(caster, target, right),
+                tacticalScore(caster, target, left)
+        ));
 
-            // Saved 0.14.0 Mage books may already contain a spell that was later
+        for (SpellEntry entry : candidates) {
+            // Saved 0.14.x Mage books may already contain a spell that was later
             // classified as unsafe, so guard again at cast time as well as book creation.
             if (isExplicitlyUnsafeMobSpell(entry.spellId())) {
+                continue;
+            }
+
+            SpellTactics tactics = tacticsFor(entry.spellId());
+            double distance = caster.distanceTo(target);
+            if (!canUseAtCurrentDistance(caster, tactics, distance)) {
                 continue;
             }
 
@@ -545,6 +657,117 @@ public final class IronSpellsCompat {
         } catch (ReflectiveOperationException | RuntimeException ignored) {
             return false;
         }
+    }
+
+    private static SpellEntry selectBestTacticalSpell(
+            CyberNpcEntity caster,
+            LivingEntity target,
+            List<SpellEntry> spells,
+            boolean requireUsableNow
+    ) {
+        SpellEntry best = null;
+        double bestScore = -Double.MAX_VALUE;
+        double distance = caster.distanceTo(target);
+
+        for (SpellEntry entry : spells) {
+            if (isExplicitlyUnsafeMobSpell(entry.spellId())
+                    || !isSupportedCombatSpell(entry.spellId())) {
+                continue;
+            }
+
+            SpellTactics tactics = tacticsFor(entry.spellId());
+            if (requireUsableNow
+                    && !canUseAtCurrentDistance(caster, tactics, distance)) {
+                continue;
+            }
+
+            double score = tacticalScore(caster, target, entry);
+            if (score > bestScore) {
+                bestScore = score;
+                best = entry;
+            }
+        }
+
+        return best;
+    }
+
+    private static double tacticalScore(
+            CyberNpcEntity caster,
+            LivingEntity target,
+            SpellEntry entry
+    ) {
+        SpellTactics tactics = tacticsFor(entry.spellId());
+        double distance = caster.distanceTo(target);
+        double healthFraction = caster.getMaxHealth() <= 0.0F
+                ? 1.0D
+                : caster.getHealth() / caster.getMaxHealth();
+
+        if (tactics.role == SpellRole.HEAL) {
+            if (healthFraction >= 0.78D) {
+                return -250.0D;
+            }
+            return 180.0D + (1.0D - healthFraction) * 180.0D;
+        }
+
+        if (tactics.role == SpellRole.DEFENSE) {
+            if (healthFraction < 0.62D || distance < 7.0D) {
+                return 135.0D
+                        + (1.0D - healthFraction) * 80.0D
+                        + Math.max(0.0D, 7.0D - distance) * 5.0D;
+            }
+            return 5.0D;
+        }
+
+        double distancePenalty = Math.abs(distance - tactics.preferredRange) * 4.0D;
+        if (distance < tactics.minRange) {
+            distancePenalty += (tactics.minRange - distance) * 14.0D;
+        } else if (distance > tactics.maxRange) {
+            distancePenalty += (distance - tactics.maxRange) * 16.0D;
+        }
+
+        double score = 100.0D - distancePenalty;
+
+        if (tactics.role == SpellRole.CONTROL) {
+            score += distance >= 6.0D ? 12.0D : -10.0D;
+        } else if (tactics.role == SpellRole.CLOSE) {
+            score += distance <= tactics.maxRange ? 15.0D : 0.0D;
+        } else if (tactics.role == SpellRole.RANGED) {
+            score += distance >= 7.0D ? 10.0D : -4.0D;
+        }
+
+        // Small stable preference for higher-level rolls when two spells make
+        // similar tactical sense.
+        score += Math.min(8.0D, entry.level() * 1.25D);
+        return score;
+    }
+
+    private static boolean canUseAtCurrentDistance(
+            CyberNpcEntity caster,
+            SpellTactics tactics,
+            double distance
+    ) {
+        if (tactics.role == SpellRole.HEAL) {
+            double healthFraction = caster.getMaxHealth() <= 0.0F
+                    ? 1.0D
+                    : caster.getHealth() / caster.getMaxHealth();
+            return healthFraction < 0.78D;
+        }
+
+        if (tactics.role == SpellRole.DEFENSE) {
+            double healthFraction = caster.getMaxHealth() <= 0.0F
+                    ? 1.0D
+                    : caster.getHealth() / caster.getMaxHealth();
+            return healthFraction < 0.62D || distance < 7.0D;
+        }
+
+        return distance >= tactics.minRange && distance <= tactics.maxRange;
+    }
+
+    private static SpellTactics tacticsFor(String spellId) {
+        String normalized = spellId == null
+                ? ""
+                : (spellId.contains(":") ? spellId.trim() : MOD_ID + ":" + spellId.trim());
+        return SPELL_TACTICS.getOrDefault(normalized, SpellTactics.mid());
     }
 
     private static boolean isExplicitlyUnsafeMobSpell(String spellId) {
@@ -767,6 +990,58 @@ public final class IronSpellsCompat {
             this.remainingTicks = remainingTicks;
             this.cooldownTicks = cooldownTicks;
             this.spellId = spellId;
+        }
+    }
+
+    private enum SpellRole {
+        CLOSE,
+        RANGED,
+        CONTROL,
+        HEAL,
+        DEFENSE
+    }
+
+    private record SpellTactics(
+            double minRange,
+            double preferredRange,
+            double maxRange,
+            SpellRole role,
+            boolean requiresLineOfSight
+    ) {
+        private static SpellTactics closeAoe() {
+            return new SpellTactics(0.0D, 4.0D, 9.0D, SpellRole.CLOSE, false);
+        }
+
+        private static SpellTactics mid() {
+            return new SpellTactics(2.0D, 10.0D, 24.0D, SpellRole.RANGED, true);
+        }
+
+        private static SpellTactics longRange() {
+            return new SpellTactics(5.0D, 16.0D, 32.0D, SpellRole.RANGED, true);
+        }
+    }
+
+    public record CombatPlan(
+            boolean available,
+            boolean readyToCast,
+            double minRange,
+            double preferredRange,
+            double maxRange,
+            boolean requiresLineOfSight,
+            String spellId,
+            String role
+    ) {
+        public static CombatPlan none() {
+            return new CombatPlan(
+                    false,
+                    false,
+                    0.0D,
+                    10.0D,
+                    18.0D,
+                    true,
+                    "",
+                    ""
+            );
         }
     }
 

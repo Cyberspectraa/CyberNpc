@@ -4074,20 +4074,52 @@ public class CyberNpcEntity extends PathfinderMob {
                 return;
             }
 
-            if (!lineOfSight || distanceSqr > 324.0D) {
-                npc.getNavigation().moveTo(target, 0.95D);
+            IronSpellsCompat.CombatPlan plan =
+                    IronSpellsCompat.getCombatPlan(npc, target, spellBook);
+
+            if (!plan.available()) {
+                mageCooldown = 30;
+                npc.getNavigation().moveTo(target, 0.90D);
                 return;
             }
 
-            if (distanceSqr < 49.0D) {
-                moveForRangedSpacing(target, 11.0D);
-            } else if (distanceSqr > 196.0D) {
-                npc.getNavigation().moveTo(target, 0.86D);
-            } else if (npc.getPersonality() == WildNpcPersonality.TACTICAL) {
-                moveForRangedSpacing(target, 11.5D);
-            } else {
-                npc.getNavigation().stop();
+            double distance = Math.sqrt(distanceSqr);
+
+            if (plan.requiresLineOfSight() && !lineOfSight) {
+                npc.getNavigation().moveTo(target, 0.98D);
+                return;
             }
+
+            if (distance > plan.maxRange()) {
+                // Close-range and mid-range spellbooks now actually close the
+                // distance instead of hovering at the old fixed Mage radius.
+                npc.getNavigation().moveTo(
+                        target,
+                        plan.preferredRange() <= 8.0D ? 1.02D : 0.92D
+                );
+                return;
+            }
+
+            if (distance < plan.minRange()) {
+                // Long-range/projectile spells create their preferred gap before
+                // committing to the cast.
+                moveForRangedSpacing(
+                        target,
+                        Math.max(plan.preferredRange(), plan.minRange() + 2.0D)
+                );
+                return;
+            }
+
+            if (!plan.readyToCast()) {
+                if (distance > plan.preferredRange()) {
+                    npc.getNavigation().moveTo(target, 0.90D);
+                } else {
+                    moveForRangedSpacing(target, plan.preferredRange());
+                }
+                return;
+            }
+
+            npc.getNavigation().stop();
 
             IronSpellsCompat.CastResult result =
                     IronSpellsCompat.tickAttackSpell(npc, target, spellBook);
