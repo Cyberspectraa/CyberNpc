@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.32.0
+
+### Developer Glasses overhaul
+- Rebuilt the Developer Glasses overlay from scratch around Minecraft-style inventory UI rather than a wide sci-fi debug panel.
+- The overlay is now much narrower and more compact, with Minecraft-style bevels, slot borders, blocky segmented bars and the normal Minecraft font.
+- Reduced seven cluttered tabs to four focused pages: Status, Mind, Social and Gear.
+- Status now shows only the essential at-a-glance information: class, personality, health, hunger, current activity, current intention and gear tier.
+- Mind contains the deeper AI information such as intention, decision reason, target, path and combat confidence.
+- Social contains party status and a capped relationship list instead of dumping every social line into the main panel.
+- Gear renders the NPC's actual equipped armor/main-hand/off-hand items inside inventory-like slots and keeps inventory/claims/spell information below them.
+- Long strings are trimmed or wrapped to keep the panel readable instead of growing indefinitely.
+- The page switch key remains V, but the active page is shown as a Minecraft-style button in the footer.
+- Looking away from an NPC now shows a small unobtrusive Developer Glasses hint card instead of the full debug panel.
+
+### Non-verbal NPC vocalizations
+- Added a dedicated vocalization controller for Wild NPCs.
+- NPCs remain speechless; the new voice layer uses short grunt/snort-style sounds rather than words.
+- Vocalizations use vanilla Minecraft sound events with lower pitch/volume variation, so no external voice assets are required.
+- Friendly, happy and social reactions use softer acknowledgement grunts.
+- Thinking/confusion uses quieter short vocal sounds.
+- Anger/combat uses rougher aggressive grunts.
+- Fear/danger uses retreat-style vocal sounds.
+- Taking damage can produce a distinct hurt grunt.
+- Nearby lightning can trigger a surprised vocal reaction.
+- Idle NPCs can make a quiet occasional ambient grunt, but the interval is deliberately long.
+- Reaction, hurt and ambient sounds all have independent cooldowns so groups of NPCs do not constantly spam audio.
+
 ## 0.31.0
 
 ### Beast Tamer retired
