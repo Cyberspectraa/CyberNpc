@@ -2095,6 +2095,20 @@ public class CyberNpcEntity extends PathfinderMob {
         return sleepBrain.getClaimedBed();
     }
 
+    boolean shouldExplorerReturnBeforeSleeping() {
+        if (getWildClass() != WildNpcClass.HORSE_TAMER
+                || !(getVehicle() instanceof AbstractHorse)
+                || explorerHomePos == null
+                || blockPosition().distSqr(explorerHomePos)
+                <= EXPLORER_HOME_REACHED_SQR) {
+            return false;
+        }
+
+        explorerReturningHome = true;
+        explorerWaypoint = null;
+        return true;
+    }
+
     @Nullable
     @Override
     public SpawnGroupData finalizeSpawn(
