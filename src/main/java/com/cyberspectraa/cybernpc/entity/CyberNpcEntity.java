@@ -154,6 +154,16 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final double HORSE_SPRINT_NAV_SPEED = 1.45D;
     private static final double HORSE_SPRINT_DISTANCE_SQR = 100.0D;
 
+    private static final int EXPLORER_DISCOVERY_SCAN_INTERVAL = 40;
+    private static final int EXPLORER_MIN_REPORT_TICKS = 2400;
+    private static final int EXPLORER_MAX_EXPEDITION_TICKS = 9000;
+    private static final int EXPLORER_WAYPOINT_MIN_DISTANCE = 96;
+    private static final int EXPLORER_WAYPOINT_RANDOM_DISTANCE = 96;
+    private static final double EXPLORER_WAYPOINT_REACHED_SQR = 100.0D;
+    private static final double EXPLORER_HOME_REACHED_SQR = 12.0D * 12.0D;
+    private static final double EXPLORER_REPORT_RADIUS = 14.0D;
+    private static final double EXPLORER_LOCAL_NAV_STEP = 24.0D;
+
     private static final int CHAT_REACTION_COOLDOWN_TICKS = 40;
 
     private static final double FIGHT_CONFIDENCE = 55.0D;
@@ -324,6 +334,21 @@ public class CyberNpcEntity extends PathfinderMob {
     private int horseRemountCooldown;
     private int horseRepathCooldown;
 
+    private final NpcDiscoveryMemory discoveryMemory =
+            new NpcDiscoveryMemory();
+
+    @Nullable
+    private BlockPos explorerHomePos;
+
+    @Nullable
+    private BlockPos explorerWaypoint;
+
+    private boolean explorerReturningHome;
+    private int explorerExpeditionTicks;
+    private int explorerDiscoveryScanCooldown;
+    private int explorerUnreportedDiscoveries;
+    private double explorerHeadingRadians = Double.NaN;
+
     private boolean chainmailMigrationChecked;
 
     private boolean huntingTarget;
@@ -404,6 +429,8 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         setPathfindingMalus(BlockPathTypes.LAVA, -1.0F);
+        setPathfindingMalus(BlockPathTypes.WATER, 1.0F);
+        setPathfindingMalus(BlockPathTypes.WATER_BORDER, 0.5F);
         setPathfindingMalus(BlockPathTypes.DAMAGE_FIRE, 16.0F);
         setPathfindingMalus(BlockPathTypes.DANGER_FIRE, 10.0F);
         setPathfindingMalus(BlockPathTypes.DAMAGE_OTHER, 12.0F);
@@ -664,6 +691,34 @@ public class CyberNpcEntity extends PathfinderMob {
 
     public String getDebugRelationships() {
         return entityData.get(DATA_DEBUG_RELATIONSHIPS);
+    }
+
+    public String getDebugDiscoveries() {
+        return discoveryMemory.debugSummary();
+    }
+
+    public String getDebugExplorerState() {
+        if (getWildClass() != WildNpcClass.HORSE_TAMER) {
+            return "not explorer";
+        }
+
+        if (explorerReturningHome) {
+            return "returning home"
+                    + (explorerUnreportedDiscoveries > 0
+                    ? " • " + explorerUnreportedDiscoveries + " new"
+                    : "");
+        }
+
+        if (getVehicle() instanceof AbstractHorse) {
+            return "exploring"
+                    + (explorerUnreportedDiscoveries > 0
+                    ? " • " + explorerUnreportedDiscoveries + " new"
+                    : "");
+        }
+
+        return explorerUnreportedDiscoveries > 0
+                ? "home • " + explorerUnreportedDiscoveries + " unreported"
+                : "ready";
     }
 
     public int getPlayerReputation(UUID playerId) {
@@ -2040,6 +2095,20 @@ public class CyberNpcEntity extends PathfinderMob {
         return sleepBrain.getClaimedBed();
     }
 
+    boolean shouldExplorerReturnBeforeSleeping() {
+        if (getWildClass() != WildNpcClass.HORSE_TAMER
+                || !(getVehicle() instanceof AbstractHorse)
+                || explorerHomePos == null
+                || blockPosition().distSqr(explorerHomePos)
+                <= EXPLORER_HOME_REACHED_SQR) {
+            return false;
+        }
+
+        explorerReturningHome = true;
+        explorerWaypoint = null;
+        return true;
+    }
+
     @Nullable
     @Override
     public SpawnGroupData finalizeSpawn(
@@ -2061,6 +2130,12 @@ public class CyberNpcEntity extends PathfinderMob {
         if (getNpcType() == NpcType.WILD) {
             setHunger(MAX_HUNGER);
             ensureWildProfile();
+
+            if (getWildClass() == WildNpcClass.HORSE_TAMER
+                    && explorerHomePos == null) {
+                explorerHomePos = blockPosition().immutable();
+            }
+
             stowWeapons();
 
             if (spawnType == MobSpawnType.NATURAL
@@ -2122,6 +2197,7 @@ public class CyberNpcEntity extends PathfinderMob {
         tickMeleeSwingAnimation();
         tickSpellCastingVisual();
         vocalizations.tick();
+        tickPlayerLikeSwimming();
 
         if (gapJumpCooldown > 0) {
             gapJumpCooldown--;
@@ -2292,10 +2368,22 @@ public class CyberNpcEntity extends PathfinderMob {
             return false;
         }
 
-        horseRideOrigin = target.blockPosition().immutable();
+        if (explorerHomePos == null) {
+            BlockPos claimedBed = getClaimedBedPos();
+            explorerHomePos = claimedBed != null
+                    ? claimedBed.immutable()
+                    : blockPosition().immutable();
+        }
+
+        horseRideOrigin = explorerHomePos;
         horseRideTicks = HORSE_RIDE_MIN_TICKS
                 + getRandom().nextInt(HORSE_RIDE_RANDOM_TICKS + 1);
         horseRepathCooldown = 0;
+
+        if (!explorerReturningHome && explorerExpeditionTicks <= 0) {
+            explorerWaypoint = null;
+            explorerHeadingRadians = Double.NaN;
+        }
 
         showReaction(NpcReactionIcon.MOUNT, 60);
         return true;
@@ -2461,49 +2549,286 @@ public class CyberNpcEntity extends PathfinderMob {
             return true;
         }
 
-        if (horseRepathCooldown > 0) {
-            horseRepathCooldown--;
-            if (horse.getNavigation().isDone()) {
-                horse.setSprinting(false);
+        return tickHorseExplorerTravel(horse);
+    }
+
+    private boolean tickHorseExplorerTravel(AbstractHorse horse) {
+        if (!(level() instanceof ServerLevel serverLevel)) {
+            return true;
+        }
+
+        explorerExpeditionTicks++;
+
+        BlockPos claimedBed = getClaimedBedPos();
+        if (claimedBed != null) {
+            explorerHomePos = claimedBed.immutable();
+        } else if (explorerHomePos == null) {
+            explorerHomePos = blockPosition().immutable();
+        }
+
+        if (explorerDiscoveryScanCooldown > 0) {
+            explorerDiscoveryScanCooldown--;
+        } else {
+            explorerDiscoveryScanCooldown =
+                    EXPLORER_DISCOVERY_SCAN_INTERVAL;
+            scanExplorerDiscoveries(serverLevel, horse.blockPosition());
+        }
+
+        BlockPos home = explorerHomePos;
+        long dayTime = serverLevel.getDayTime() % 24000L;
+        boolean evening = dayTime >= 11200L && dayTime <= 23000L;
+
+        if (!explorerReturningHome
+                && home != null
+                && (
+                (explorerUnreportedDiscoveries >= 2
+                        && explorerExpeditionTicks >= EXPLORER_MIN_REPORT_TICKS)
+                        || explorerExpeditionTicks
+                        >= EXPLORER_MAX_EXPEDITION_TICKS
+                        || getHunger() <= 14
+                        || (evening
+                        && horse.blockPosition().distSqr(home) > 900.0D)
+        )) {
+            explorerReturningHome = true;
+            explorerWaypoint = null;
+        }
+
+        if (explorerReturningHome && home != null) {
+            if (horse.blockPosition().distSqr(home)
+                    <= EXPLORER_HOME_REACHED_SQR) {
+                reportExplorerDiscoveries();
+                explorerReturningHome = false;
+                explorerExpeditionTicks = 0;
+                explorerWaypoint = null;
+                explorerHeadingRadians = Double.NaN;
+                stopUsingHorse(horse);
+                return false;
             }
+
+            navigateExplorerToward(horse, home, true);
             return true;
         }
 
-        horseRepathCooldown = HORSE_REPATH_INTERVAL;
-
-        if (horseRideOrigin != null
-                && horse.blockPosition().distSqr(horseRideOrigin) > 900.0D) {
-            horse.setSprinting(true);
-            horse.getNavigation().moveTo(
-                    horseRideOrigin.getX() + 0.5D,
-                    horseRideOrigin.getY(),
-                    horseRideOrigin.getZ() + 0.5D,
-                    HORSE_SPRINT_NAV_SPEED
-            );
-            return true;
+        if (explorerWaypoint == null
+                || horizontalDistanceSqr(
+                horse.blockPosition(),
+                explorerWaypoint
+        ) <= EXPLORER_WAYPOINT_REACHED_SQR) {
+            chooseNextExplorerWaypoint(horse.blockPosition());
         }
 
-        Vec3 travel = DefaultRandomPos.getPos(horse, 18, 6);
-        if (travel != null) {
-            double dx = travel.x - horse.getX();
-            double dz = travel.z - horse.getZ();
-            boolean sprint = dx * dx + dz * dz
-                    > HORSE_SPRINT_DISTANCE_SQR;
-
-            horse.setSprinting(sprint);
-            horse.getNavigation().moveTo(
-                    travel.x,
-                    travel.y,
-                    travel.z,
-                    sprint
-                            ? HORSE_SPRINT_NAV_SPEED
-                            : HORSE_NORMAL_NAV_SPEED
-            );
+        if (explorerWaypoint != null) {
+            navigateExplorerToward(horse, explorerWaypoint, true);
         } else {
             horse.setSprinting(false);
         }
 
         return true;
+    }
+
+    private void chooseNextExplorerWaypoint(BlockPos from) {
+        if (Double.isNaN(explorerHeadingRadians)
+                || getRandom().nextFloat() < 0.28F) {
+            explorerHeadingRadians =
+                    getRandom().nextDouble() * Math.PI * 2.0D;
+        } else {
+            explorerHeadingRadians +=
+                    (getRandom().nextDouble() - 0.5D) * 0.85D;
+        }
+
+        int distance = EXPLORER_WAYPOINT_MIN_DISTANCE
+                + getRandom().nextInt(
+                EXPLORER_WAYPOINT_RANDOM_DISTANCE + 1
+        );
+
+        int dx = Mth.floor(Math.cos(explorerHeadingRadians) * distance);
+        int dz = Mth.floor(Math.sin(explorerHeadingRadians) * distance);
+
+        explorerWaypoint = from.offset(dx, 0, dz).immutable();
+    }
+
+    private void navigateExplorerToward(
+            AbstractHorse horse,
+            BlockPos destination,
+            boolean sprint
+    ) {
+        Vec3 delta = new Vec3(
+                destination.getX() + 0.5D - horse.getX(),
+                0.0D,
+                destination.getZ() + 0.5D - horse.getZ()
+        );
+
+        if (delta.lengthSqr() < 0.01D) {
+            horse.getNavigation().stop();
+            horse.setSprinting(false);
+            return;
+        }
+
+        Vec3 direction = delta.normalize();
+        double step = Math.min(
+                EXPLORER_LOCAL_NAV_STEP,
+                Math.sqrt(delta.lengthSqr())
+        );
+
+        Vec3 localTarget = horse.position().add(
+                direction.x * step,
+                0.0D,
+                direction.z * step
+        );
+
+        horse.setSprinting(sprint);
+        boolean pathStarted = horse.getNavigation().moveTo(
+                localTarget.x,
+                horse.getY(),
+                localTarget.z,
+                sprint
+                        ? HORSE_SPRINT_NAV_SPEED
+                        : HORSE_NORMAL_NAV_SPEED
+        );
+
+        if (!pathStarted && !explorerReturningHome) {
+            explorerWaypoint = null;
+            explorerHeadingRadians +=
+                    0.9D + getRandom().nextDouble() * 0.8D;
+        }
+    }
+
+    private void scanExplorerDiscoveries(
+            ServerLevel serverLevel,
+            BlockPos pos
+    ) {
+        BlockPos home = explorerHomePos;
+        boolean awayFromHome = home == null
+                || horizontalDistanceSqr(home, pos) > 32.0D * 32.0D;
+
+        String biomeId = serverLevel.getBiome(pos)
+                .unwrapKey()
+                .map(key -> key.location().toString())
+                .orElse("minecraft:unknown");
+
+        if (discoveryMemory.rememberBiome(biomeId, pos)
+                && awayFromHome) {
+            explorerUnreportedDiscoveries++;
+            showReaction(NpcReactionIcon.THINKING, 45);
+        }
+
+        if (serverLevel.isVillage(pos)
+                && discoveryMemory.rememberVillage(pos)
+                && awayFromHome) {
+            explorerUnreportedDiscoveries++;
+            showReaction(NpcReactionIcon.SURPRISED, 55);
+        }
+    }
+
+    private void reportExplorerDiscoveries() {
+        if (explorerUnreportedDiscoveries <= 0) {
+            return;
+        }
+
+        List<CyberNpcEntity> listeners = level().getEntitiesOfClass(
+                        CyberNpcEntity.class,
+                        getBoundingBox().inflate(EXPLORER_REPORT_RADIUS),
+                        other -> other != this
+                                && other.isAlive()
+                                && other.getNpcType() == NpcType.WILD
+                ).stream()
+                .sorted(Comparator.comparingDouble(this::distanceToSqr))
+                .toList();
+
+        CyberNpcEntity conversationPartner = null;
+        int totalLearned = 0;
+
+        for (CyberNpcEntity listener : listeners) {
+            int learned = discoveryMemory.shareTo(
+                    listener.discoveryMemory
+            );
+
+            if (learned > 0) {
+                totalLearned += learned;
+                listener.showReaction(NpcReactionIcon.THINKING, 55);
+
+                if (conversationPartner == null) {
+                    conversationPartner = listener;
+                }
+            }
+        }
+
+        if (totalLearned > 0) {
+            explorerUnreportedDiscoveries = 0;
+            showReaction(NpcReactionIcon.GREETING, 70);
+
+            if (conversationPartner != null) {
+                startSocialConversationHold(
+                        conversationPartner,
+                        100
+                );
+            }
+        }
+    }
+
+    private static double horizontalDistanceSqr(
+            BlockPos a,
+            BlockPos b
+    ) {
+        double dx = a.getX() - b.getX();
+        double dz = a.getZ() - b.getZ();
+        return dx * dx + dz * dz;
+    }
+
+    private void tickPlayerLikeSwimming() {
+        if (isPassenger() || isSleeping()) {
+            if (isSwimming()) {
+                setSwimming(false);
+            }
+            return;
+        }
+
+        if (!isInWaterOrBubble()) {
+            if (isSwimming()) {
+                setSwimming(false);
+            }
+            return;
+        }
+
+        Path path = getNavigation().getPath();
+        boolean movingToGoal =
+                path != null && !path.isDone() && path.getTarget() != null;
+
+        boolean underwater = isUnderWater();
+        setSwimming(underwater && movingToGoal);
+
+        Vec3 movement = getDeltaMovement();
+        double upward = underwater ? 0.035D : 0.012D;
+
+        if (underwater
+                && getAirSupply() < getMaxAirSupply() / 2) {
+            upward = 0.085D;
+        }
+
+        if (movingToGoal) {
+            Vec3 target = Vec3.atCenterOf(path.getTarget());
+            Vec3 horizontal = new Vec3(
+                    target.x - getX(),
+                    0.0D,
+                    target.z - getZ()
+            );
+
+            if (horizontal.lengthSqr() > 0.01D) {
+                horizontal = horizontal.normalize();
+                double push = isSprinting() ? 0.045D : 0.030D;
+                movement = movement.add(
+                        horizontal.x * push,
+                        upward,
+                        horizontal.z * push
+                );
+            } else {
+                movement = movement.add(0.0D, upward, 0.0D);
+            }
+        } else {
+            movement = movement.add(0.0D, upward, 0.0D);
+        }
+
+        setDeltaMovement(movement);
     }
 
     private boolean canUseHorse(
@@ -5873,6 +6198,12 @@ public class CyberNpcEntity extends PathfinderMob {
             return "Sleeping";
         }
         if (getVehicle() instanceof AbstractHorse horse) {
+            if (getWildClass() == WildNpcClass.HORSE_TAMER) {
+                return explorerReturningHome
+                        ? "Explorer returning home"
+                        : "Exploring on horseback";
+            }
+
             return (horse.isSprinting()
                     ? "Sprinting on horse — "
                     : "Riding horse — ")
@@ -5960,6 +6291,17 @@ public class CyberNpcEntity extends PathfinderMob {
             return "It is night and this NPC is committed to reaching its claimed bed";
         }
         if (getVehicle() instanceof AbstractHorse horse) {
+            if (getWildClass() == WildNpcClass.HORSE_TAMER
+                    && explorerReturningHome) {
+                return explorerUnreportedDiscoveries > 0
+                        ? "The explorer has new places to report and is riding back home to share them"
+                        : "The current exploration trip is ending, so the rider is returning home";
+            }
+
+            if (getWildClass() == WildNpcClass.HORSE_TAMER) {
+                return "Horse Tamer is acting as an explorer, travelling beyond the local area to discover biomes and landmarks";
+            }
+
             if (horse.isSprinting()) {
                 return "Mounted destination is far enough away to make sprint travel worthwhile";
             }
@@ -6747,6 +7089,27 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         socialMemory.saveTo(tag);
+        discoveryMemory.saveTo(tag);
+
+        if (explorerHomePos != null) {
+            tag.putLong(
+                    "CyberNpcExplorerHome",
+                    explorerHomePos.asLong()
+            );
+        }
+        tag.putBoolean(
+                "CyberNpcExplorerReturning",
+                explorerReturningHome
+        );
+        tag.putInt(
+                "CyberNpcExplorerExpeditionTicks",
+                explorerExpeditionTicks
+        );
+        tag.putInt(
+                "CyberNpcExplorerUnreported",
+                explorerUnreportedDiscoveries
+        );
+
         corralBrain.addSaveData(tag);
         sleepBrain.addSaveData(tag);
     }
@@ -6807,6 +7170,21 @@ public class CyberNpcEntity extends PathfinderMob {
 
         ensureAppearance();
         socialMemory.loadFrom(tag);
+        discoveryMemory.loadFrom(tag);
+
+        explorerHomePos = tag.contains("CyberNpcExplorerHome")
+                ? BlockPos.of(tag.getLong("CyberNpcExplorerHome"))
+                : null;
+        explorerReturningHome =
+                tag.getBoolean("CyberNpcExplorerReturning");
+        explorerExpeditionTicks =
+                tag.getInt("CyberNpcExplorerExpeditionTicks");
+        explorerUnreportedDiscoveries = Math.max(
+                0,
+                tag.getInt("CyberNpcExplorerUnreported")
+        );
+        explorerWaypoint = null;
+        explorerHeadingRadians = Double.NaN;
 
         if (getNpcType() == NpcType.WILD) {
             String loadedClassName = tag.contains("CyberNpcWildClass")
@@ -6966,6 +7344,9 @@ public class CyberNpcEntity extends PathfinderMob {
         horseRideTicks = 0;
         horseRemountCooldown = 0;
         horseRepathCooldown = 0;
+        explorerDiscoveryScanCooldown = 0;
+        explorerWaypoint = null;
+        explorerHeadingRadians = Double.NaN;
         chainmailMigrationChecked = false;
         fleeingThreat = null;
         fleeSafeTicks = 0;
