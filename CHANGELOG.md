@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.33.0
+
+### Developer Glasses — compact rebuild
+- Rebuilt the Developer Glasses overlay again around a strict 176×98 pixel footprint.
+- The overlay now only appears while actually looking at a CyberNpc; there is no idle hint panel taking up screen space.
+- Added hard GUI scissoring around the body area. Even malformed or unexpectedly long debug text cannot render outside the panel.
+- Removed wrapped paragraphs entirely from the overlay. Every value is forced into a fixed-width single row and trimmed before rendering.
+- Reduced each page to a handful of high-value rows so the glasses behave like a glanceable Minecraft HUD instead of a debug console.
+- Four compact pages remain: INFO, AI, SOC and DATA.
+- INFO: class, personality, health, hunger and current activity.
+- AI: current intention, decision reason, target, path/explorer state and confidence.
+- SOC: party, shared place knowledge and at most three relationship lines.
+- DATA: gear tier, compact inventory/claim summary and actual equipment slots.
+- Minecraft-style grey bevels, dark wells and inventory slots remain, but the panel is dramatically smaller.
+
+### Horse Tamer explorers
+- Horse Tamers now act as long-range explorers once they have found, tamed and mounted their own horse.
+- Removed the old local 30-block mounted return leash.
+- Explorers build long-distance expedition waypoints and can continue travelling outward without a fixed home-distance cap.
+- Navigation is performed in local pathable steps so an expedition can keep extending instead of requiring one enormous path.
+- Failed terrain routes cause the explorer to choose a different heading rather than repeatedly running into the same obstacle.
+- Explorers remember new biomes they enter while away from home.
+- Explorers detect villages encountered during an expedition and store them as landmarks.
+- Nearby sections of the same village are merged into one remembered landmark instead of producing duplicate discoveries.
+- A claimed bed becomes the explorer's preferred home; otherwise the NPC's original home position is used.
+- Explorers decide to return after a meaningful expedition, when carrying multiple new discoveries, when hunger starts becoming relevant, or when evening/night makes returning sensible.
+- At night, mounted explorers return home before the sleep system is allowed to make them dismount.
+- On reaching home, explorers share their discovered biome/village knowledge with nearby Wild NPCs and briefly enter a normal social conversation.
+- Shared discoveries persist in the receiving NPCs, so place knowledge can spread through a settlement.
+- Developer Glasses exposes known-place counts and the explorer's current exploration/return state.
+- Explorers do not force-load distant chunks; they roam as far as normal loaded-world simulation permits.
+
+### Player-like swimming
+- Wild NPCs now treat water as traversable terrain instead of strongly avoiding it.
+- Added an active swimming controller for NPCs moving through water.
+- Moving submerged NPCs enter Minecraft's swimming state/pose instead of remaining upright like ordinary land mobs.
+- Swimming applies forward movement toward the active navigation goal plus controlled buoyancy.
+- NPCs push upward more strongly when their air supply becomes low, giving them player-like attempts to reach the surface rather than passively drowning.
+- Passenger/sleep states correctly leave the swimming pose.
+
+### Animal opinions and watching
+- Attention/curiosity now considers adult animals as well as villagers, golems, horses and baby mobs.
+- Every NPC receives stable species preferences derived from its identity and personality, so the same NPC consistently likes or dislikes the same animal type across sessions.
+- Horse Tamers always like horses.
+- Baby animals receive a natural positive bias.
+- Personality changes the overall likelihood of likes/dislikes.
+- If an NPC likes an animal, it may approach to a comfortable distance, watch it and show a friendly reaction.
+- If an NPC dislikes an animal, it keeps extra distance, watches it and shows an annoyed reaction.
+- Disliking an animal never makes the NPC attack it; this is a social/preference reaction, not combat aggression.
+- The active AI reason explains when an animal is being watched because the NPC likes or dislikes it.
+
 ## 0.32.0
 
 ### Developer Glasses overhaul
