@@ -155,7 +155,7 @@ final class NpcVocalizationController {
 
     private float passivePitch() {
         float personality = switch (npc.getPersonality()) {
-            case RECKLESS, AGGRESSIVE, BERSERKER -> -0.08F;
+            case RECKLESS, AGGRESSIVE -> -0.08F;
             case SKITTISH -> 0.10F;
             case PATIENT, STUBBORN -> -0.04F;
             default -> 0.0F;
