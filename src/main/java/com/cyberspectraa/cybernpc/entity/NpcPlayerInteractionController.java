@@ -138,15 +138,32 @@ final class NpcPlayerInteractionController {
         if (wolf == null
                 || !wolf.isAlive()
                 || !wolf.isTame()
-                || !npc.getUUID().equals(wolf.getOwnerUUID())
-                || wolf.isOrderedToSit() == shouldSit) {
+                || !npc.getUUID().equals(wolf.getOwnerUUID())) {
             return;
         }
 
-        rightClickEntity(wolf);
+        boolean commandMismatch = wolf.isOrderedToSit() != shouldSit;
+        boolean poseMismatch = wolf.isInSittingPose() != shouldSit;
 
+        if (!commandMismatch && !poseMismatch) {
+            return;
+        }
+
+        // Only issue a real owner right-click when the actual command flag is
+        // wrong. If just the synced render pose is stale, right-clicking would
+        // flip a correct command back to the wrong one.
+        if (commandMismatch) {
+            rightClickEntity(wolf);
+        }
+
+        // Normalize both pieces of vanilla tameable state once after the
+        // interaction. SitWhenOrderedToGoal reads orderedToSit, while the
+        // renderer reads the synced sitting pose; both must agree.
         if (wolf.isOrderedToSit() != shouldSit) {
             wolf.setOrderedToSit(shouldSit);
+        }
+        if (wolf.isInSittingPose() != shouldSit) {
+            wolf.setInSittingPose(shouldSit);
         }
     }
 
