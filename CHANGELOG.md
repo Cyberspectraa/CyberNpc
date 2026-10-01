@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.30.0
+
+### Player-style interaction foundation
+- Added a dedicated NpcPlayerInteractionController backed by Forge's 1.20.1 FakePlayer support.
+- Each interaction proxy uses the CyberNpc's UUID, position, rotation and crouch state so Player-based vanilla/mod interaction hooks can recognize the NPC as the actor/owner.
+- Added real right-click support for entities through Entity.interact(Player, hand).
+- Added real right-click support for blocks through BlockState.use(...), including vanilla and compatible modded Player-based use hooks.
+- Successful interactions produce the NPC's visible hand swing.
+- Fake menus are closed immediately after autonomous use so invisible proxy containers cannot remain open.
+
+### No breaking or block placement yet
+- The interaction controller intentionally exposes no block-breaking action.
+- Generic block right-clicks are performed with an empty hand, so the new system cannot place BlockItems.
+- Existing movement/combat code remains separate; this release is specifically the safe "use/interact" phase.
+
+### Beast Tamer player interaction
+- Owned wolf sit/stand changes now try the same empty-hand owner right-click used by a normal player.
+- A direct sit-state assignment remains only as a compatibility fallback when another mod consumes/rejects the interaction without changing the wolf.
+- Wild-wolf taming now uses a real bone right-click rather than forcing setTame(true).
+- Taming therefore uses vanilla success/failure behavior and consumes the bone like a real attempt.
+- Because the interaction proxy shares the CyberNpc UUID, successful vanilla taming naturally assigns the Beast Tamer as owner.
+- After a successful tame, the Beast Tamer uses a second owner right-click to put the wolf into its normal follow state.
+
+### Leisure and observation
+- Added a low-priority leisure brain so Wild NPCs can choose non-essential player-like activities when survival and social needs are satisfied.
+- NPCs can choose to stop moving and watch the sunset when the evening sky is visible.
+- Sunset interest varies by personality; Patient/Balanced/Cautious NPCs are more likely to stop than Aggressive/Reckless NPCs.
+- NPCs may walk to and right-click nearby crafting tables, smithing tables, cartography tables, fletching tables, looms, stonecutters and grindstones.
+- NPCs may also choose to spend time watching a nearby campfire without interfering with it.
+- Combat, danger, hunger, sleep, social commitments, livestock work, companion tasks and other real needs interrupt leisure immediately.
+- Developer Glasses reports the active leisure activity and the reason the NPC chose it.
+
+### Crafting scope
+- Crafting/workstation blocks now receive a genuine player-style right-click.
+- Recipe selection and autonomous crafting are deliberately not faked in this release; those can now be built cleanly on top of the interaction controller in a later crafting brain.
+
 ## 0.29.0
 
 ### Beast Tamer companion-state fix

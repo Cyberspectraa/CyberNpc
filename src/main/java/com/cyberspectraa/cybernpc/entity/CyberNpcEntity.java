@@ -396,11 +396,15 @@ public class CyberNpcEntity extends PathfinderMob {
 
     private final WildNpcCorralBrain corralBrain;
     private final WildNpcSleepBrain sleepBrain;
+    private final NpcPlayerInteractionController playerInteractions;
+    private final NpcLeisureBrain leisureBrain;
 
     public CyberNpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
         corralBrain = new WildNpcCorralBrain(this);
         sleepBrain = new WildNpcSleepBrain(this);
+        playerInteractions = new NpcPlayerInteractionController(this);
+        leisureBrain = new NpcLeisureBrain(this, playerInteractions);
 
         getNavigation().setCanFloat(true);
         if (getNavigation() instanceof GroundPathNavigation groundNavigation) {
@@ -2238,6 +2242,12 @@ public class CyberNpcEntity extends PathfinderMob {
 
         tickSocialLife();
         tickHuntingAndFood();
+
+        if (leisureBrain.tick()) {
+            finishAiTick();
+            return;
+        }
+
         finishAiTick();
     }
 
@@ -2459,9 +2469,7 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void setWolfSitCommand(Wolf wolf, boolean shouldSit) {
-        if (wolf.isOrderedToSit() != shouldSit) {
-            wolf.setOrderedToSit(shouldSit);
-        }
+        playerInteractions.setOwnedWolfSitting(wolf, shouldSit);
     }
 
     private boolean tickBeastTamer() {
@@ -2534,18 +2542,38 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         getNavigation().stop();
-        target.setTame(true);
-        target.setOwnerUUID(getUUID());
+
+        // Perform the same bone right-click a real player would perform. The
+        // FakePlayer proxy uses this NPC's UUID, so a successful vanilla tame
+        // naturally records the Beast Tamer as the wolf's owner.
+        NpcPlayerInteractionController.EntityUseResult use =
+                playerInteractions.rightClickEntity(target, bone);
+
+        if (!use.remaining().isEmpty()) {
+            inventory.add(use.remaining());
+        }
+
+        boolean tamedByThisNpc = target.isTame()
+                && getUUID().equals(target.getOwnerUUID());
+
+        beastTamerWolfTargetId = null;
+
+        if (!tamedByThisNpc) {
+            // Vanilla taming is chance-based. A failed attempt consumes the
+            // bone just like a player's attempt and the NPC can try again later.
+            beastTamerSearchCooldown = 20;
+            return true;
+        }
+
+        // Vanilla commonly leaves a newly tamed wolf sitting. Use a second real
+        // owner right-click to switch it into the class's normal follow state.
         setWolfSitCommand(target, false);
-        target.setInSittingPose(false);
         target.setTarget(null);
         target.getNavigation().moveTo(this, BEAST_TAMER_FOLLOW_SPEED);
         target.setHealth(target.getMaxHealth());
         target.setPersistenceRequired();
 
-        beastTamerWolfTargetId = null;
         beastTamerSearchCooldown = BEAST_TAMER_SEARCH_INTERVAL * 2;
-
         showReaction(NpcReactionIcon.BEAST, 70);
 
         return true;
@@ -6245,6 +6273,32 @@ public class CyberNpcEntity extends PathfinderMob {
         return value.substring(0, Math.min(8, value.length()));
     }
 
+    boolean canDoLeisureActivity() {
+        return getNpcType() == NpcType.WILD
+                && canWander()
+                && isAlive()
+                && !isCombatActive()
+                && getTarget() == null
+                && fleeingThreat == null
+                && suspiciousNpc == null
+                && !isSleeping()
+                && !isZombifying()
+                && !isPassenger()
+                && !isSpellCastingVisual()
+                && getHunger() > 14
+                && foodToEat.isEmpty()
+                && cookingMode == COOK_MODE_NONE
+                && dropSearchTicks <= 0
+                && groundFoodTargetId == null
+                && foodChestTarget == null
+                && !corralBrain.isBusy()
+                && !sleepBrain.isBusy()
+                && socialConversationHoldTicks <= 0
+                && !regroupingWithParty
+                && horseTargetId == null
+                && beastTamerWolfTargetId == null;
+    }
+
     private String buildDebugActivity() {
         MobEffectInstance infection = getEffect(ModEffects.ZOMBIFICATION.get());
         if (infection != null) {
@@ -6319,6 +6373,9 @@ public class CyberNpcEntity extends PathfinderMob {
         }
         if (regroupingWithParty) {
             return "Regrouping with party";
+        }
+        if (leisureBrain.isBusy()) {
+            return leisureBrain.getActivity();
         }
         if (!getNavigation().isDone()) {
             return "Travelling";
@@ -6397,6 +6454,9 @@ public class CyberNpcEntity extends PathfinderMob {
         }
         if (regroupingWithParty) {
             return "Maintaining party cohesion has priority over wandering alone";
+        }
+        if (leisureBrain.isBusy()) {
+            return leisureBrain.getReason();
         }
         if (!getNavigation().isDone()) {
             return "Continuing the current route instead of selecting a new activity every tick";
@@ -7023,6 +7083,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
             corralBrain.interrupt();
             sleepBrain.wakeUp();
+            leisureBrain.interrupt();
             fleeingThreat = null;
             suspiciousNpc = null;
             emergencyEating = false;
@@ -7360,6 +7421,7 @@ public class CyberNpcEntity extends PathfinderMob {
         fleeRepathCooldown = 0;
         corralBrain.readSaveData(tag);
         sleepBrain.readSaveData(tag);
+        leisureBrain.interrupt();
 
         if (getNpcType() == NpcType.WILD) {
             ensureWildProfile();
