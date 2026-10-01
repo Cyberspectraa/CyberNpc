@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.28.0
+
+### NPC armor cleanup
+- Removed chainmail from all new Wild NPC loadouts because it clashes visually with the custom NPC appearance.
+- Fine-tier Classless, Archer, Rogue, Berserker, Beast Tamer and Horse Tamer NPCs now keep leather armor with their Fine-tier enchantments.
+- Knights use iron armor from Standard/Fine upward instead of chainmail.
+- Existing loaded Wild NPCs wearing CyberNpc-generated chainmail are migrated automatically: Knights receive iron and lighter classes receive leather, with gear-tier enchantments reapplied.
+
+### Beast Tamer wolf state fix
+- Newly tamed wolves now explicitly clear both the ordered-sit flag and the synced sitting pose.
+- The Beast Tamer command loop now keeps the visible sitting pose in sync with the actual command state.
+- Wolves sit only while their Beast Tamer is sleeping.
+- Waking, following, fleeing, combat and hunting explicitly clear the sitting pose, fixing wolves that appeared seated while sliding across the ground.
+- A newly tamed wolf immediately begins pathing back toward its Beast Tamer instead of remaining visually parked.
+
+### Horse Tamer riding improvements
+- Mounted NPCs no longer reuse their on-foot limb swing, preventing the rider's torso and arms from visibly walking while seated.
+- The rider's body stays aligned with the horse while the head remains free to look around.
+- The old 15-30 second forced ride timeout has been removed.
+- Mounting now creates a longer decision commitment rather than guaranteeing a timed dismount.
+- Horse Tamers stay mounted while no higher-priority need exists.
+- Combat, danger, sleep and zombification can still interrupt riding immediately.
+- Hunger and normal chores only cause a dismount after the minimum riding commitment has elapsed.
+- After dismounting, Horse Tamers have a remount cooldown so they do not repeatedly get on and off the same horse with no meaningful reason.
+
+### Decision reasoning
+- Added a synced decision-reason state alongside the existing activity state.
+- Developer Glasses now shows both what the NPC is doing and why that action currently has priority.
+- Reasons cover survival, infection avoidance, fleeing, combat, hunting, sleep, horse travel, horse taming, wolf taming, food work, livestock work, socialising, party regrouping and ordinary travel.
+- Existing AI priority remains intact; this pass makes commitments and transitions more stable instead of replacing working systems.
+
+### Future optional integrations
+- Tinkers' Construct is noted for a later weapon/loadout integration.
+- Dynamic Trees is noted for a later environment/resource interaction feature.
+- Neither mod is a hard CyberNpc dependency in 0.28.0.
+
 ## 0.27.1
 
 ### Beast Tamer wolf follow fix
