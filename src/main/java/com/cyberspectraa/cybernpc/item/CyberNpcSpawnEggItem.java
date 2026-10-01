@@ -52,5 +52,13 @@ public final class CyberNpcSpawnEggItem extends ForgeSpawnEggItem {
     private void applyNpcType(ItemStack stack) {
         CompoundTag entityTag = stack.getOrCreateTagElement("EntityTag");
         entityTag.putString("CyberNpcType", npcType.serializedName());
+
+        // Wild spawn eggs create a fresh class profile, so let the spawned NPC
+        // perform its one-time class companion setup after the EntityTag has
+        // been applied. Main/Quest NPCs never need this.
+        entityTag.putBoolean(
+                "CyberNpcClassSpawnCompanionHandled",
+                npcType != NpcType.WILD
+        );
     }
 }
