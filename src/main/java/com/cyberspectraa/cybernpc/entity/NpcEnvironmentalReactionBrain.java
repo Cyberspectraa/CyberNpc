@@ -107,7 +107,7 @@ final class NpcEnvironmentalReactionBrain {
             return false;
         }
 
-        return intentions.request(
+        boolean reacted = intentions.request(
                 NpcIntentionController.Intent.REACT_LIGHTNING,
                 90,
                 35 + npc.getRandom().nextInt(46),
@@ -115,6 +115,12 @@ final class NpcEnvironmentalReactionBrain {
                 bolt.blockPosition(),
                 "A nearby lightning strike was sudden enough to interrupt normal activity"
         );
+
+        if (reacted) {
+            npc.showReaction(NpcReactionIcon.SURPRISED, 36);
+        }
+
+        return reacted;
     }
 
     private boolean tryReactToWeather(ServerLevel level) {
