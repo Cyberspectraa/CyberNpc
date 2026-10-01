@@ -6629,7 +6629,6 @@ public class CyberNpcEntity extends PathfinderMob {
             } else {
                 clearHorseTarget();
             }
-            releaseTamedBeasts();
 
             corralBrain.interrupt();
             sleepBrain.wakeUp();
