@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.29.0
+
+### Beast Tamer companion-state fix
+- Reworked wolf sit/follow control to change the ordered sit state only when the desired state actually changes.
+- Removed continuous sit-pose forcing from the normal command loop, preventing CyberNpc and vanilla wolf AI from fighting over the animation every tick.
+- Companion command refresh now runs every 5 ticks instead of rewriting state every tick.
+- Wolves still sit while their Beast Tamer sleeps, stand/follow when awake, attack the Beast Tamer's combat/hunting target, and regroup while fleeing.
+- Newly tamed and newly spawned companion wolves start standing and owned by their Beast Tamer.
+
+### Starting class companions
+- Fresh Beast Tamers now spawn with one adult tamed wolf already owned by that NPC.
+- Fresh Horse Tamers now spawn with one adult owned horse when Icy's Better Horses is installed.
+- The starting Horse Tamer horse receives the real Better Horses Upgraded Saddle and is assigned to that NPC.
+- Wild spawn eggs participate in the same one-time companion setup as natural Wild NPC spawns.
+- Companion setup is persisted so loading chunks or existing worlds cannot duplicate class companions.
+- Older NPCs are treated as already initialized and keep their existing companion state rather than receiving surprise duplicates.
+
+### Mounted sprint travel
+- Horse Tamers can now make their horse sprint for longer-distance mounted travel.
+- Mounted navigation uses roughly player-style sprint scaling: nearby destinations use normal horse travel speed while destinations over about 10 blocks use a faster sprint speed.
+- Party catch-up, long return trips and sufficiently distant roaming destinations can trigger mounted sprinting.
+- Horses automatically stop sprinting when their path finishes or the rider dismounts.
+- Developer Glasses now reports "Sprinting on horse" and explains when distance caused the faster travel choice.
+
 ## 0.28.0
 
 ### NPC armor cleanup
