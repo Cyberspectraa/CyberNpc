@@ -4,6 +4,7 @@ import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.animal.horse.AbstractHorse;
 
 public final class CyberNpcPlayerModel extends PlayerModel<CyberNpcEntity> {
     public CyberNpcPlayerModel(ModelPart root, boolean slim) {
@@ -19,7 +20,26 @@ public final class CyberNpcPlayerModel extends PlayerModel<CyberNpcEntity> {
             float netHeadYaw,
             float headPitch
     ) {
-        super.setupAnim(entity, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
+        boolean mountedOnHorse = entity.isPassenger()
+                && entity.getVehicle() instanceof AbstractHorse;
+
+        // A mounted NPC must not reuse its on-foot limb swing. That was making
+        // the torso/arms visibly walk while seated on the horse.
+        super.setupAnim(
+                entity,
+                mountedOnHorse ? 0.0F : limbSwing,
+                mountedOnHorse ? 0.0F : limbSwingAmount,
+                ageInTicks,
+                netHeadYaw,
+                headPitch
+        );
+
+        if (mountedOnHorse) {
+            body.xRot = 0.0F;
+            body.yRot = 0.0F;
+            body.zRot = 0.0F;
+            jacket.copyFrom(body);
+        }
 
         if (entity.isSleeping()) {
             // A sleeping player keeps their head aligned with the body/bed rather

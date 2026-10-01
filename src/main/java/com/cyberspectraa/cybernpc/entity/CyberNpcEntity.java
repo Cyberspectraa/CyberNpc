@@ -145,8 +145,9 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final double HORSE_SEARCH_RADIUS = 18.0D;
     private static final int HORSE_SEARCH_INTERVAL = 200;
     private static final double HORSE_MOUNT_DISTANCE_SQR = 6.25D;
-    private static final int HORSE_RIDE_MIN_TICKS = 300;
-    private static final int HORSE_RIDE_RANDOM_TICKS = 300;
+    private static final int HORSE_RIDE_MIN_TICKS = 600;
+    private static final int HORSE_RIDE_RANDOM_TICKS = 600;
+    private static final int HORSE_REMOUNT_COOLDOWN_TICKS = 600;
     private static final int HORSE_REPATH_INTERVAL = 40;
     private static final double HORSE_OWNER_RETURN_RADIUS_SQR = 24.0D * 24.0D;
 
@@ -254,6 +255,9 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> DATA_DEBUG_ACTIVITY =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
 
+    private static final EntityDataAccessor<String> DATA_DEBUG_REASON =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
     private static final EntityDataAccessor<String> DATA_DEBUG_TARGET =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
 
@@ -315,8 +319,13 @@ public class CyberNpcEntity extends PathfinderMob {
     private BlockPos horseRideOrigin;
 
     private int horseSearchCooldown;
+    // This is now a minimum ride commitment, not a timer that forces a
+    // meaningless dismount when it expires.
     private int horseRideTicks;
+    private int horseRemountCooldown;
     private int horseRepathCooldown;
+
+    private boolean chainmailMigrationChecked;
 
     private int beastTamerSearchCooldown;
 
@@ -440,6 +449,7 @@ public class CyberNpcEntity extends PathfinderMob {
         entityData.define(DATA_MELEE_SWING_TICKS, 0);
         entityData.define(DATA_AGGRESSION, -1);
         entityData.define(DATA_DEBUG_ACTIVITY, "Idle");
+        entityData.define(DATA_DEBUG_REASON, "No higher-priority need");
         entityData.define(DATA_DEBUG_TARGET, "none");
         entityData.define(DATA_DEBUG_PATH, "none");
         entityData.define(DATA_DEBUG_CLAIMS, "none");
@@ -934,6 +944,10 @@ public class CyberNpcEntity extends PathfinderMob {
         return entityData.get(DATA_DEBUG_ACTIVITY);
     }
 
+    public String getDebugReason() {
+        return entityData.get(DATA_DEBUG_REASON);
+    }
+
     public String getDebugTarget() {
         return entityData.get(DATA_DEBUG_TARGET);
     }
@@ -1050,6 +1064,7 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         applyClassAttributes();
+        replaceLegacyChainmailArmor();
 
         if (aggressionLevel < 0) {
             aggressionLevel = WILD_MIN_AGGRESSION
@@ -1147,10 +1162,10 @@ public class CyberNpcEntity extends PathfinderMob {
                     Items.LEATHER_BOOTS
             );
             case FINE -> equipArmorSet(
-                    Items.CHAINMAIL_HELMET,
-                    Items.CHAINMAIL_CHESTPLATE,
-                    Items.CHAINMAIL_LEGGINGS,
-                    Items.CHAINMAIL_BOOTS
+                    Items.LEATHER_HELMET,
+                    Items.LEATHER_CHESTPLATE,
+                    Items.LEATHER_LEGGINGS,
+                    Items.LEATHER_BOOTS
             );
             case RARE -> equipArmorSet(
                     Items.IRON_HELMET,
@@ -1193,10 +1208,10 @@ public class CyberNpcEntity extends PathfinderMob {
                     Items.LEATHER_BOOTS
             );
             case FINE -> equipArmorSet(
-                    Items.CHAINMAIL_HELMET,
-                    Items.CHAINMAIL_CHESTPLATE,
-                    Items.CHAINMAIL_LEGGINGS,
-                    Items.CHAINMAIL_BOOTS
+                    Items.LEATHER_HELMET,
+                    Items.LEATHER_CHESTPLATE,
+                    Items.LEATHER_LEGGINGS,
+                    Items.LEATHER_BOOTS
             );
             case RARE -> equipArmorSet(
                     Items.IRON_HELMET,
@@ -1227,10 +1242,10 @@ public class CyberNpcEntity extends PathfinderMob {
 
         switch (tier) {
             case STANDARD -> equipArmorSet(
-                    Items.CHAINMAIL_HELMET,
-                    Items.CHAINMAIL_CHESTPLATE,
-                    Items.CHAINMAIL_LEGGINGS,
-                    Items.CHAINMAIL_BOOTS
+                    Items.IRON_HELMET,
+                    Items.IRON_CHESTPLATE,
+                    Items.IRON_LEGGINGS,
+                    Items.IRON_BOOTS
             );
             case FINE -> equipArmorSet(
                     Items.IRON_HELMET,
@@ -1273,10 +1288,10 @@ public class CyberNpcEntity extends PathfinderMob {
                     Items.LEATHER_BOOTS
             );
             case FINE -> equipArmorSet(
-                    Items.CHAINMAIL_HELMET,
-                    Items.CHAINMAIL_CHESTPLATE,
-                    Items.CHAINMAIL_LEGGINGS,
-                    Items.CHAINMAIL_BOOTS
+                    Items.LEATHER_HELMET,
+                    Items.LEATHER_CHESTPLATE,
+                    Items.LEATHER_LEGGINGS,
+                    Items.LEATHER_BOOTS
             );
             case RARE -> equipArmorSet(
                     Items.IRON_HELMET,
@@ -1315,10 +1330,10 @@ public class CyberNpcEntity extends PathfinderMob {
                     Items.LEATHER_BOOTS
             );
             case FINE -> equipArmorSet(
-                    Items.CHAINMAIL_HELMET,
-                    Items.CHAINMAIL_CHESTPLATE,
-                    Items.CHAINMAIL_LEGGINGS,
-                    Items.CHAINMAIL_BOOTS
+                    Items.LEATHER_HELMET,
+                    Items.LEATHER_CHESTPLATE,
+                    Items.LEATHER_LEGGINGS,
+                    Items.LEATHER_BOOTS
             );
             case RARE -> equipArmorSet(
                     Items.IRON_HELMET,
@@ -1364,10 +1379,10 @@ public class CyberNpcEntity extends PathfinderMob {
                     Items.LEATHER_BOOTS
             );
             case FINE -> equipArmorSet(
-                    Items.CHAINMAIL_HELMET,
-                    Items.CHAINMAIL_CHESTPLATE,
-                    Items.CHAINMAIL_LEGGINGS,
-                    Items.CHAINMAIL_BOOTS
+                    Items.LEATHER_HELMET,
+                    Items.LEATHER_CHESTPLATE,
+                    Items.LEATHER_LEGGINGS,
+                    Items.LEATHER_BOOTS
             );
             case RARE -> equipArmorSet(
                     Items.IRON_HELMET,
@@ -1417,10 +1432,10 @@ public class CyberNpcEntity extends PathfinderMob {
                     Items.LEATHER_BOOTS
             );
             case FINE -> equipArmorSet(
-                    Items.CHAINMAIL_HELMET,
-                    Items.CHAINMAIL_CHESTPLATE,
-                    Items.CHAINMAIL_LEGGINGS,
-                    Items.CHAINMAIL_BOOTS
+                    Items.LEATHER_HELMET,
+                    Items.LEATHER_CHESTPLATE,
+                    Items.LEATHER_LEGGINGS,
+                    Items.LEATHER_BOOTS
             );
             case RARE -> equipArmorSet(
                     Items.IRON_HELMET,
@@ -1561,6 +1576,51 @@ public class CyberNpcEntity extends PathfinderMob {
                     Items.LEATHER_BOOTS
             );
         }
+    }
+
+    private void replaceLegacyChainmailArmor() {
+        if (chainmailMigrationChecked || getNpcType() != NpcType.WILD) {
+            return;
+        }
+
+        chainmailMigrationChecked = true;
+        boolean knight = getWildClass() == WildNpcClass.KNIGHT;
+
+        replaceLegacyChainmailSlot(
+                EquipmentSlot.HEAD,
+                Items.CHAINMAIL_HELMET,
+                knight ? Items.IRON_HELMET : Items.LEATHER_HELMET
+        );
+        replaceLegacyChainmailSlot(
+                EquipmentSlot.CHEST,
+                Items.CHAINMAIL_CHESTPLATE,
+                knight ? Items.IRON_CHESTPLATE : Items.LEATHER_CHESTPLATE
+        );
+        replaceLegacyChainmailSlot(
+                EquipmentSlot.LEGS,
+                Items.CHAINMAIL_LEGGINGS,
+                knight ? Items.IRON_LEGGINGS : Items.LEATHER_LEGGINGS
+        );
+        replaceLegacyChainmailSlot(
+                EquipmentSlot.FEET,
+                Items.CHAINMAIL_BOOTS,
+                knight ? Items.IRON_BOOTS : Items.LEATHER_BOOTS
+        );
+    }
+
+    private void replaceLegacyChainmailSlot(
+            EquipmentSlot slot,
+            net.minecraft.world.item.Item oldItem,
+            net.minecraft.world.item.Item replacement
+    ) {
+        ItemStack current = getItemBySlot(slot);
+        if (!current.is(oldItem)) {
+            return;
+        }
+
+        ItemStack updated = new ItemStack(replacement);
+        applyArmorEnchantments(updated, getGearTier());
+        setItemSlot(slot, updated);
     }
 
     private void clearArmorSlots() {
@@ -2096,6 +2156,10 @@ public class CyberNpcEntity extends PathfinderMob {
             chatReactionCooldown--;
         }
 
+        if (horseRemountCooldown > 0) {
+            horseRemountCooldown--;
+        }
+
         // Pen ownership is discovered independently from hunger so nearby pens
         // are reserved immediately instead of only when livestock work starts.
         corralBrain.tickClaimDiscovery();
@@ -2183,12 +2247,14 @@ public class CyberNpcEntity extends PathfinderMob {
                 wolf.setTarget(null);
                 wolf.getNavigation().stop();
                 wolf.setOrderedToSit(true);
+                wolf.setInSittingPose(true);
                 continue;
             }
 
             // Owner combat and hunting orders always override following.
             if (hasAttackOrder) {
                 wolf.setOrderedToSit(false);
+                wolf.setInSittingPose(false);
                 wolf.setTarget(activeTarget);
                 continue;
             }
@@ -2198,6 +2264,7 @@ public class CyberNpcEntity extends PathfinderMob {
             if (fleeingThreat != null) {
                 wolf.setTarget(null);
                 wolf.setOrderedToSit(false);
+                wolf.setInSittingPose(false);
 
                 if (wolf.distanceToSqr(this)
                         > BEAST_TAMER_FOLLOW_DISTANCE_SQR) {
@@ -2212,6 +2279,7 @@ public class CyberNpcEntity extends PathfinderMob {
             // Follow is the default pack state. Do not use socialising, idle
             // time or other normal activities as reasons to sit.
             wolf.setOrderedToSit(false);
+            wolf.setInSittingPose(false);
 
             LivingEntity wolfTarget = wolf.getTarget();
             if (wolfTarget != null && !wolfTarget.isAlive()) {
@@ -2305,7 +2373,9 @@ public class CyberNpcEntity extends PathfinderMob {
         target.setTame(true);
         target.setOwnerUUID(getUUID());
         target.setOrderedToSit(false);
+        target.setInSittingPose(false);
         target.setTarget(null);
+        target.getNavigation().moveTo(this, BEAST_TAMER_FOLLOW_SPEED);
         target.setHealth(target.getMaxHealth());
         target.setPersistenceRequired();
 
@@ -2361,6 +2431,7 @@ public class CyberNpcEntity extends PathfinderMob {
                         && getUUID().equals(candidate.getOwnerUUID())
         )) {
             wolf.setOrderedToSit(false);
+            wolf.setInSittingPose(false);
             wolf.setTarget(target);
         }
     }
@@ -2379,6 +2450,7 @@ public class CyberNpcEntity extends PathfinderMob {
         )) {
             wolf.setTarget(null);
             wolf.setOrderedToSit(false);
+            wolf.setInSittingPose(false);
             wolf.setOwnerUUID(null);
             wolf.setTame(false);
         }
@@ -2399,6 +2471,11 @@ public class CyberNpcEntity extends PathfinderMob {
             if (getVehicle() instanceof AbstractHorse horse) {
                 return tickRidingHorse(horse);
             }
+            return false;
+        }
+
+        if (horseRemountCooldown > 0) {
+            clearHorseTarget();
             return false;
         }
 
@@ -2606,19 +2683,35 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private boolean tickRidingHorse(AbstractHorse horse) {
-        if (!horse.isAlive()
+        // The rider's torso should stay aligned with the mount. Head tracking
+        // remains independent on the client, so the NPC can look around without
+        // twisting its whole body through the saddle.
+        setYBodyRot(horse.getYRot());
+
+        boolean hardDismount = !horse.isAlive()
                 || isCombatActive()
                 || fleeingThreat != null
                 || isSleeping()
                 || isZombifying()
-                || getHunger() <= HUNT_HUNGER_THRESHOLD
-                || ownerReturnedForHorse(horse)) {
+                || ownerReturnedForHorse(horse);
+
+        if (hardDismount) {
             stopUsingHorse(horse);
             return false;
         }
 
-        horseRideTicks--;
-        if (horseRideTicks <= 0) {
+        if (horseRideTicks > 0) {
+            horseRideTicks--;
+        }
+
+        // Hunger and ordinary chores are real reasons to get off, but a Horse
+        // Tamer does not abandon a ride seconds after mounting. The commitment
+        // window prevents rapid mount/dismount loops while still allowing
+        // combat, danger and sleep to interrupt immediately.
+        boolean softDismount = getHunger() <= HUNT_HUNGER_THRESHOLD
+                || hasNonHorseUrgentNeed();
+
+        if (softDismount && horseRideTicks <= 0) {
             stopUsingHorse(horse);
             return false;
         }
@@ -2755,6 +2848,7 @@ public class CyberNpcEntity extends PathfinderMob {
         horseRideTicks = 0;
         horseRepathCooldown = 0;
         horseSearchCooldown = HORSE_SEARCH_INTERVAL;
+        horseRemountCooldown = HORSE_REMOUNT_COOLDOWN_TICKS;
     }
 
     private void clearHorseTarget() {
@@ -5802,6 +5896,7 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         entityData.set(DATA_DEBUG_ACTIVITY, buildDebugActivity());
+        entityData.set(DATA_DEBUG_REASON, buildDecisionReason());
 
         LivingEntity target = getTarget();
         entityData.set(
@@ -6041,6 +6136,82 @@ public class CyberNpcEntity extends PathfinderMob {
             return "Travelling";
         }
         return canWander() ? "Wandering/idle" : "Idle";
+    }
+
+    private String buildDecisionReason() {
+        if (isZombifying()) {
+            return "Infection overrides normal routines until conversion resolves";
+        }
+        if (suspiciousNpc != null && infectionAvoidTicks > 0) {
+            return "Avoiding a nearby NPC that may spread zombification";
+        }
+        if (fleeingThreat != null) {
+            return "Threat confidence is too low to keep fighting safely";
+        }
+        if (isCombatActive()) {
+            return huntingTarget
+                    ? "Selected this prey because food is needed and the fight is considered safe"
+                    : "Combat has priority because this NPC or an ally is under threat";
+        }
+        if (isSleeping()) {
+            return "Nighttime rest is active and a claimed bed is available";
+        }
+        if (sleepBrain.isBusy()) {
+            return "It is night and this NPC is committed to reaching its claimed bed";
+        }
+        if (getVehicle() instanceof AbstractHorse) {
+            CyberNpcEntity leader = getLoadedPartyLeader();
+            if (leader != null
+                    && distanceToSqr(leader)
+                    > PARTY_FOLLOW_DISTANCE * PARTY_FOLLOW_DISTANCE) {
+                return "Using the owned horse to catch up with the party";
+            }
+            if (horseRideTicks > 0) {
+                return "Horse Tamer chose mounted travel and is still committed to that decision";
+            }
+            return "Horse Tamer prefers to remain mounted while no higher-priority need exists";
+        }
+        if (horseTargetId != null) {
+            AbstractHorse horse = findLoadedHorse(horseTargetId);
+            if (horse != null && !horse.isTamed()) {
+                return "Found an adult unowned horse and has an Upgraded Saddle available";
+            }
+            return "Returning to an owned horse for efficient travel";
+        }
+        if (horseRemountCooldown > 0
+                && getWildClass() == WildNpcClass.HORSE_TAMER) {
+            return "Recently dismounted for another need; delaying remount to avoid indecisive cycling";
+        }
+        if (beastTamerWolfTargetId != null) {
+            return "Beast Tamer has companion capacity and found an adult untamed wolf";
+        }
+        if (!foodToEat.isEmpty()) {
+            return "Prepared food is available and hunger should be restored before lower-priority tasks";
+        }
+        if (cookingMode != COOK_MODE_NONE || !getRawFoodStack().isEmpty()) {
+            return "Raw food is available, so preparing it is more useful than wandering";
+        }
+        if (foodChestTarget != null || groundFoodTargetId != null) {
+            return "Nearby food can satisfy hunger without starting a new hunt";
+        }
+        if (corralBrain.isBusy()) {
+            return "Livestock work is already in progress and remains the current commitment";
+        }
+        if (getHunger() <= HUNT_HUNGER_THRESHOLD) {
+            return "Hunger has crossed the hunting threshold, so food becomes the main routine need";
+        }
+        if (socialConversationHoldTicks > 0) {
+            return "No urgent survival need is active and a social interaction has already started";
+        }
+        if (regroupingWithParty) {
+            return "Maintaining party cohesion has priority over wandering alone";
+        }
+        if (!getNavigation().isDone()) {
+            return "Continuing the current route instead of selecting a new activity every tick";
+        }
+        return canWander()
+                ? "No higher-priority need is active, so local exploration is reasonable"
+                : "No higher-priority need is active and wandering is disabled";
     }
 
     private String buildMageSpellDebug() {
@@ -6977,7 +7148,9 @@ public class CyberNpcEntity extends PathfinderMob {
         horseRideOrigin = null;
         horseSearchCooldown = 0;
         horseRideTicks = 0;
+        horseRemountCooldown = 0;
         horseRepathCooldown = 0;
+        chainmailMigrationChecked = false;
         beastTamerSearchCooldown = 0;
         beastTamerWolfTargetId = null;
         fleeingThreat = null;
