@@ -2,7 +2,6 @@ package com.cyberspectraa.cybernpc.client;
 
 import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
-import com.cyberspectraa.cybernpc.entity.WildNpcClass;
 import com.cyberspectraa.cybernpc.registry.ModItems;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
@@ -22,9 +21,6 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.lwjgl.glfw.GLFW;
 
-import java.util.ArrayList;
-import java.util.List;
-
 @Mod.EventBusSubscriber(
         modid = CyberNpc.MOD_ID,
         bus = Mod.EventBusSubscriber.Bus.FORGE,
@@ -33,27 +29,30 @@ import java.util.List;
 public final class DeveloperGlassesOverlay {
     private static final double DEBUG_RANGE = 64.0D;
 
-    private static final int PANEL_WIDTH = 252;
-    private static final int PANEL_HEIGHT = 154;
-    private static final int HEADER_HEIGHT = 31;
-    private static final int FOOTER_HEIGHT = 22;
+    // Intentionally tiny. This is a glanceable Minecraft HUD card, not a
+    // desktop debug window.
+    private static final int PANEL_WIDTH = 176;
+    private static final int PANEL_HEIGHT = 98;
+    private static final int HEADER_HEIGHT = 23;
+    private static final int FOOTER_HEIGHT = 18;
+    private static final int BODY_TOP = HEADER_HEIGHT + 3;
+    private static final int BODY_BOTTOM = PANEL_HEIGHT - FOOTER_HEIGHT - 3;
 
-    private static final int BORDER_DARK = 0xF02B2B2B;
-    private static final int PANEL = 0xE8C6C6C6;
-    private static final int PANEL_LIGHT = 0xE8FFFFFF;
-    private static final int PANEL_SHADOW = 0xE8555555;
-    private static final int CONTENT = 0xE8A8A8A8;
-    private static final int SLOT = 0xE88B8B8B;
-    private static final int SLOT_LIGHT = 0xE8FFFFFF;
-    private static final int SLOT_SHADOW = 0xE8373737;
+    private static final int OUTLINE = 0xF0222222;
+    private static final int PANEL = 0xF0C6C6C6;
+    private static final int PANEL_HI = 0xF0FFFFFF;
+    private static final int PANEL_LO = 0xF0555555;
+    private static final int WELL = 0xF08B8B8B;
+    private static final int WELL_DARK = 0xF0373737;
 
     private static final int TEXT = 0x303030;
-    private static final int TEXT_DIM = 0x555555;
+    private static final int DIM = 0x5B5B5B;
+    private static final int WHITE = 0xFFFFFF;
     private static final int GOLD = 0xFFAA00;
-    private static final int GREEN = 0x55AA55;
-    private static final int RED = 0xCC3333;
-    private static final int BLUE = 0x3366AA;
-    private static final int PURPLE = 0x8844AA;
+    private static final int GREEN = 0x3E7D3E;
+    private static final int BLUE = 0x315F8F;
+    private static final int RED = 0xB43A32;
+    private static final int PURPLE = 0x7A428C;
 
     public static final KeyMapping CYCLE_TAB = new KeyMapping(
             "key.cybernpc.developer_glasses_cycle",
@@ -78,7 +77,7 @@ public final class DeveloperGlassesOverlay {
         }
 
         while (CYCLE_TAB.consumeClick()) {
-            currentTab = (currentTab + 1) % Tab.values().length;
+            currentTab = (currentTab + 1) % Page.values().length;
         }
     }
 
@@ -91,301 +90,292 @@ public final class DeveloperGlassesOverlay {
             return;
         }
 
-        GuiGraphics gui = event.getGuiGraphics();
-        Font font = minecraft.font;
         CyberNpcEntity npc = findLookedAtNpc(minecraft);
-
-        int x = 8;
-        int y = 8;
-
         if (npc == null) {
-            drawEmptyCard(gui, font, x, y);
             return;
         }
 
-        drawMinecraftPanel(gui, x, y, PANEL_WIDTH, PANEL_HEIGHT);
+        GuiGraphics gui = event.getGuiGraphics();
+        Font font = minecraft.font;
 
-        Tab tab = Tab.values()[currentTab];
-        drawHeader(gui, font, npc, tab, x, y);
-        drawContentBackground(
-                gui,
-                x + 6,
-                y + HEADER_HEIGHT + 3,
-                PANEL_WIDTH - 12,
-                PANEL_HEIGHT - HEADER_HEIGHT - FOOTER_HEIGHT - 7
-        );
+        int x = 6;
+        int y = 6;
 
-        switch (tab) {
-            case STATUS -> drawStatusPage(gui, font, npc, x, y);
-            case MIND -> drawMindPage(gui, font, npc, x, y);
-            case SOCIAL -> drawSocialPage(gui, font, npc, x, y);
-            case GEAR -> drawGearPage(gui, font, npc, x, y);
-        }
-
+        drawPanel(gui, x, y, PANEL_WIDTH, PANEL_HEIGHT);
+        drawHeader(gui, font, npc, x, y);
+        drawBodyWell(gui, x, y);
         drawFooter(gui, font, x, y);
-    }
 
-    private static void drawEmptyCard(
-            GuiGraphics gui,
-            Font font,
-            int x,
-            int y
-    ) {
-        int width = 228;
-        int height = 58;
-        drawMinecraftPanel(gui, x, y, width, height);
+        // Hard clipping is deliberate. Text can be malformed, translated or
+        // unexpectedly long and it still cannot escape the body rectangle.
+        int bodyX = x + 7;
+        int bodyY = y + BODY_TOP + 2;
+        int bodyRight = x + PANEL_WIDTH - 7;
+        int bodyBottom = y + BODY_BOTTOM - 1;
 
-        gui.drawString(font, "Developer Glasses", x + 10, y + 9, GOLD, true);
-        gui.drawString(font, "Look at a CyberNpc", x + 10, y + 27, TEXT, false);
-        gui.drawString(
-                font,
-                keyHint() + " changes page",
-                x + 10,
-                y + 40,
-                TEXT_DIM,
-                false
-        );
+        gui.enableScissor(bodyX, bodyY, bodyRight, bodyBottom);
+        try {
+            switch (Page.values()[currentTab]) {
+                case INFO -> drawInfo(gui, font, npc, bodyX, bodyY);
+                case AI -> drawAi(gui, font, npc, bodyX, bodyY);
+                case SOCIAL -> drawSocial(gui, font, npc, bodyX, bodyY);
+                case DATA -> drawData(gui, font, npc, bodyX, bodyY);
+            }
+        } finally {
+            gui.disableScissor();
+        }
     }
 
     private static void drawHeader(
             GuiGraphics gui,
             Font font,
             CyberNpcEntity npc,
-            Tab tab,
             int x,
             int y
     ) {
-        gui.fill(x + 4, y + 4, x + PANEL_WIDTH - 4, y + 27, 0xE83A3A3A);
-        gui.fill(x + 5, y + 5, x + PANEL_WIDTH - 5, y + 6, 0xFF777777);
+        gui.fill(
+                x + 4,
+                y + 4,
+                x + PANEL_WIDTH - 4,
+                y + HEADER_HEIGHT,
+                0xF03B3B3B
+        );
+        gui.fill(
+                x + 5,
+                y + 5,
+                x + PANEL_WIDTH - 5,
+                y + 6,
+                0xFF747474
+        );
+
         gui.drawString(
                 font,
-                trim(font, npc.getName().getString(), 142),
-                x + 10,
-                y + 9,
-                0xFFFFFF,
+                fit(font, npc.getName().getString(), 103),
+                x + 8,
+                y + 8,
+                WHITE,
                 true
         );
+
+        String page = Page.values()[currentTab].label;
         gui.drawString(
                 font,
-                tab.displayName,
-                x + PANEL_WIDTH - 10 - font.width(tab.displayName),
-                y + 9,
+                page,
+                x + PANEL_WIDTH - 25 - font.width(page),
+                y + 8,
                 GOLD,
                 true
         );
+
         gui.drawString(
                 font,
-                npc.getWildClassDisplayName() + "  •  " + npc.getPersonalityDisplayName(),
-                x + 10,
-                y + 19,
-                0xCFCFCF,
+                "[V]",
+                x + PANEL_WIDTH - 22,
+                y + 8,
+                0xC8C8C8,
                 false
         );
     }
 
-    private static void drawStatusPage(
+    private static void drawInfo(
             GuiGraphics gui,
             Font font,
             CyberNpcEntity npc,
             int x,
             int y
     ) {
-        int left = x + 13;
-        int top = y + 40;
-
-        gui.drawString(font, "HEALTH", left, top, TEXT_DIM, false);
-        drawSegmentBar(
+        row(gui, font, "Class", npc.getWildClassDisplayName(), x, y, BLUE);
+        row(
                 gui,
-                left + 49,
-                top + 1,
-                10,
+                font,
+                "Trait",
+                npc.getPersonalityDisplayName(),
+                x,
+                y + 11,
+                PURPLE
+        );
+
+        gui.drawString(font, "HP", x, y + 24, DIM, false);
+        miniBar(
+                gui,
+                x + 24,
+                y + 25,
+                8,
                 npc.getMaxHealth() <= 0.0F
                         ? 0.0F
                         : npc.getHealth() / npc.getMaxHealth(),
                 RED
         );
-        gui.drawString(
-                font,
-                String.format("%.0f/%.0f", npc.getHealth(), npc.getMaxHealth()),
-                left + 169,
-                top,
-                TEXT,
-                false
+
+        gui.drawString(font, "Food", x, y + 35, DIM, false);
+        miniBar(
+                gui,
+                x + 24,
+                y + 36,
+                8,
+                npc.getHunger() / 20.0F,
+                GOLD
         );
 
-        top += 17;
-        gui.drawString(font, "HUNGER", left, top, TEXT_DIM, false);
-        drawSegmentBar(gui, left + 49, top + 1, 10, npc.getHunger() / 20.0F, GOLD);
-        gui.drawString(
+        row(
+                gui,
                 font,
-                npc.getHunger() + "/20",
-                left + 169,
-                top,
-                npc.getHunger() <= 6 ? RED : TEXT,
-                false
+                "Now",
+                npc.getDebugActivity(),
+                x,
+                y + 47,
+                GREEN
         );
-
-        top += 20;
-        drawLabelValue(gui, font, "Doing", npc.getDebugActivity(), left, top, BLUE);
-        top += 16;
-        drawLabelValue(gui, font, "Intent", npc.getDebugIntention(), left, top, GREEN);
-
-        top += 18;
-        gui.drawString(font, "GEAR", left, top, TEXT_DIM, false);
-        gui.drawString(
-                font,
-                npc.getGearTierDisplayName()
-                        + (npc.getWildClass().hasMagicSchool()
-                        ? "  •  " + npc.getMageSchoolDisplayName()
-                        : ""),
-                left + 42,
-                top,
-                classColor(npc.getWildClass()),
-                false
-        );
-
-        if (npc.isZombifying()) {
-            top += 16;
-            gui.drawString(
-                    font,
-                    String.format(
-                            "Zombifying: %.0f%%",
-                            npc.getZombificationProgress() * 100.0F
-                    ),
-                    left,
-                    top,
-                    0x336633,
-                    true
-            );
-        }
     }
 
-    private static void drawMindPage(
+    private static void drawAi(
             GuiGraphics gui,
             Font font,
             CyberNpcEntity npc,
             int x,
             int y
     ) {
-        int left = x + 13;
-        int top = y + 40;
-        int valueWidth = 171;
-
-        drawLabelValue(gui, font, "Doing", npc.getDebugActivity(), left, top, BLUE);
-        top += 17;
-        drawLabelValue(gui, font, "Intent", npc.getDebugIntention(), left, top, GREEN);
-        top += 19;
-
-        gui.drawString(font, "WHY", left, top, TEXT_DIM, false);
-        top += 11;
-        top = drawWrapped(
+        row(
                 gui,
                 font,
+                "Intent",
+                npc.getDebugIntention(),
+                x,
+                y,
+                GREEN
+        );
+        row(
+                gui,
+                font,
+                "Why",
                 npc.getDebugReason(),
-                left,
-                top,
-                PANEL_WIDTH - 27,
-                2,
+                x,
+                y + 12,
                 TEXT
         );
-
-        top += 4;
-        drawLabelValue(
+        row(
                 gui,
                 font,
                 "Target",
-                trim(font, npc.getDebugTarget(), valueWidth),
-                left,
-                top,
+                npc.getDebugTarget(),
+                x,
+                y + 24,
                 RED
         );
-        top += 16;
-        drawLabelValue(
-                gui,
-                font,
-                "Path",
-                trim(font, npc.getDebugPath(), valueWidth),
-                left,
-                top,
-                TEXT
-        );
-        top += 16;
-        drawLabelValue(
+
+        if ("Horse Tamer".equals(npc.getWildClassDisplayName())) {
+            row(
+                    gui,
+                    font,
+                    "Explore",
+                    npc.getDebugExplorerState(),
+                    x,
+                    y + 36,
+                    BLUE
+            );
+        } else {
+            row(
+                    gui,
+                    font,
+                    "Path",
+                    npc.getDebugPath(),
+                    x,
+                    y + 36,
+                    BLUE
+            );
+        }
+
+        row(
                 gui,
                 font,
                 "Conf.",
-                trim(font, npc.getDebugConfidence(), valueWidth),
-                left,
-                top,
+                npc.getDebugConfidence(),
+                x,
+                y + 48,
                 PURPLE
         );
     }
 
-    private static void drawSocialPage(
+    private static void drawSocial(
             GuiGraphics gui,
             Font font,
             CyberNpcEntity npc,
             int x,
             int y
     ) {
-        int left = x + 13;
-        int top = y + 40;
-
-        drawLabelValue(gui, font, "Party", npc.getDebugParty(), left, top, BLUE);
-        top += 20;
-
-        gui.drawString(font, "RELATIONSHIPS", left, top, TEXT_DIM, false);
-        top += 13;
+        row(gui, font, "Party", npc.getDebugParty(), x, y, BLUE);
+        row(
+                gui,
+                font,
+                "Places",
+                npc.getDebugDiscoveries(),
+                x,
+                y + 12,
+                GREEN
+        );
 
         String social = npc.getDebugRelationships();
         if (social == null
                 || social.isBlank()
                 || "none".equalsIgnoreCase(social)) {
-            gui.drawString(font, "No notable relationships yet.", left, top, TEXT, false);
+            row(gui, font, "Links", "none yet", x, y + 26, DIM);
             return;
         }
 
-        String[] relations = social.split("\\|");
-        int shown = 0;
-        for (String relation : relations) {
-            if (shown >= 5) {
-                gui.drawString(
-                        font,
-                        "+" + (relations.length - shown) + " more",
-                        left,
-                        top,
-                        TEXT_DIM,
-                        false
-                );
-                break;
-            }
+        String[] entries = social.split("\\|");
+        int lineY = y + 26;
+        int shown = Math.min(3, entries.length);
 
-            drawBullet(
-                    gui,
+        for (int i = 0; i < shown; i++) {
+            gui.fill(x, lineY + 3, x + 4, lineY + 7, GREEN);
+            gui.drawString(
                     font,
-                    trim(font, relation.trim(), PANEL_WIDTH - 39),
-                    left,
-                    top,
-                    relation.startsWith("Player ") ? GOLD : GREEN
+                    fit(font, entries[i].trim(), 145),
+                    x + 8,
+                    lineY,
+                    TEXT,
+                    false
             );
-            top += 15;
-            shown++;
+            lineY += 11;
         }
     }
 
-    private static void drawGearPage(
+    private static void drawData(
             GuiGraphics gui,
             Font font,
             CyberNpcEntity npc,
             int x,
             int y
     ) {
-        int left = x + 13;
-        int top = y + 39;
+        row(
+                gui,
+                font,
+                "Gear",
+                npc.getGearTierDisplayName(),
+                x,
+                y,
+                GOLD
+        );
+        row(
+                gui,
+                font,
+                "Bag",
+                npc.getDebugInventory(),
+                x,
+                y + 12,
+                TEXT
+        );
+        row(
+                gui,
+                font,
+                "Claim",
+                npc.getDebugClaims(),
+                x,
+                y + 24,
+                GREEN
+        );
 
-        gui.drawString(font, "EQUIPMENT", left, top, TEXT_DIM, false);
-        top += 13;
-
+        int slotY = y + 36;
         EquipmentSlot[] slots = {
                 EquipmentSlot.HEAD,
                 EquipmentSlot.CHEST,
@@ -395,65 +385,84 @@ public final class DeveloperGlassesOverlay {
                 EquipmentSlot.OFFHAND
         };
 
-        int slotX = left;
+        int slotX = x;
         for (EquipmentSlot slot : slots) {
-            drawItemSlot(gui, font, npc.getItemBySlot(slot), slotX, top);
-            slotX += 22;
+            drawTinySlot(
+                    gui,
+                    font,
+                    npc.getItemBySlot(slot),
+                    slotX,
+                    slotY
+            );
+            slotX += 21;
         }
+    }
 
+    private static void row(
+            GuiGraphics gui,
+            Font font,
+            String label,
+            String value,
+            int x,
+            int y,
+            int valueColor
+    ) {
+        String left = label + ":";
+        int labelWidth = Math.max(34, font.width(left) + 5);
+        gui.drawString(font, left, x, y, DIM, false);
+
+        int available = PANEL_WIDTH - 20 - labelWidth;
         gui.drawString(
                 font,
-                "armor                 hands",
-                left,
-                top + 22,
-                TEXT_DIM,
+                fit(font, value, available),
+                x + labelWidth,
+                y,
+                valueColor,
                 false
         );
+    }
 
-        top += 40;
-        drawLabelValue(
-                gui,
-                font,
-                "Bag",
-                trim(font, npc.getDebugInventory(), 183),
-                left,
-                top,
-                TEXT
-        );
-        top += 18;
-        drawLabelValue(
-                gui,
-                font,
-                "Claims",
-                trim(font, npc.getDebugClaims(), 171),
-                left,
-                top,
-                GREEN
+    private static void miniBar(
+            GuiGraphics gui,
+            int x,
+            int y,
+            int segments,
+            float fraction,
+            int color
+    ) {
+        int filled = Mth.clamp(
+                Mth.ceil(Mth.clamp(fraction, 0.0F, 1.0F) * segments),
+                0,
+                segments
         );
 
-        if (npc.getWildClass().usesSpellBook()) {
-            top += 18;
-            gui.drawString(font, "SPELLS", left, top, TEXT_DIM, false);
-            top += 12;
+        for (int i = 0; i < segments; i++) {
+            int px = x + i * 13;
+            gui.fill(px, y, px + 11, y + 7, WELL_DARK);
+            gui.fill(
+                    px + 1,
+                    y + 1,
+                    px + 10,
+                    y + 6,
+                    i < filled ? color : 0x666666
+            );
+        }
+    }
 
-            String spells = npc.getDebugSpells();
-            if (spells == null || spells.isBlank()) {
-                gui.drawString(font, "No spell data.", left, top, TEXT, false);
-            } else {
-                String[] entries = spells.split("\\|");
-                int count = Math.min(2, entries.length);
-                for (int i = 0; i < count; i++) {
-                    gui.drawString(
-                            font,
-                            trim(font, entries[i], PANEL_WIDTH - 28),
-                            left,
-                            top,
-                            PURPLE,
-                            false
-                    );
-                    top += 12;
-                }
-            }
+    private static void drawTinySlot(
+            GuiGraphics gui,
+            Font font,
+            ItemStack stack,
+            int x,
+            int y
+    ) {
+        gui.fill(x, y, x + 19, y + 19, WELL_DARK);
+        gui.fill(x + 1, y + 1, x + 18, y + 18, WELL);
+        gui.fill(x + 1, y + 1, x + 18, y + 2, PANEL_HI);
+
+        if (!stack.isEmpty()) {
+            gui.renderItem(stack, x + 2, y + 2);
+            gui.renderItemDecorations(font, stack, x + 2, y + 2);
         }
     }
 
@@ -463,260 +472,104 @@ public final class DeveloperGlassesOverlay {
             int x,
             int y
     ) {
-        int footerY = y + PANEL_HEIGHT - FOOTER_HEIGHT;
-        gui.fill(
-                x + 5,
-                footerY,
-                x + PANEL_WIDTH - 5,
-                y + PANEL_HEIGHT - 5,
-                0xE83A3A3A
-        );
+        int top = y + PANEL_HEIGHT - FOOTER_HEIGHT;
+        int innerX = x + 6;
+        int usable = PANEL_WIDTH - 12;
+        int buttonWidth = usable / Page.values().length;
 
-        int cursor = x + 10;
-        for (int i = 0; i < Tab.values().length; i++) {
-            Tab tab = Tab.values()[i];
-            boolean active = i == currentTab;
-            int labelWidth = font.width(tab.shortName) + 12;
+        for (int i = 0; i < Page.values().length; i++) {
+            int bx = innerX + i * buttonWidth;
+            boolean selected = i == currentTab;
 
-            drawTabButton(
-                    gui,
-                    cursor,
-                    footerY + 3,
-                    labelWidth,
-                    14,
-                    active
+            gui.fill(
+                    bx,
+                    top + 3,
+                    bx + buttonWidth - 2,
+                    y + PANEL_HEIGHT - 5,
+                    WELL_DARK
+            );
+            gui.fill(
+                    bx + 1,
+                    top + 4,
+                    bx + buttonWidth - 3,
+                    y + PANEL_HEIGHT - 6,
+                    selected ? 0xF0717171 : 0xF04B4B4B
             );
 
+            String label = Page.values()[i].shortLabel;
+            int tx = bx + (buttonWidth - 2 - font.width(label)) / 2;
             gui.drawString(
                     font,
-                    tab.shortName,
-                    cursor + 6,
-                    footerY + 6,
-                    active ? 0xFFFFFF : 0xB8B8B8,
-                    active
+                    label,
+                    tx,
+                    top + 6,
+                    selected ? WHITE : 0xBEBEBE,
+                    selected
             );
-
-            cursor += labelWidth + 4;
         }
-
-        gui.drawString(
-                font,
-                keyHint(),
-                x + PANEL_WIDTH - 9 - font.width(keyHint()),
-                footerY + 6,
-                GOLD,
-                true
-        );
     }
 
-    private static void drawMinecraftPanel(
+    private static void drawBodyWell(
             GuiGraphics gui,
-            int x,
-            int y,
-            int width,
-            int height
-    ) {
-        gui.fill(x, y, x + width, y + height, BORDER_DARK);
-        gui.fill(x + 2, y + 2, x + width - 2, y + height - 2, PANEL);
-        gui.fill(x + 3, y + 3, x + width - 3, y + 4, PANEL_LIGHT);
-        gui.fill(x + 3, y + 3, x + 4, y + height - 3, PANEL_LIGHT);
-        gui.fill(x + 3, y + height - 4, x + width - 3, y + height - 3, PANEL_SHADOW);
-        gui.fill(x + width - 4, y + 3, x + width - 3, y + height - 3, PANEL_SHADOW);
-    }
-
-    private static void drawContentBackground(
-            GuiGraphics gui,
-            int x,
-            int y,
-            int width,
-            int height
-    ) {
-        gui.fill(x, y, x + width, y + height, SLOT_SHADOW);
-        gui.fill(x + 1, y + 1, x + width - 1, y + height - 1, CONTENT);
-        gui.fill(x + 1, y + 1, x + width - 1, y + 2, 0xE8D6D6D6);
-    }
-
-    private static void drawTabButton(
-            GuiGraphics gui,
-            int x,
-            int y,
-            int width,
-            int height,
-            boolean active
-    ) {
-        int fill = active ? 0xE8787878 : 0xE84A4A4A;
-        gui.fill(x, y, x + width, y + height, SLOT_SHADOW);
-        gui.fill(x + 1, y + 1, x + width - 1, y + height - 1, fill);
-        gui.fill(x + 1, y + 1, x + width - 1, y + 2, active ? SLOT_LIGHT : 0xE8707070);
-    }
-
-    private static void drawItemSlot(
-            GuiGraphics gui,
-            Font font,
-            ItemStack stack,
             int x,
             int y
     ) {
-        gui.fill(x, y, x + 20, y + 20, SLOT_SHADOW);
-        gui.fill(x + 1, y + 1, x + 19, y + 19, SLOT);
-        gui.fill(x + 1, y + 1, x + 19, y + 2, SLOT_LIGHT);
-        gui.fill(x + 1, y + 1, x + 2, y + 19, SLOT_LIGHT);
+        int left = x + 5;
+        int top = y + BODY_TOP;
+        int right = x + PANEL_WIDTH - 5;
+        int bottom = y + BODY_BOTTOM;
 
-        if (!stack.isEmpty()) {
-            gui.renderItem(stack, x + 2, y + 2);
-            gui.renderItemDecorations(font, stack, x + 2, y + 2);
-        }
+        gui.fill(left, top, right, bottom, WELL_DARK);
+        gui.fill(left + 1, top + 1, right - 1, bottom - 1, 0xE8AAAAAA);
     }
 
-    private static void drawSegmentBar(
+    private static void drawPanel(
             GuiGraphics gui,
             int x,
             int y,
-            int segments,
-            float fraction,
-            int activeColor
+            int width,
+            int height
     ) {
-        int filled = Mth.clamp(
-                Mth.ceil(Mth.clamp(fraction, 0.0F, 1.0F) * segments),
-                0,
-                segments
+        gui.fill(x, y, x + width, y + height, OUTLINE);
+        gui.fill(x + 2, y + 2, x + width - 2, y + height - 2, PANEL);
+        gui.fill(x + 3, y + 3, x + width - 3, y + 4, PANEL_HI);
+        gui.fill(x + 3, y + 3, x + 4, y + height - 3, PANEL_HI);
+        gui.fill(
+                x + 3,
+                y + height - 4,
+                x + width - 3,
+                y + height - 3,
+                PANEL_LO
         );
-
-        for (int i = 0; i < segments; i++) {
-            int px = x + i * 11;
-            gui.fill(px, y, px + 9, y + 8, SLOT_SHADOW);
-            gui.fill(
-                    px + 1,
-                    y + 1,
-                    px + 8,
-                    y + 7,
-                    i < filled ? activeColor : 0x666666
-            );
-            if (i < filled) {
-                gui.fill(px + 2, y + 2, px + 7, y + 3, 0x55FFFFFF);
-            }
-        }
-    }
-
-    private static void drawLabelValue(
-            GuiGraphics gui,
-            Font font,
-            String label,
-            String value,
-            int x,
-            int y,
-            int valueColor
-    ) {
-        gui.drawString(font, label.toUpperCase(), x, y, TEXT_DIM, false);
-        int labelWidth = Math.max(42, font.width(label.toUpperCase()) + 8);
-        gui.drawString(
-                font,
-                trim(font, value == null ? "none" : value, PANEL_WIDTH - labelWidth - 28),
-                x + labelWidth,
-                y,
-                valueColor,
-                false
+        gui.fill(
+                x + width - 4,
+                y + 3,
+                x + width - 3,
+                y + height - 3,
+                PANEL_LO
         );
     }
 
-    private static void drawBullet(
-            GuiGraphics gui,
-            Font font,
-            String value,
-            int x,
-            int y,
-            int color
-    ) {
-        gui.fill(x, y + 3, x + 5, y + 8, color);
-        gui.drawString(font, value, x + 10, y + 1, TEXT, false);
-    }
-
-    private static int drawWrapped(
-            GuiGraphics gui,
+    private static String fit(
             Font font,
             String text,
-            int x,
-            int y,
-            int maxWidth,
-            int maxLines,
-            int color
+            int maxWidth
     ) {
-        List<String> lines = wrap(font, text == null ? "" : text, maxWidth, maxLines);
-        for (String line : lines) {
-            gui.drawString(font, line, x, y, color, false);
-            y += 11;
-        }
-        return y;
-    }
-
-    private static List<String> wrap(
-            Font font,
-            String text,
-            int maxWidth,
-            int maxLines
-    ) {
-        List<String> lines = new ArrayList<>();
-        String remaining = text.trim();
-
-        while (!remaining.isEmpty() && lines.size() < maxLines) {
-            if (font.width(remaining) <= maxWidth) {
-                lines.add(remaining);
-                break;
-            }
-
-            String fit = font.plainSubstrByWidth(remaining, maxWidth);
-            int split = fit.lastIndexOf(' ');
-            if (split <= 0) {
-                split = fit.length();
-            }
-
-            String line = remaining.substring(0, split).trim();
-            remaining = remaining.substring(Math.min(remaining.length(), split)).trim();
-
-            if (lines.size() == maxLines - 1 && !remaining.isEmpty()) {
-                line = trim(font, line + "...", maxWidth);
-                remaining = "";
-            }
-
-            lines.add(line);
-        }
-
-        if (lines.isEmpty()) {
-            lines.add("none");
-        }
-
-        return lines;
-    }
-
-    private static String keyHint() {
-        return "[" + CYCLE_TAB.getTranslatedKeyMessage().getString() + "]";
-    }
-
-    private static String trim(Font font, String text, int maxWidth) {
         if (text == null || text.isBlank()) {
-            return "none";
+            return "-";
         }
+
+        if (maxWidth <= 0) {
+            return "";
+        }
+
         if (font.width(text) <= maxWidth) {
             return text;
         }
 
-        String ellipsis = "...";
-        int allowed = Math.max(0, maxWidth - font.width(ellipsis));
-        return font.plainSubstrByWidth(text, allowed) + ellipsis;
-    }
-
-    private static int classColor(WildNpcClass npcClass) {
-        return switch (npcClass) {
-            case ARCHER -> 0x2E7D32;
-            case KNIGHT -> 0x355C9A;
-            case ROGUE -> 0x6A3D8E;
-            case BERSERKER -> 0x9B3A32;
-            case HORSE_TAMER -> 0x795548;
-            case MAGE -> 0x8E3C8E;
-            case CLERIC -> 0x9A7B16;
-            case SPELLBLADE -> 0x336A8B;
-            default -> 0x3F3F3F;
-        };
+        String dots = "..";
+        int allowed = Math.max(0, maxWidth - font.width(dots));
+        return font.plainSubstrByWidth(text, allowed) + dots;
     }
 
     private static boolean isWearingGlasses(Minecraft minecraft) {
@@ -726,7 +579,9 @@ public final class DeveloperGlassesOverlay {
                 .is(ModItems.DEVELOPER_GLASSES.get());
     }
 
-    private static CyberNpcEntity findLookedAtNpc(Minecraft minecraft) {
+    private static CyberNpcEntity findLookedAtNpc(
+            Minecraft minecraft
+    ) {
         Vec3 start = minecraft.player.getEyePosition(1.0F);
         Vec3 look = minecraft.player.getViewVector(1.0F);
         Vec3 end = start.add(look.scale(DEBUG_RANGE));
@@ -743,23 +598,24 @@ public final class DeveloperGlassesOverlay {
                 DEBUG_RANGE * DEBUG_RANGE
         );
 
-        return hit != null && hit.getEntity() instanceof CyberNpcEntity npc
+        return hit != null
+                && hit.getEntity() instanceof CyberNpcEntity npc
                 ? npc
                 : null;
     }
 
-    private enum Tab {
-        STATUS("Status", "Status"),
-        MIND("Mind", "Mind"),
-        SOCIAL("Social", "Social"),
-        GEAR("Gear", "Gear");
+    private enum Page {
+        INFO("Info", "INFO"),
+        AI("AI", "AI"),
+        SOCIAL("Social", "SOC"),
+        DATA("Data", "DATA");
 
-        private final String displayName;
-        private final String shortName;
+        private final String label;
+        private final String shortLabel;
 
-        Tab(String displayName, String shortName) {
-            this.displayName = displayName;
-            this.shortName = shortName;
+        Page(String label, String shortLabel) {
+            this.label = label;
+            this.shortLabel = shortLabel;
         }
     }
 
