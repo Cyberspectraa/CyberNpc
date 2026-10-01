@@ -42,7 +42,6 @@ public final class ModEvents {
         }
 
         if (event.getTabKey().equals(CreativeModeTabs.TOOLS_AND_UTILITIES)) {
-            event.accept(ModItems.DEVELOPER_GLASSES);
         }
     }
 
