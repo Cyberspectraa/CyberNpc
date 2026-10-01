@@ -39,6 +39,12 @@ final class WildNpcSleepBrain {
             return false;
         }
 
+        if (level.isNight()
+                && npc.shouldExplorerReturnBeforeSleeping()) {
+            busy = false;
+            return false;
+        }
+
         if (npc.isSleeping()) {
             if (npc.isCombatActive()
                     || !level.isNight()
