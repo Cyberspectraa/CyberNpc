@@ -161,6 +161,7 @@ public final class DeveloperGlassesOverlay {
                         npc.getHunger() <= 6 ? 0xFF7777 : 0xE8E8E8
                 ));
                 lines.add(new DebugLine("Activity: " + npc.getDebugActivity(), 0xFFFF77));
+                lines.add(new DebugLine("Intent: " + npc.getDebugIntention(), 0xB9E6FF));
                 lines.add(new DebugLine("Why: " + npc.getDebugReason(), 0xB8D8FF));
                 lines.add(new DebugLine(
                         npc.isZombifying()
@@ -278,6 +279,7 @@ public final class DeveloperGlassesOverlay {
             }
             case DEBUG -> {
                 lines.add(new DebugLine("Activity: " + npc.getDebugActivity(), 0xFFFF77));
+                lines.add(new DebugLine("Intent: " + npc.getDebugIntention(), 0xB9E6FF));
                 lines.add(new DebugLine("Why: " + npc.getDebugReason(), 0xB8D8FF));
                 lines.add(new DebugLine("Target: " + npc.getDebugTarget(), 0xFFB866));
                 lines.add(new DebugLine("Path: " + npc.getDebugPath(), 0xB7D7FF));
@@ -324,7 +326,6 @@ public final class DeveloperGlassesOverlay {
             case KNIGHT -> "Armored committed melee";
             case ROGUE -> "Fast flanking melee";
             case BERSERKER -> "Heavy axe pressure / low-health rage";
-            case BEAST_TAMER -> "Melee + coordinated wolf pack";
             case HORSE_TAMER -> "Mounted melee / horse handling";
             case MAGE -> "Iron's Spells caster / distance control";
             case CLERIC -> "Holy support / healing + ranged pressure";
@@ -339,7 +340,6 @@ public final class DeveloperGlassesOverlay {
             case KNIGHT -> 0x8DB9FF;
             case ROGUE -> 0xD39BFF;
             case BERSERKER -> 0xFF7A6E;
-            case BEAST_TAMER -> 0xE0B36A;
             case HORSE_TAMER -> 0xC99A68;
             case MAGE -> 0xFF8EF3;
             case CLERIC -> 0xFFF0A6;
