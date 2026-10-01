@@ -2298,73 +2298,9 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
-        if (getWildClass() != WildNpcClass.HORSE_TAMER
-                || !BetterHorsesCompat.isLoaded()) {
-            return;
-        }
-
-        AbstractHorse horse = EntityType.HORSE.create(level.getLevel());
-        if (horse == null) {
-            return;
-        }
-
-        horse.moveTo(
-                companionPos.getX() + 0.5D,
-                companionPos.getY(),
-                companionPos.getZ() + 0.5D,
-                getYRot(),
-                0.0F
-        );
-        horse.finalizeSpawn(
-                level,
-                difficulty,
-                MobSpawnType.MOB_SUMMONED,
-                null,
-                null
-        );
-
-        ItemStack upgradedSaddle = inventory.takeOne(
-                BetterHorsesCompat::isUpgradedSaddle
-        );
-        if (upgradedSaddle.isEmpty()) {
-            upgradedSaddle = BetterHorsesCompat.createUpgradedSaddle();
-        }
-
-        if (upgradedSaddle.isEmpty()) {
-            horse.discard();
-            return;
-        }
-
-        horse.setTamed(true);
-        horse.setOwnerUUID(getUUID());
-
-        boolean ownerSet = BetterHorsesCompat.setBetterHorsesOwner(
-                horse,
-                getUUID()
-        );
-        boolean saddleEquipped = ownerSet
-                && BetterHorsesCompat.equipUpgradedSaddle(
-                horse,
-                upgradedSaddle
-        );
-
-        if (!saddleEquipped) {
-            BetterHorsesCompat.setBetterHorsesOwner(horse, null);
-            horse.setOwnerUUID(null);
-            horse.setTamed(false);
-            inventory.add(upgradedSaddle);
-            horse.discard();
-            return;
-        }
-
-        horse.setHealth(horse.getMaxHealth());
-        horse.setPersistenceRequired();
-        claimHorse(horse);
-        horseTargetId = horse.getUUID();
-        horseSearchCooldown = 0;
-        horseRemountCooldown = 0;
-
-        level.addFreshEntity(horse);
+        // Horse Tamers deliberately do not receive a generated horse.
+        // They keep their Upgraded Saddle and use tickHorseUse() to discover,
+        // tame and claim a real horse that already exists in the world.
     }
 
     private BlockPos findInitialCompanionSpawnPos(
