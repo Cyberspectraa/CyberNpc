@@ -385,6 +385,7 @@ public class CyberNpcEntity extends PathfinderMob {
     private final NpcIntentionController intentions;
     private final NpcAttentionBrain attentionBrain;
     private final NpcEnvironmentalReactionBrain environmentBrain;
+    private final NpcVocalizationController vocalizations;
 
     public CyberNpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -394,6 +395,7 @@ public class CyberNpcEntity extends PathfinderMob {
         intentions = new NpcIntentionController(this);
         attentionBrain = new NpcAttentionBrain(this, playerInteractions, intentions);
         environmentBrain = new NpcEnvironmentalReactionBrain(this, intentions);
+        vocalizations = new NpcVocalizationController(this);
 
         getNavigation().setCanFloat(true);
         if (getNavigation() instanceof GroundPathNavigation groundNavigation) {
@@ -868,6 +870,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 DATA_REACTION_UNTIL,
                 level().getGameTime() + durationTicks
         );
+        vocalizations.react(icon);
     }
 
     public boolean canWander() {
@@ -2118,6 +2121,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         tickMeleeSwingAnimation();
         tickSpellCastingVisual();
+        vocalizations.tick();
 
         if (gapJumpCooldown > 0) {
             gapJumpCooldown--;
@@ -6122,6 +6126,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         intentions.clear();
         sleepBrain.wakeUp();
+        vocalizations.hurt(amount);
 
         if (source.getEntity() instanceof Zombie zombie
                 && !isZombifying()
