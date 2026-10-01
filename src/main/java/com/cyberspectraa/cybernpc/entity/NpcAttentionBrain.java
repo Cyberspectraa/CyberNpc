@@ -6,6 +6,7 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.AgeableMob;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.animal.horse.AbstractHorse;
 import net.minecraft.world.entity.animal.IronGolem;
 import net.minecraft.world.entity.npc.Villager;
@@ -241,14 +242,35 @@ final class NpcAttentionBrain {
             return false;
         }
 
-        return intentions.request(
+        NpcAnimalPreference.Opinion opinion =
+                NpcAnimalPreference.opinion(npc, target);
+
+        String reason = switch (opinion) {
+            case LIKE -> "This NPC likes "
+                    + NpcAnimalPreference.animalName(target)
+                    + " and chose to stop and watch it";
+            case DISLIKE -> "This NPC dislikes "
+                    + NpcAnimalPreference.animalName(target)
+                    + " and is keeping an eye on it from a comfortable distance";
+            case NEUTRAL -> "A nearby creature or villager looked interesting enough to inspect briefly";
+        };
+
+        boolean accepted = intentions.request(
                 NpcIntentionController.Intent.INSPECT_ENTITY,
-                16,
-                60 + npc.getRandom().nextInt(101),
+                opinion == NpcAnimalPreference.Opinion.NEUTRAL ? 16 : 20,
+                70 + npc.getRandom().nextInt(111),
                 target.getUUID(),
                 null,
-                "A nearby creature or villager looked interesting enough to inspect briefly"
+                reason
         );
+
+        if (accepted && opinion == NpcAnimalPreference.Opinion.LIKE) {
+            npc.showReaction(NpcReactionIcon.FRIENDLY, 50);
+        } else if (accepted && opinion == NpcAnimalPreference.Opinion.DISLIKE) {
+            npc.showReaction(NpcReactionIcon.ANNOYED, 50);
+        }
+
+        return accepted;
     }
 
     private boolean tryWorkstation(ServerLevel level) {
@@ -353,7 +375,34 @@ final class NpcAttentionBrain {
         }
 
         double distance = npc.distanceToSqr(living);
-        if (distance > 25.0D) {
+        NpcAnimalPreference.Opinion opinion =
+                NpcAnimalPreference.opinion(npc, living);
+
+        if (opinion == NpcAnimalPreference.Opinion.DISLIKE) {
+            // Disliking an animal is observational, not hostile. The NPC keeps
+            // a little more personal space but still watches it.
+            if (distance < 49.0D) {
+                Vec3 away = npc.position().subtract(living.position());
+                if (away.lengthSqr() > 0.01D) {
+                    away = away.normalize().scale(6.0D);
+                    Vec3 destination = npc.position().add(away);
+                    npc.getNavigation().moveTo(
+                            destination.x,
+                            destination.y,
+                            destination.z,
+                            0.60D
+                    );
+                }
+            } else {
+                npc.getNavigation().stop();
+            }
+        } else if (opinion == NpcAnimalPreference.Opinion.LIKE) {
+            if (distance > 16.0D) {
+                npc.getNavigation().moveTo(living, 0.48D);
+            } else {
+                npc.getNavigation().stop();
+            }
+        } else if (distance > 25.0D) {
             npc.getNavigation().moveTo(living, 0.52D);
         } else {
             npc.getNavigation().stop();
@@ -470,6 +519,7 @@ final class NpcAttentionBrain {
     private static boolean isInterestingEntity(LivingEntity entity) {
         return entity instanceof Villager
                 || entity instanceof IronGolem
+                || entity instanceof Animal
                 || entity instanceof AbstractHorse
                 || (entity instanceof AgeableMob ageable && ageable.isBaby());
     }
