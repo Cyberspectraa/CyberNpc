@@ -128,45 +128,6 @@ final class NpcPlayerInteractionController {
         return new EntityUseResult(result, remaining);
     }
 
-    /**
-     * Uses the same empty-hand right click an owning player would use to toggle
-     * a wolf. Direct state assignment is retained only as a compatibility
-     * fallback if another mod consumes/rejects the interaction without putting
-     * the wolf into the requested state.
-     */
-    void setOwnedWolfSitting(net.minecraft.world.entity.animal.Wolf wolf, boolean shouldSit) {
-        if (wolf == null
-                || !wolf.isAlive()
-                || !wolf.isTame()
-                || !npc.getUUID().equals(wolf.getOwnerUUID())) {
-            return;
-        }
-
-        boolean commandMismatch = wolf.isOrderedToSit() != shouldSit;
-        boolean poseMismatch = wolf.isInSittingPose() != shouldSit;
-
-        if (!commandMismatch && !poseMismatch) {
-            return;
-        }
-
-        // Only issue a real owner right-click when the actual command flag is
-        // wrong. If just the synced render pose is stale, right-clicking would
-        // flip a correct command back to the wrong one.
-        if (commandMismatch) {
-            rightClickEntity(wolf);
-        }
-
-        // Normalize both pieces of vanilla tameable state once after the
-        // interaction. SitWhenOrderedToGoal reads orderedToSit, while the
-        // renderer reads the synced sitting pose; both must agree.
-        if (wolf.isOrderedToSit() != shouldSit) {
-            wolf.setOrderedToSit(shouldSit);
-        }
-        if (wolf.isInSittingPose() != shouldSit) {
-            wolf.setInSittingPose(shouldSit);
-        }
-    }
-
     private FakePlayer preparePlayer(ServerLevel level) {
         GameProfile profile = new GameProfile(
                 npc.getUUID(),
