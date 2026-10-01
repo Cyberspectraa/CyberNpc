@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.31.0
+
+### Beast Tamer retired
+- Removed Beast Tamer from the Wild NPC class pool.
+- Removed its loadout, wolf search/taming logic, companion commands, combat hooks, spawn-companion lifecycle and Developer Glasses class styling.
+- Classless spawn weight increases slightly to absorb the retired class slot.
+- Existing saves containing the old `beast_tamer` class migrate to Classless and rebuild their normal class loadout instead of failing to load.
+- The generic player-style interaction controller remains available for future entity interactions; only Beast-Tamer-specific wolf behavior was removed.
+
+### Short-term intentions
+- Added a dedicated intention controller for non-critical player-like decisions.
+- NPCs now commit to one chosen intention for a sensible duration instead of rerolling an idle action every tick.
+- Intentions have priorities so important environmental reactions can interrupt ordinary curiosity while weaker distractions cannot interrupt a stronger current commitment.
+- Damage, combat, hunger, sleeping, horse handling, regrouping, social commitments, livestock work and other real needs cancel low-priority intentions immediately.
+- Developer Glasses now exposes the active intention and remaining commitment time.
+
+### Attention and curiosity
+- NPCs can notice nearby players who are sprinting, sneaking or actively using an item and choose to watch them for a while.
+- Curious NPCs may move somewhat closer to an interesting player before stopping at a respectful distance.
+- NPCs can notice another Wild NPC fighting and stop to observe the fight from nearby instead of ignoring it.
+- NPCs may inspect villagers, iron golems, horses and baby mobs when nothing more important is happening.
+- Existing sunset watching is retained and now participates in the same intention/commitment system.
+- Workstation curiosity is retained: NPCs can approach and genuinely right-click crafting, smithing, cartography, fletching, loom, stonecutter and grindstone blocks.
+- Campfire watching is retained as another low-priority player-like activity.
+- Personality changes what attracts attention: for example Brave/Aggressive/Reckless NPCs are more interested in fights, while Patient/Balanced NPCs are more likely to stop for sunsets.
+
+### Environmental reactions
+- NPCs now react to rain and thunderstorms rather than wandering through weather with no acknowledgement.
+- Exposed NPCs may search for reachable covered ground and move under shelter.
+- Thunderstorms produce a stronger shelter response than ordinary rain, with personality affecting how strongly each NPC reacts.
+- After reaching cover, NPCs can remain there briefly and look outward at the weather instead of immediately walking back into the rain.
+- Nearby lightning strikes can interrupt ordinary activity; the NPC stops and visibly looks toward the strike for a short reaction period.
+- Environmental reactions outrank curiosity/leisure but remain below combat, hunger, sleep and immediate survival behavior.
+
 ## 0.30.1
 
 ### Beast Tamer wolf standing fix
