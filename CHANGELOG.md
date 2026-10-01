@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.30.1
+
+### Beast Tamer wolf standing fix
+- Wolf command state and the synced sitting render pose are now treated as separate pieces of state.
+- CyberNpc only sends an owner right-click when the wolf's ordered sit command actually needs to change.
+- If the ordered command is already correct but the visual sitting pose is stale, CyberNpc fixes only the pose instead of right-clicking again and accidentally toggling the command.
+- After each real sit/stand transition, both orderedToSit and the synced sitting pose are normalized exactly once.
+- This keeps the player-style right-click interaction while preventing the tamed wolf from remaining visually seated or entering a sit/stand loop.
+
+### Horse Tamer discovery
+- Horse Tamers no longer generate a vanilla horse when the NPC spawns.
+- They still receive their Upgraded Saddle loadout when Better Horses is installed.
+- Horse Tamers now rely entirely on the existing search/tame/ownership AI to find a real horse already living in the world.
+- Existing owned horses are still preferred over claiming a new horse.
+
 ## 0.30.0
 
 ### Player-style interaction foundation
