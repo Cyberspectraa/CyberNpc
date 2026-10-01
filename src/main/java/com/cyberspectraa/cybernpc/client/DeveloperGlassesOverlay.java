@@ -161,6 +161,7 @@ public final class DeveloperGlassesOverlay {
                         npc.getHunger() <= 6 ? 0xFF7777 : 0xE8E8E8
                 ));
                 lines.add(new DebugLine("Activity: " + npc.getDebugActivity(), 0xFFFF77));
+                lines.add(new DebugLine("Why: " + npc.getDebugReason(), 0xB8D8FF));
                 lines.add(new DebugLine(
                         npc.isZombifying()
                                 ? String.format("Zombification: %.0f%%", npc.getZombificationProgress() * 100.0F)
@@ -277,6 +278,7 @@ public final class DeveloperGlassesOverlay {
             }
             case DEBUG -> {
                 lines.add(new DebugLine("Activity: " + npc.getDebugActivity(), 0xFFFF77));
+                lines.add(new DebugLine("Why: " + npc.getDebugReason(), 0xB8D8FF));
                 lines.add(new DebugLine("Target: " + npc.getDebugTarget(), 0xFFB866));
                 lines.add(new DebugLine("Path: " + npc.getDebugPath(), 0xB7D7FF));
                 lines.add(new DebugLine("Claims: " + npc.getDebugClaims(), 0xB9E6B9));
