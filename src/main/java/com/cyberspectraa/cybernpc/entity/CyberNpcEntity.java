@@ -5822,7 +5822,13 @@ public class CyberNpcEntity extends PathfinderMob {
                 && getHunger() > HUNT_HUNGER_THRESHOLD
                 && foodToEat.isEmpty()
                 && cookingMode == COOK_MODE_NONE
-                && !emergencyEating;
+                && !emergencyEating
+                && !corralBrain.isBusy()
+                && !sleepBrain.isBusy()
+                && socialConversationHoldTicks <= 0
+                && !regroupingWithParty
+                && horseTargetId == null
+                && !(getVehicle() instanceof AbstractHorse);
     }
 
     boolean canReactToEnvironment() {
@@ -6097,6 +6103,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 || socialConversationHoldTicks > 0
                 || horseTargetId != null
                 || getVehicle() instanceof AbstractHorse
+                || intentions.isActive()
                 || (suspiciousNpc != null && infectionAvoidTicks > 0);
     }
 
@@ -6113,6 +6120,7 @@ public class CyberNpcEntity extends PathfinderMob {
             return damaged;
         }
 
+        intentions.clear();
         sleepBrain.wakeUp();
 
         if (source.getEntity() instanceof Zombie zombie
