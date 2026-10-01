@@ -150,6 +150,10 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final int HORSE_REMOUNT_COOLDOWN_TICKS = 600;
     private static final int HORSE_REPATH_INTERVAL = 40;
     private static final double HORSE_OWNER_RETURN_RADIUS_SQR = 24.0D * 24.0D;
+    private static final double HORSE_NORMAL_NAV_SPEED = 1.12D;
+    private static final double HORSE_PARTY_NAV_SPEED = 1.18D;
+    private static final double HORSE_SPRINT_NAV_SPEED = 1.45D;
+    private static final double HORSE_SPRINT_DISTANCE_SQR = 100.0D;
 
     private static final double BEAST_TAMER_WOLF_RADIUS = 20.0D;
     private static final int BEAST_TAMER_SEARCH_INTERVAL = 80;
@@ -157,6 +161,7 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final double BEAST_TAMER_COMMAND_RADIUS = 96.0D;
     private static final double BEAST_TAMER_FOLLOW_DISTANCE_SQR = 16.0D;
     private static final double BEAST_TAMER_FOLLOW_SPEED = 1.15D;
+    private static final int BEAST_TAMER_COMMAND_INTERVAL = 5;
 
     private static final int CHAT_REACTION_COOLDOWN_TICKS = 40;
 
@@ -324,6 +329,10 @@ public class CyberNpcEntity extends PathfinderMob {
     private int horseRideTicks;
     private int horseRemountCooldown;
     private int horseRepathCooldown;
+
+    // Fresh Wild NPCs handle their class companion once. This is persisted so
+    // loading an existing world can never duplicate wolves or horses.
+    private boolean classSpawnCompanionHandled;
 
     private boolean chainmailMigrationChecked;
 
@@ -2108,6 +2117,7 @@ public class CyberNpcEntity extends PathfinderMob {
             setHunger(MAX_HUNGER);
             ensureWildProfile();
             stowWeapons();
+            ensureInitialClassCompanion(level, difficulty);
 
             if (spawnType == MobSpawnType.NATURAL
                     || spawnType == MobSpawnType.CHUNK_GENERATION) {
@@ -2143,6 +2153,14 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         ensureWildProfile();
+
+        if (!classSpawnCompanionHandled
+                && level() instanceof ServerLevel serverLevel) {
+            ensureInitialClassCompanion(
+                    serverLevel,
+                    serverLevel.getCurrentDifficultyAt(blockPosition())
+            );
+        }
 
         if (isZombifying()) {
             clearHostileTargetsWhileZombifying();
@@ -2223,8 +2241,153 @@ public class CyberNpcEntity extends PathfinderMob {
         finishAiTick();
     }
 
+    private void ensureInitialClassCompanion(
+            ServerLevelAccessor level,
+            DifficultyInstance difficulty
+    ) {
+        if (classSpawnCompanionHandled
+                || getNpcType() != NpcType.WILD) {
+            return;
+        }
+
+        // Mark this before trying the spawn. A blocked or failed companion
+        // spawn must not turn into duplicate companions on later ticks.
+        classSpawnCompanionHandled = true;
+
+        BlockPos companionPos = findInitialCompanionSpawnPos(level);
+
+        if (getWildClass() == WildNpcClass.BEAST_TAMER) {
+            Wolf wolf = EntityType.WOLF.create(level.getLevel());
+            if (wolf == null) {
+                return;
+            }
+
+            wolf.moveTo(
+                    companionPos.getX() + 0.5D,
+                    companionPos.getY(),
+                    companionPos.getZ() + 0.5D,
+                    getYRot(),
+                    0.0F
+            );
+            wolf.finalizeSpawn(
+                    level,
+                    difficulty,
+                    MobSpawnType.MOB_SUMMONED,
+                    null,
+                    null
+            );
+            wolf.setTame(true);
+            wolf.setOwnerUUID(getUUID());
+            wolf.setOrderedToSit(false);
+            wolf.setInSittingPose(false);
+            wolf.setTarget(null);
+            wolf.setHealth(wolf.getMaxHealth());
+            wolf.setPersistenceRequired();
+
+            level.addFreshEntity(wolf);
+            return;
+        }
+
+        if (getWildClass() != WildNpcClass.HORSE_TAMER
+                || !BetterHorsesCompat.isLoaded()) {
+            return;
+        }
+
+        AbstractHorse horse = EntityType.HORSE.create(level.getLevel());
+        if (horse == null) {
+            return;
+        }
+
+        horse.moveTo(
+                companionPos.getX() + 0.5D,
+                companionPos.getY(),
+                companionPos.getZ() + 0.5D,
+                getYRot(),
+                0.0F
+        );
+        horse.finalizeSpawn(
+                level,
+                difficulty,
+                MobSpawnType.MOB_SUMMONED,
+                null,
+                null
+        );
+
+        ItemStack upgradedSaddle = inventory.takeOne(
+                BetterHorsesCompat::isUpgradedSaddle
+        );
+        if (upgradedSaddle.isEmpty()) {
+            upgradedSaddle = BetterHorsesCompat.createUpgradedSaddle();
+        }
+
+        if (upgradedSaddle.isEmpty()) {
+            horse.discard();
+            return;
+        }
+
+        horse.setTamed(true);
+        horse.setOwnerUUID(getUUID());
+
+        boolean ownerSet = BetterHorsesCompat.setBetterHorsesOwner(
+                horse,
+                getUUID()
+        );
+        boolean saddleEquipped = ownerSet
+                && BetterHorsesCompat.equipUpgradedSaddle(
+                horse,
+                upgradedSaddle
+        );
+
+        if (!saddleEquipped) {
+            BetterHorsesCompat.setBetterHorsesOwner(horse, null);
+            horse.setOwnerUUID(null);
+            horse.setTamed(false);
+            inventory.add(upgradedSaddle);
+            horse.discard();
+            return;
+        }
+
+        horse.setHealth(horse.getMaxHealth());
+        horse.setPersistenceRequired();
+        claimHorse(horse);
+        horseTargetId = horse.getUUID();
+        horseSearchCooldown = 0;
+        horseRemountCooldown = 0;
+
+        level.addFreshEntity(horse);
+    }
+
+    private BlockPos findInitialCompanionSpawnPos(
+            ServerLevelAccessor level
+    ) {
+        BlockPos origin = blockPosition();
+        int[][] offsets = {
+                { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 },
+                { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 },
+                { 2, 0 }, { -2, 0 }, { 0, 2 }, { 0, -2 }
+        };
+
+        for (int[] offset : offsets) {
+            BlockPos candidate = origin.offset(offset[0], 0, offset[1]);
+
+            if (level.getFluidState(candidate).isEmpty()
+                    && level.getFluidState(candidate.above()).isEmpty()
+                    && level.getBlockState(candidate)
+                    .getCollisionShape(level, candidate).isEmpty()
+                    && level.getBlockState(candidate.above())
+                    .getCollisionShape(level, candidate.above()).isEmpty()
+                    && !level.getBlockState(candidate.below())
+                    .getCollisionShape(level, candidate.below()).isEmpty()) {
+                return candidate;
+            }
+        }
+
+        return origin;
+    }
+
     private void tickBeastTamerCompanionCommands() {
-        if (getWildClass() != WildNpcClass.BEAST_TAMER) {
+        if (getWildClass() != WildNpcClass.BEAST_TAMER
+                || tickCount % BEAST_TAMER_COMMAND_INTERVAL != 0) {
             return;
         }
 
@@ -2240,31 +2403,30 @@ public class CyberNpcEntity extends PathfinderMob {
                         && candidate.isTame()
                         && getUUID().equals(candidate.getOwnerUUID())
         )) {
-            // Sleeping is the one normal state where the pack should stay put.
-            // The moment the Beast Tamer wakes, the default branch below
-            // explicitly unsits the wolf again.
             if (isSleeping()) {
                 wolf.setTarget(null);
                 wolf.getNavigation().stop();
-                wolf.setOrderedToSit(true);
-                wolf.setInSittingPose(true);
+                setWolfSitCommand(wolf, true);
                 continue;
             }
 
-            // Owner combat and hunting orders always override following.
+            // Standing/following is the default. Only send a new sit/stand
+            // command when the desired state actually changed; continuously
+            // writing both the command flag and animation pose was causing the
+            // visible sit/stand spam.
+            setWolfSitCommand(wolf, false);
+
             if (hasAttackOrder) {
-                wolf.setOrderedToSit(false);
-                wolf.setInSittingPose(false);
-                wolf.setTarget(activeTarget);
+                if (wolf.getTarget() != activeTarget) {
+                    wolf.setTarget(activeTarget);
+                }
                 continue;
             }
 
-            // A fleeing Beast Tamer recalls the pack instead of letting a wolf
-            // remain behind fighting or sitting.
             if (fleeingThreat != null) {
-                wolf.setTarget(null);
-                wolf.setOrderedToSit(false);
-                wolf.setInSittingPose(false);
+                if (wolf.getTarget() != null) {
+                    wolf.setTarget(null);
+                }
 
                 if (wolf.distanceToSqr(this)
                         > BEAST_TAMER_FOLLOW_DISTANCE_SQR) {
@@ -2276,19 +2438,15 @@ public class CyberNpcEntity extends PathfinderMob {
                 continue;
             }
 
-            // Follow is the default pack state. Do not use socialising, idle
-            // time or other normal activities as reasons to sit.
-            wolf.setOrderedToSit(false);
-            wolf.setInSittingPose(false);
-
             LivingEntity wolfTarget = wolf.getTarget();
             if (wolfTarget != null && !wolfTarget.isAlive()) {
                 wolf.setTarget(null);
                 wolfTarget = null;
             }
 
-            // Preserve a live self-defence target, otherwise actively path back
-            // to the Beast Tamer so companions do not look permanently parked.
+            // Preserve live self-defence targets. Otherwise the pack actively
+            // follows the Beast Tamer instead of depending on vanilla owner AI,
+            // which expects a Player owner.
             if (wolfTarget == null
                     && wolf.distanceToSqr(this)
                     > BEAST_TAMER_FOLLOW_DISTANCE_SQR) {
@@ -2297,6 +2455,12 @@ public class CyberNpcEntity extends PathfinderMob {
                         BEAST_TAMER_FOLLOW_SPEED
                 );
             }
+        }
+    }
+
+    private void setWolfSitCommand(Wolf wolf, boolean shouldSit) {
+        if (wolf.isOrderedToSit() != shouldSit) {
+            wolf.setOrderedToSit(shouldSit);
         }
     }
 
@@ -2372,7 +2536,7 @@ public class CyberNpcEntity extends PathfinderMob {
         getNavigation().stop();
         target.setTame(true);
         target.setOwnerUUID(getUUID());
-        target.setOrderedToSit(false);
+        setWolfSitCommand(target, false);
         target.setInSittingPose(false);
         target.setTarget(null);
         target.getNavigation().moveTo(this, BEAST_TAMER_FOLLOW_SPEED);
@@ -2430,8 +2594,7 @@ public class CyberNpcEntity extends PathfinderMob {
                         && candidate.isTame()
                         && getUUID().equals(candidate.getOwnerUUID())
         )) {
-            wolf.setOrderedToSit(false);
-            wolf.setInSittingPose(false);
+            setWolfSitCommand(wolf, false);
             wolf.setTarget(target);
         }
     }
@@ -2449,8 +2612,7 @@ public class CyberNpcEntity extends PathfinderMob {
                         && getUUID().equals(candidate.getOwnerUUID())
         )) {
             wolf.setTarget(null);
-            wolf.setOrderedToSit(false);
-            wolf.setInSittingPose(false);
+            setWolfSitCommand(wolf, false);
             wolf.setOwnerUUID(null);
             wolf.setTame(false);
         }
@@ -2720,12 +2882,23 @@ public class CyberNpcEntity extends PathfinderMob {
         if (partyLeader != null
                 && distanceToSqr(partyLeader)
                 > PARTY_FOLLOW_DISTANCE * PARTY_FOLLOW_DISTANCE) {
-            horse.getNavigation().moveTo(partyLeader, 1.18D);
+            boolean sprint = horse.distanceToSqr(partyLeader)
+                    > HORSE_SPRINT_DISTANCE_SQR;
+            horse.setSprinting(sprint);
+            horse.getNavigation().moveTo(
+                    partyLeader,
+                    sprint
+                            ? HORSE_SPRINT_NAV_SPEED
+                            : HORSE_PARTY_NAV_SPEED
+            );
             return true;
         }
 
         if (horseRepathCooldown > 0) {
             horseRepathCooldown--;
+            if (horse.getNavigation().isDone()) {
+                horse.setSprinting(false);
+            }
             return true;
         }
 
@@ -2733,23 +2906,34 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (horseRideOrigin != null
                 && horse.blockPosition().distSqr(horseRideOrigin) > 900.0D) {
+            horse.setSprinting(true);
             horse.getNavigation().moveTo(
                     horseRideOrigin.getX() + 0.5D,
                     horseRideOrigin.getY(),
                     horseRideOrigin.getZ() + 0.5D,
-                    1.12D
+                    HORSE_SPRINT_NAV_SPEED
             );
             return true;
         }
 
         Vec3 travel = DefaultRandomPos.getPos(horse, 18, 6);
         if (travel != null) {
+            double dx = travel.x - horse.getX();
+            double dz = travel.z - horse.getZ();
+            boolean sprint = dx * dx + dz * dz
+                    > HORSE_SPRINT_DISTANCE_SQR;
+
+            horse.setSprinting(sprint);
             horse.getNavigation().moveTo(
                     travel.x,
                     travel.y,
                     travel.z,
-                    1.12D
+                    sprint
+                            ? HORSE_SPRINT_NAV_SPEED
+                            : HORSE_NORMAL_NAV_SPEED
             );
+        } else {
+            horse.setSprinting(false);
         }
 
         return true;
@@ -2841,6 +3025,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
     private void stopUsingHorse(AbstractHorse horse) {
         stopRiding();
+        horse.setSprinting(false);
         horse.getNavigation().stop();
         releaseHorseClaim(horse);
         horseTargetId = null;
@@ -6079,7 +6264,10 @@ public class CyberNpcEntity extends PathfinderMob {
             return "Sleeping";
         }
         if (getVehicle() instanceof AbstractHorse horse) {
-            return "Riding horse — " + horse.getName().getString();
+            return (horse.isSprinting()
+                    ? "Sprinting on horse — "
+                    : "Riding horse — ")
+                    + horse.getName().getString();
         }
         if (horseTargetId != null) {
             return "Approaching horse";
@@ -6159,7 +6347,11 @@ public class CyberNpcEntity extends PathfinderMob {
         if (sleepBrain.isBusy()) {
             return "It is night and this NPC is committed to reaching its claimed bed";
         }
-        if (getVehicle() instanceof AbstractHorse) {
+        if (getVehicle() instanceof AbstractHorse horse) {
+            if (horse.isSprinting()) {
+                return "Mounted destination is far enough away to make sprint travel worthwhile";
+            }
+
             CyberNpcEntity leader = getLoadedPartyLeader();
             if (leader != null
                     && distanceToSqr(leader)
@@ -6904,6 +7096,10 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (getNpcType() == NpcType.WILD) {
             tag.putString("CyberNpcWildClass", getWildClass().serializedName());
+            tag.putBoolean(
+                    "CyberNpcClassSpawnCompanionHandled",
+                    classSpawnCompanionHandled
+            );
             tag.putString("CyberNpcPersonality", getPersonality().serializedName());
             tag.putString("CyberNpcGearTier", getGearTier().serializedName());
             tag.putBoolean("CyberNpcClassLoadoutInitialized", classLoadoutInitialized);
@@ -7039,12 +7235,18 @@ public class CyberNpcEntity extends PathfinderMob {
 
             classLoadoutInitialized = !unavailableLoadedClass
                     && tag.getBoolean("CyberNpcClassLoadoutInitialized");
+            classSpawnCompanionHandled = tag.contains(
+                    "CyberNpcClassSpawnCompanionHandled"
+            )
+                    ? tag.getBoolean("CyberNpcClassSpawnCompanionHandled")
+                    : true;
         } else {
             entityData.set(DATA_WILD_CLASS, "");
             entityData.set(DATA_PERSONALITY, "");
             entityData.set(DATA_GEAR_TIER, "");
             entityData.set(DATA_MAGE_SCHOOL, "");
             classLoadoutInitialized = false;
+            classSpawnCompanionHandled = true;
         }
 
         if (tag.contains("CyberNpcAggression")) {
