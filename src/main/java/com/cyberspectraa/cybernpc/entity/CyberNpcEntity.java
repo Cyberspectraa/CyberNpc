@@ -9,6 +9,7 @@ import com.cyberspectraa.cybernpc.registry.ModEffects;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.cyberspectraa.cybernpc.registry.ModItems;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
+import com.cyberspectraa.cybernpc.service.SpecialNpcSavedData;
 import com.cyberspectraa.cybernpc.world.CyberNpcWorldClaims;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -421,6 +422,9 @@ public class CyberNpcEntity extends PathfinderMob {
     private final NpcVocalizationController vocalizations;
     private final NpcServiceBrain serviceBrain;
 
+    @Nullable
+    private UUID specialNpcId;
+
     public CyberNpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
         corralBrain = new WildNpcCorralBrain(this);
@@ -516,6 +520,20 @@ public class CyberNpcEntity extends PathfinderMob {
 
     public String getRole() {
         return entityData.get(DATA_ROLE);
+    }
+
+    @Nullable
+    public UUID getSpecialNpcId() {
+        return specialNpcId;
+    }
+
+    public void setSpecialNpcId(@Nullable UUID specialNpcId) {
+        this.specialNpcId = specialNpcId;
+    }
+
+    public boolean isSpecialServiceNpc() {
+        return NpcServiceRole.fromRole(getRole())
+                != NpcServiceRole.NONE;
     }
 
     public void setRole(String role) {
@@ -2191,6 +2209,11 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (getNpcType() != NpcType.WILD) {
             if (isAlive()) {
+                if (isSpecialServiceNpc()
+                        && level() instanceof ServerLevel serverLevel) {
+                    SpecialNpcSavedData.get(serverLevel)
+                            .ensureRegistered(this);
+                }
                 serviceBrain.tick();
             }
             return;
@@ -7104,11 +7127,14 @@ public class CyberNpcEntity extends PathfinderMob {
 
     @Override
     public void die(DamageSource source) {
-        boolean convertFromZombieKill = !level().isClientSide
+        boolean specialServiceNpc = isSpecialServiceNpc();
+
+        boolean convertFromZombieKill = !specialServiceNpc
+                && !level().isClientSide
                 && source.getEntity() instanceof Zombie
                 && getRandom().nextFloat() < ZOMBIE_KILL_CONVERSION_CHANCE;
 
-        if (convertFromZombieKill) {
+        if (convertFromZombieKill || specialServiceNpc) {
             suppressDeathLootForZombieConversion = true;
         }
 
@@ -7134,12 +7160,18 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         if (!level().isClientSide) {
-            if (source.getEntity() instanceof Player player
-                    && !player.isCreative()
-                    && !player.isSpectator()) {
-                notifySocialWitnessesOfPlayerAttack(player, true);
+            if (specialServiceNpc
+                    && level() instanceof ServerLevel serverLevel) {
+                SpecialNpcSavedData.get(serverLevel)
+                        .scheduleRespawn(this);
+            } else {
+                if (source.getEntity() instanceof Player player
+                        && !player.isCreative()
+                        && !player.isSpectator()) {
+                    notifySocialWitnessesOfPlayerAttack(player, true);
+                }
+                handlePartyDeath();
             }
-            handlePartyDeath();
         }
 
         IronSpellsCompat.clearCasterState(this);
@@ -7248,6 +7280,10 @@ public class CyberNpcEntity extends PathfinderMob {
         tag.putBoolean("CyberNpcCanWander", canWander());
         tag.putString("CyberNpcType", getNpcType().serializedName());
 
+        if (specialNpcId != null) {
+            tag.putUUID("CyberNpcSpecialId", specialNpcId);
+        }
+
         ensureAppearance();
         tag.putString(
                 "CyberNpcAppearanceGender",
@@ -7311,6 +7347,10 @@ public class CyberNpcEntity extends PathfinderMob {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
+
+        specialNpcId = tag.hasUUID("CyberNpcSpecialId")
+                ? tag.getUUID("CyberNpcSpecialId")
+                : null;
 
         if (tag.contains("CyberNpcRole")) {
             setRole(tag.getString("CyberNpcRole"));
