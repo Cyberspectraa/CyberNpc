@@ -18,6 +18,8 @@ import java.util.function.Supplier;
 
 public final class CyberNpcSpawnEggItem extends ForgeSpawnEggItem {
     private final NpcType npcType;
+    private final String role;
+    private final boolean canWander;
 
     public CyberNpcSpawnEggItem(
             Supplier<? extends EntityType<? extends Mob>> typeSupplier,
@@ -26,8 +28,30 @@ public final class CyberNpcSpawnEggItem extends ForgeSpawnEggItem {
             NpcType npcType,
             Item.Properties properties
     ) {
+        this(
+                typeSupplier,
+                backgroundColor,
+                highlightColor,
+                npcType,
+                "",
+                true,
+                properties
+        );
+    }
+
+    public CyberNpcSpawnEggItem(
+            Supplier<? extends EntityType<? extends Mob>> typeSupplier,
+            int backgroundColor,
+            int highlightColor,
+            NpcType npcType,
+            String role,
+            boolean canWander,
+            Item.Properties properties
+    ) {
         super(typeSupplier, backgroundColor, highlightColor, properties);
         this.npcType = npcType;
+        this.role = role == null ? "" : role.trim();
+        this.canWander = canWander;
     }
 
     @Override
@@ -53,5 +77,9 @@ public final class CyberNpcSpawnEggItem extends ForgeSpawnEggItem {
         CompoundTag entityTag = stack.getOrCreateTagElement("EntityTag");
         entityTag.putString("CyberNpcType", npcType.serializedName());
 
+        if (!role.isEmpty()) {
+            entityTag.putString("CyberNpcRole", role);
+            entityTag.putBoolean("CyberNpcCanWander", canWander);
+        }
     }
 }
