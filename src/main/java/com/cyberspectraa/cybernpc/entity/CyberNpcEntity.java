@@ -2261,14 +2261,18 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private boolean tickHorseUse() {
-        if (getWildClass() != WildNpcClass.RANGER
-                || !BetterHorsesCompat.isLoaded()) {
+        if (getWildClass() != WildNpcClass.RANGER) {
             if (getVehicle() instanceof AbstractHorse horse) {
                 stopUsingHorse(horse);
             } else {
                 clearHorseTarget();
             }
             return false;
+        }
+
+        if (!BetterHorsesCompat.isLoaded()) {
+            clearHorseTarget();
+            return tickRangerFootPatrol();
         }
 
         if (isPassenger()) {
@@ -2280,7 +2284,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (horseRemountCooldown > 0) {
             clearHorseTarget();
-            return false;
+            return tickRangerFootPatrol();
         }
 
         if (isCombatActive()
@@ -2306,7 +2310,7 @@ public class CyberNpcEntity extends PathfinderMob {
         if (target == null) {
             if (horseSearchCooldown > 0) {
                 horseSearchCooldown--;
-                return false;
+                return tickRangerFootPatrol();
             }
 
             horseSearchCooldown = HORSE_SEARCH_INTERVAL;
@@ -2341,7 +2345,7 @@ public class CyberNpcEntity extends PathfinderMob {
             }
 
             if (target == null) {
-                return false;
+                return tickRangerFootPatrol();
             }
 
             claimHorse(target);
@@ -2546,6 +2550,96 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         return tickRangerPatrol(horse);
+    }
+
+    private boolean tickRangerFootPatrol() {
+        if (!(level() instanceof ServerLevel serverLevel)
+                || isCombatActive()
+                || fleeingThreat != null
+                || isSleeping()
+                || isZombifying()
+                || socialConversationHoldTicks > 0
+                || getHunger() <= HUNT_HUNGER_THRESHOLD
+                || hasNonHorseUrgentNeed()) {
+            return false;
+        }
+
+        BlockPos claimedBed = getClaimedBedPos();
+        if (claimedBed != null) {
+            rangerHomePos = claimedBed.immutable();
+        } else if (rangerHomePos == null) {
+            rangerHomePos = blockPosition().immutable();
+        }
+
+        if (rangerVillageCheckCooldown > 0) {
+            rangerVillageCheckCooldown--;
+        } else {
+            rangerVillageCheckCooldown = RANGER_VILLAGE_CHECK_INTERVAL;
+            rangerHomeIsVillage = rangerHomePos != null
+                    && serverLevel.isVillage(rangerHomePos);
+
+            if (!rangerHomeIsVillage
+                    && serverLevel.isVillage(blockPosition())) {
+                rangerHomePos = blockPosition().immutable();
+                rangerHomeIsVillage = true;
+                rangerPatrolTarget = null;
+            }
+        }
+
+        if (rangerHomePos == null) {
+            return false;
+        }
+
+        if (blockPosition().distSqr(rangerHomePos)
+                > RANGER_HOME_RETURN_DISTANCE_SQR) {
+            rangerPatrolTarget = rangerHomePos;
+        }
+
+        if (rangerPatrolPauseTicks > 0) {
+            rangerPatrolPauseTicks--;
+            getNavigation().stop();
+            setSprinting(false);
+            return true;
+        }
+
+        if (rangerPatrolTarget != null
+                && horizontalDistanceSqr(
+                blockPosition(),
+                rangerPatrolTarget
+        ) <= RANGER_PATROL_REACHED_SQR) {
+            rangerPatrolTarget = null;
+            rangerPatrolPauseTicks = RANGER_PATROL_PAUSE_MIN_TICKS
+                    + getRandom().nextInt(
+                    RANGER_PATROL_PAUSE_RANDOM_TICKS + 1
+            );
+            getNavigation().stop();
+            setSprinting(false);
+            return true;
+        }
+
+        if (rangerPatrolTarget == null) {
+            chooseNextRangerPatrolPoint();
+        }
+
+        if (rangerPatrolTarget == null) {
+            return false;
+        }
+
+        boolean started = getNavigation().moveTo(
+                rangerPatrolTarget.getX() + 0.5D,
+                rangerPatrolTarget.getY(),
+                rangerPatrolTarget.getZ() + 0.5D,
+                0.78D
+        );
+
+        if (!started) {
+            rangerPatrolTarget = null;
+            rangerPatrolAngle += 0.9D;
+            return false;
+        }
+
+        setSprinting(false);
+        return true;
     }
 
     private boolean tickRangerPatrol(AbstractHorse horse) {
