@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.35.0
+
+### Banker and Courier service NPCs
+- Rebuilt the old Banker and Mailman/Courier concepts directly inside CyberNpc.
+- Season2-Core is now treated as retired legacy reference only; CyberNpc 0.35.0 has no runtime dependency on Season2-Core, Dragon Currency, Spectral Mail or EasyNPC.
+- Added dedicated Banker NPC and Courier NPC spawn eggs.
+- Banker/Courier eggs create persistent MAIN NPCs already configured with the correct service role.
+- Service NPCs do not run Wild NPC hunger/social/combat-life routines.
+- Banker stays stationary.
+- Courier uses a small one-task postal state machine rather than the full Wild NPC AI stack.
+
+### CyberNpc creative tab
+- Added a dedicated CyberNpc creative-mode tab.
+- NPC eggs appear first in this order: Main, Quest, Wild, Banker, Courier.
+- Currency, postal items/blocks and Developer Glasses follow in the same tab.
+- All five NPC eggs also remain available in Minecraft's normal Spawn Eggs tab.
+
+### Currency and bank
+- Added CyberNpc-native Copper, Silver, Gold, Platinum and Dragon Coins.
+- Preserved the old currency values: 1 / 10 / 100 / 1,000 / 10,000 credits.
+- Added server-authoritative persistent player bank balances.
+- Added /bal for checking your balance.
+- Banker interaction is deposit-only by design.
+- Hold a CyberNpc coin stack and right-click a Banker to deposit the whole stack.
+- Empty-hand Banker interaction displays the current balance and deposit hint.
+- Currency is intentionally not craftable.
+
+### Physical mail
+- Added Letter Paper, Addressed Letter, Sealed Letter and Opened Letter items.
+- Added /mail write <player> <message>; writing consumes one Letter Paper and creates an Addressed Letter.
+- Letter messages are capped at 256 characters.
+- Added craftable Drop Box and personal Letter Box blocks.
+- Drop Boxes accept Addressed Letters and create authoritative server-side mail records.
+- Breaking a Drop Box safely returns still-pending addressed letters instead of silently deleting them.
+- Each player has one active personal Letter Box at a time.
+- Letter Boxes hold up to nine delivered records and only the owning player can collect them.
+- Breaking an active Letter Box safely requeues boxed mail.
+- Reading a Sealed Letter is recipient-only and converts it into a locally readable Opened Letter.
+
+### Courier routing
+- Couriers search periodically for nearby pending mail instead of scanning every tick.
+- One Courier handles one authoritative letter at a time.
+- Couriers physically walk to the Drop Box before showing a carried letter.
+- Delivery priority is: usable recipient Letter Box, then an online recipient in the same dimension.
+- Couriers never force-load chunks and never teleport to recipients.
+- If nobody can currently receive the letter, the Courier keeps custody and returns toward its home/post-office point.
+- Courier death/removal safely releases an in-transit letter back to pending routing.
+- In-transit records are also released back to pending when a world reloads, preventing stale courier ownership after crashes/restarts.
+- The visual letter in a Courier's hand contains no authoritative message data.
+
 ## 0.34.0
 
 ### Horse Tamer renamed to Ranger
