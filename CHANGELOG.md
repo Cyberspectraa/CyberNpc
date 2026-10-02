@@ -1,5 +1,66 @@
 # Changelog
 
+## 0.37.0
+
+### Special NPC configuration fixes
+- Fixed Town Register interaction being swallowed by Banker/Courier service right-click actions.
+- Town Register and Special NPC Removal Stick now receive interaction priority before normal NPC service behavior.
+- Guard is a registered special NPC role and therefore supports saved Home/Work anchors, permanent identity and CyberServer arrival respawning.
+
+### Permanent special NPC removal
+- Added the Special NPC Removal Stick.
+- Right-clicking a registered Banker, Courier or Guard with the stick permanently deletes its SpecialNpc record and discards the live entity.
+- Permanently removed special NPCs do not schedule a CyberServer beam respawn.
+- Courier mail/claims are safely released before permanent removal.
+- The removal stick is available in the CyberNpc creative tab and is intentionally not a normal survival recipe.
+
+### Physical letter writing
+- Retired /mail write as the normal letter-authoring path.
+- Right-click Letter Paper to open a compact parchment-style writing page instead.
+- The writing page has a recipient field, message field, previous/next buttons for currently online players and a Seal Letter button.
+- Recipient names may also be typed manually, allowing previously known/offline player profiles to be addressed.
+- The server validates the recipient, message length and held Letter Paper before creating the Addressed Letter.
+- Letter creation remains server-authoritative and consumes one Letter Paper outside creative mode.
+- /bal remains available; the old letter-writing command was removed.
+
+### Banker interaction overhaul
+- Banking remains completely world/interact based with no custom bank GUI.
+- Right-click with a CyberNpc coin stack to deposit that entire stack.
+- Right-click with an empty hand to see the current bank balance and controls.
+- Sneak-right-click with an empty hand to withdraw balance automatically as the fewest sensible physical coin stacks.
+- Withdrawals use Dragon, Platinum, Gold, Silver and Copper denominations in descending value order.
+- One interaction is bounded to an inventory-scale payout to prevent pathological balances creating thousands of dropped item entities.
+- If the player inventory is full, excess withdrawn coin stacks are dropped and the player is warned.
+
+### Guard — first Main service NPC
+- Added a dedicated Guard NPC Spawn Egg.
+- Guards are MAIN-type special NPCs with permanent identity, Home/Work anchors and CyberServer respawning.
+- New Guards receive an iron sword, shield and iron armor when equipment slots are empty.
+- Guards use a lightweight dedicated service state machine rather than the full Wild NPC AI stack.
+- A Guard's Work anchor acts as its town/patrol centre.
+- Guards remain within a bounded 48-block town radius and scan for hostile mobs on a staggered 20-tick cadence.
+- Patrol destinations are generated outdoors only.
+- Patrol points are rejected near registered special-NPC Home anchors and near beds, keeping normal patrols out of NPC/player homes.
+- Guard navigation does not open/pass closed doors, further reducing house-entry shortcuts.
+- Guards pause at patrol points instead of constantly pathfinding.
+
+### Guard danger response and bells
+- A single ordinary Zombie, Skeleton-family mob or Spider can be handled by one Guard.
+- Multiple nearby hostiles, players attacking protected NPCs, or stronger/non-basic hostile mobs cause the Guard to seek the nearest bell and call backup.
+- Guards physically walk to and use a loaded bell instead of triggering an invisible global alarm.
+- Bell alerts notify nearby Guards within a bounded local radius; alerted Guards converge on the same threat.
+- Guard melee response is intentionally simple and low-cost: approach, face target, swing/attack on cooldown, then return to patrol.
+- Guards stop pursuing threats that leave their configured town radius.
+
+### Special NPC danger trait
+- Banker and Courier now detect being attacked or being actively targeted by a nearby hostile.
+- Threatened service NPCs run toward the nearest loaded bell, physically ring it and call nearby Guards.
+- If no bell is available, they still alert local Guards and attempt to flee away from the threat.
+- After ringing the alarm, the threatened NPC keeps retreating briefly instead of immediately returning to work.
+- Alarm scans and bell searches are bounded/cooldown-driven to avoid turning service NPCs into expensive always-on scanners.
+- Courier mail routing pauses during danger and safely resumes afterward.
+- Existing Courier breathing easter egg remains intact.
+
 ## 0.36.0
 
 ### Persistent special NPC identity
