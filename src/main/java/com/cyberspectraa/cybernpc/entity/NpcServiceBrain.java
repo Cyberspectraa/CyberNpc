@@ -7,6 +7,7 @@ import com.cyberspectraa.cybernpc.mail.MailState;
 import com.cyberspectraa.cybernpc.registry.ModItems;
 import com.cyberspectraa.cybernpc.registry.ModSounds;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
+import com.cyberspectraa.cybernpc.service.GuardPostSavedData;
 import com.cyberspectraa.cybernpc.service.SpecialNpcSavedData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -74,6 +75,10 @@ final class NpcServiceBrain {
     private static final int GUARD_PATROL_MIN_RADIUS = 10;
     private static final int GUARD_PATROL_EXTRA_RADIUS = 24;
     private static final double GUARD_PATROL_REACHED_SQR = 6.25D;
+    private static final int GUARD_POST_DUTY_MIN_TICKS = 600;
+    private static final int GUARD_POST_DUTY_EXTRA_TICKS = 600;
+    private static final int GUARD_POST_REST_MIN_TICKS = 160;
+    private static final int GUARD_POST_REST_EXTRA_TICKS = 200;
 
     private final CyberNpcEntity npc;
     private final List<Long> satchelIds = new ArrayList<>();
@@ -108,6 +113,13 @@ final class NpcServiceBrain {
     @Nullable
     private BlockPos guardPatrolTarget;
     private int guardPatrolPauseTicks;
+    @Nullable
+    private GuardPostSavedData.GuardPost guardPostTarget;
+    private int guardPostDutyTicks;
+    private int guardPostRestTicks;
+    @Nullable
+    private BlockPos guardRespondBellPos;
+    private int guardBellHoldTicks;
 
     NpcServiceBrain(CyberNpcEntity npc) {
         this.npc = npc;
@@ -190,7 +202,7 @@ final class NpcServiceBrain {
 
         if (!panicBellRung) {
             if (panicBellPos == null) {
-                broadcastGuardAlert(
+                GuardAlarmSystem.alertGuards(
                         level,
                         npc.blockPosition(),
                         threat
@@ -201,10 +213,18 @@ final class NpcServiceBrain {
                     <= BELL_ARRIVE_SQR) {
                 npc.getNavigation().stop();
                 npc.setSprinting(false);
-                npc.useServiceBlock(panicBellPos);
-                broadcastGuardAlert(level, panicBellPos, threat);
-                bellAlertCooldown = BELL_ALERT_COOLDOWN_TICKS;
-                panicBellRung = true;
+                if (GuardAlarmSystem.ringBellAndAlert(
+                        level,
+                        panicBellPos,
+                        npc,
+                        threat
+                )) {
+                    bellAlertCooldown =
+                            BELL_ALERT_COOLDOWN_TICKS;
+                    panicBellRung = true;
+                } else {
+                    panicBellPos = null;
+                }
             } else {
                 npc.setSprinting(true);
                 navigateTo(panicBellPos, 1.15D);
@@ -318,24 +338,7 @@ final class NpcServiceBrain {
             BlockPos source,
             LivingEntity threat
     ) {
-        AABB area = new AABB(
-                source.getX() - GUARD_ALERT_RADIUS,
-                source.getY() - 24.0D,
-                source.getZ() - GUARD_ALERT_RADIUS,
-                source.getX() + GUARD_ALERT_RADIUS + 1.0D,
-                source.getY() + 24.0D,
-                source.getZ() + GUARD_ALERT_RADIUS + 1.0D
-        );
-
-        for (CyberNpcEntity guard : level.getEntitiesOfClass(
-                CyberNpcEntity.class,
-                area,
-                candidate -> candidate.isAlive()
-                        && NpcServiceRole.fromRole(candidate.getRole())
-                        == NpcServiceRole.GUARD
-        )) {
-            guard.receiveGuardAlert(threat, source);
-        }
+        GuardAlarmSystem.alertGuards(level, source, threat);
     }
 
     private void tickGuard(
@@ -378,14 +381,17 @@ final class NpcServiceBrain {
                     <= BELL_ARRIVE_SQR) {
                 npc.getNavigation().stop();
                 npc.setSprinting(false);
-                npc.useServiceBlock(guardAlarmBellPos);
-                broadcastGuardAlert(
+                if (GuardAlarmSystem.ringBellAndAlert(
                         level,
                         guardAlarmBellPos,
+                        npc,
                         target
-                );
-                guardCallingBackup = false;
-                guardAlarmBellPos = null;
+                )) {
+                    guardCallingBackup = false;
+                    guardAlarmBellPos = null;
+                } else {
+                    guardAlarmBellPos = null;
+                }
             } else {
                 npc.setSprinting(true);
                 navigateTo(guardAlarmBellPos, 1.10D);
@@ -399,6 +405,47 @@ final class NpcServiceBrain {
                 return;
             }
             guardTargetId = null;
+        }
+
+        if (guardTargetId == null
+                && guardRespondBellPos != null) {
+            if (npc.blockPosition().distSqr(guardRespondBellPos)
+                    > BELL_ARRIVE_SQR) {
+                releaseGuardPost(level);
+                npc.setSprinting(true);
+                navigateTo(guardRespondBellPos, 1.08D);
+                return;
+            }
+
+            npc.getNavigation().stop();
+            npc.setSprinting(false);
+
+            if (guardBellHoldTicks <= 0) {
+                guardBellHoldTicks = 120;
+            }
+
+            if (guardBellHoldTicks > 0) {
+                guardBellHoldTicks--;
+
+                if (guardScanCooldown > 0) {
+                    guardScanCooldown--;
+                } else {
+                    guardScanCooldown = 10;
+                    LivingEntity nearbyThreat =
+                            findGuardThreat(level, record);
+                    if (nearbyThreat != null) {
+                        guardTargetId =
+                                nearbyThreat.getUUID();
+                        guardRespondBellPos = null;
+                        guardBellHoldTicks = 0;
+                        return;
+                    }
+                }
+
+                return;
+            }
+
+            guardRespondBellPos = null;
         }
 
         if (guardScanCooldown > 0) {
@@ -419,6 +466,10 @@ final class NpcServiceBrain {
 
                 return;
             }
+        }
+
+        if (tickGuardPostDuty(level, record)) {
+            return;
         }
 
         tickGuardPatrol(level, data, record);
@@ -538,6 +589,96 @@ final class NpcServiceBrain {
         return work == null
                 || !work.dimension().equals(level.dimension())
                 || pos.distSqr(work.pos()) <= GUARD_TOWN_RADIUS_SQR;
+    }
+
+    private boolean tickGuardPostDuty(
+            ServerLevel level,
+            SpecialNpcSavedData.SpecialNpcRecord record
+    ) {
+        SpecialNpcSavedData.Anchor work = record.work();
+        if (work == null
+                || !work.dimension().equals(level.dimension())) {
+            releaseGuardPost(level);
+            return false;
+        }
+
+        GuardPostSavedData posts = GuardPostSavedData.get(level);
+        UUID guardId = npc.getSpecialNpcId() == null
+                ? npc.getUUID()
+                : npc.getSpecialNpcId();
+
+        if (guardPostTarget != null
+                && (!posts.exists(guardPostTarget)
+                || !guardPostTarget.dimension().equals(level.dimension())
+                || guardPostTarget.pos().distSqr(work.pos())
+                > GUARD_TOWN_RADIUS_SQR)) {
+            releaseGuardPost(level);
+        }
+
+        if (guardPostRestTicks > 0) {
+            guardPostRestTicks--;
+            return false;
+        }
+
+        if (guardPostTarget == null) {
+            guardPostTarget = posts.claimNearest(
+                    level.dimension(),
+                    work.pos(),
+                    guardId,
+                    GUARD_TOWN_RADIUS_SQR,
+                    level.getGameTime(),
+                    level.getGameTime() + 6_000L
+            );
+
+            if (guardPostTarget == null) {
+                return false;
+            }
+
+            guardPostDutyTicks = 0;
+            guardPatrolTarget = null;
+            guardPatrolPauseTicks = 0;
+        }
+
+        if (npc.blockPosition().distSqr(guardPostTarget.pos())
+                > GUARD_PATROL_REACHED_SQR) {
+            navigateTo(guardPostTarget.pos(), 0.86D);
+            return true;
+        }
+
+        npc.getNavigation().stop();
+        npc.setSprinting(false);
+        npc.setYRot(guardPostTarget.yaw());
+        npc.setYHeadRot(guardPostTarget.yaw());
+        npc.setYBodyRot(guardPostTarget.yaw());
+
+        if (guardPostDutyTicks <= 0) {
+            guardPostDutyTicks = GUARD_POST_DUTY_MIN_TICKS
+                    + npc.getRandom().nextInt(
+                    GUARD_POST_DUTY_EXTRA_TICKS + 1
+            );
+        }
+
+        guardPostDutyTicks--;
+        if (guardPostDutyTicks <= 0) {
+            releaseGuardPost(level);
+            guardPostRestTicks = GUARD_POST_REST_MIN_TICKS
+                    + npc.getRandom().nextInt(
+                    GUARD_POST_REST_EXTRA_TICKS + 1
+            );
+            return false;
+        }
+
+        return true;
+    }
+
+    private void releaseGuardPost(ServerLevel level) {
+        UUID guardId = npc.getSpecialNpcId() == null
+                ? npc.getUUID()
+                : npc.getSpecialNpcId();
+
+        GuardPostSavedData.get(level).releaseGuard(guardId);
+        guardPostTarget = null;
+        guardPostDutyTicks = 0;
     }
 
     private void tickGuardPatrol(
@@ -685,11 +826,18 @@ final class NpcServiceBrain {
             guardTargetId = threat.getUUID();
         }
 
+        guardRespondBellPos = bellPos.immutable();
+        guardBellHoldTicks = 0;
         guardAlertTicks = GUARD_ALERT_TICKS;
         guardCallingBackup = false;
         guardAlarmBellPos = null;
         guardPatrolTarget = null;
         guardPatrolPauseTicks = 0;
+
+        if (npc.level() instanceof ServerLevel serverLevel) {
+            releaseGuardPost(serverLevel);
+        }
+
         npc.getNavigation().stop();
     }
 
