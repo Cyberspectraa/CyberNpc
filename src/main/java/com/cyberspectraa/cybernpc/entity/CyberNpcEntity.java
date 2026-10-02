@@ -6240,6 +6240,14 @@ public class CyberNpcEntity extends PathfinderMob {
         if (horseTargetId != null) {
             return "Approaching horse";
         }
+        if (getWildClass() == WildNpcClass.RANGER
+                && rangerPatrolPauseTicks > 0) {
+            return "Ranger watching perimeter";
+        }
+        if (getWildClass() == WildNpcClass.RANGER
+                && rangerPatrolTarget != null) {
+            return "Ranger patrolling perimeter";
+        }
         if (sculkSneaking) {
             return "Sneaking near visible sculk sensor";
         }
@@ -6354,7 +6362,15 @@ public class CyberNpcEntity extends PathfinderMob {
         }
         if (horseRemountCooldown > 0
                 && getWildClass() == WildNpcClass.RANGER) {
-            return "Recently dismounted for another need; delaying remount to avoid indecisive cycling";
+            return "Recently dismounted for another need; delaying remount while continuing local Ranger duties on foot";
+        }
+        if (getWildClass() == WildNpcClass.RANGER
+                && rangerPatrolPauseTicks > 0) {
+            return "The Ranger reached a perimeter point and is pausing to watch the surrounding area";
+        }
+        if (getWildClass() == WildNpcClass.RANGER
+                && rangerPatrolTarget != null) {
+            return "The Ranger is checking the local home or village perimeter and stays within a bounded patrol area";
         }
         if (!foodToEat.isEmpty()) {
             return "Prepared food is available and hunger should be restored before lower-priority tasks";
