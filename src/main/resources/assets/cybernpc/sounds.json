@@ -1,0 +1,11 @@
+{
+  "courier_breathing": {
+    "subtitle": "subtitles.cybernpc.courier_breathing",
+    "sounds": [
+      {
+        "name": "cybernpc:entity/courier_breathing",
+        "stream": true
+      }
+    ]
+  }
+}
