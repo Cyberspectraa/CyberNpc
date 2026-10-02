@@ -12,7 +12,7 @@ public enum WildNpcClass {
     KNIGHT("knight", "Knight", 6, false),
     ROGUE("rogue", "Rogue", 5, false),
     BERSERKER("berserker", "Berserker", 5, false),
-    HORSE_TAMER("horse_tamer", "Horse Tamer", 3, false),
+    RANGER("ranger", "Ranger", 3, false),
     MAGE("mage", "Mage", 3, true),
     CLERIC("cleric", "Cleric", 2, true),
     SPELLBLADE("spellblade", "Spellblade", 3, true);
@@ -64,6 +64,12 @@ public enum WildNpcClass {
         }
 
         String normalized = value.trim().toLowerCase(Locale.ROOT);
+
+        // Save compatibility for worlds created before Horse Tamer was renamed.
+        if ("horse_tamer".equals(normalized)) {
+            return RANGER;
+        }
+
         for (WildNpcClass npcClass : values()) {
             if (npcClass.serializedName.equals(normalized)) {
                 return npcClass;
@@ -98,7 +104,7 @@ public enum WildNpcClass {
     }
 
     public boolean isAvailable() {
-        if (this == HORSE_TAMER && !BetterHorsesCompat.isLoaded()) {
+        if (this == RANGER && !BetterHorsesCompat.isLoaded()) {
             return false;
         }
 
