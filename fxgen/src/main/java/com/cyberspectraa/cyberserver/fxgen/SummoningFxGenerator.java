@@ -1,6 +1,7 @@
 package com.cyberspectraa.cyberserver.fxgen;
 
 import com.lowdragmc.photon.client.fx.FX;
+import com.lowdragmc.lowdraglib.syncdata.TypedPayloadRegistries;
 import com.lowdragmc.photon.client.gameobject.emitter.beam.BeamEmitter;
 import com.lowdragmc.photon.client.gameobject.emitter.data.EmissionSetting;
 import com.lowdragmc.photon.client.gameobject.emitter.data.RendererSetting;
@@ -42,6 +43,11 @@ public final class SummoningFxGenerator {
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             throw new IllegalStateException("Could not create " + parent);
         }
+
+        // Normally LDLib initializes this during mod startup. The build-time exporter
+        // runs outside Minecraft, so initialise the serializer payload registry explicitly.
+        TypedPayloadRegistries.init();
+        TypedPayloadRegistries.postInit();
 
         FX fx = buildEffect();
 
