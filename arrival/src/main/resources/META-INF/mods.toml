@@ -1,0 +1,25 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="season2arrival"
+version="0.1.0"
+displayName="Season 2 Arrival"
+authors="Cyberspectraa"
+displayTest="MATCH_VERSION"
+description='''A lightweight first-join summoning and exact church spawn system for the Season 2 Forge 1.20.1 server.'''
+
+[[dependencies.season2arrival]]
+modId="forge"
+mandatory=true
+versionRange="[47.4.0,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.season2arrival]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.21)"
+ordering="NONE"
+side="BOTH"
