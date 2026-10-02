@@ -5,90 +5,91 @@ plugins {
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
 }
 
-version = mod_version
-group = mod_group_id
+version = '0.1.0'
+group = 'com.cyberspectraa.cyberserver'
 
 base {
-    archivesName = mod_id
+    archivesName = 'cyberserver'
 }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
 minecraft {
-    mappings channel: mapping_channel, version: mapping_version
+    mappings channel: 'official', version: '1.20.1'
     copyIdeResources = true
+}
 
-    runs {
-        configureEach {
-            workingDirectory project.file('run')
-            property 'forge.logging.markers', 'REGISTRIES'
-            property 'forge.logging.console.level', 'info'
-
-            mods {
-                "${mod_id}" {
-                    source sourceSets.main
-                }
-            }
-        }
-
-        client {
-        }
-
-        server {
-            args '--nogui'
-        }
-
-        data {
-            workingDirectory project.file('run-data')
-            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
-        }
+sourceSets {
+    main {
+        java.setSrcDirs(['cyberserver/src/main/java'])
+        resources.setSrcDirs(['cyberserver/src/main/resources'])
+    }
+    fxgen {
+        java.setSrcDirs(['fxgen/src/main/java'])
+        resources.setSrcDirs([])
+        compileClasspath += sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.runtimeClasspath
     }
 }
 
-sourceSets.main.resources { srcDir 'src/generated/resources' }
+repositories {
+    maven {
+        url = "https://cursemaven.com"
+        content { includeGroup "curse.maven" }
+    }
+    maven {
+        url = "https://maven.firstdarkdev.xyz/snapshots"
+        content { includeGroup "com.lowdragmc.ldlib" }
+    }
+}
 
 dependencies {
-    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    minecraft "net.minecraftforge:forge:1.20.1-47.4.10"
+
+    // Build-time only. These never get bundled into CyberServer.jar.
+    fxgenImplementation("curse.maven:photon-871522:7501597") { transitive = false }
+    fxgenImplementation("com.lowdragmc.ldlib:ldlib-forge-1.20.1:1.0.42") { transitive = false }
 }
 
 tasks.named('processResources', ProcessResources).configure {
-    def replaceProperties = [
-            minecraft_version: minecraft_version,
-            minecraft_version_range: minecraft_version_range,
-            forge_version: forge_version,
-            forge_version_range: forge_version_range,
-            loader_version_range: loader_version_range,
-            mod_id: mod_id,
-            mod_name: mod_name,
-            mod_license: mod_license,
-            mod_version: mod_version,
-            mod_authors: mod_authors,
-            mod_description: mod_description
-    ]
-
-    inputs.properties replaceProperties
-
-    filesMatching('META-INF/mods.toml') {
-        expand replaceProperties
-    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 tasks.named('jar', Jar).configure {
-    archiveFileName = "CyberNpc-${mod_version}-forge-${minecraft_version}.jar"
+    archiveFileName = "CyberServer-0.1.0-forge-1.20.1.jar"
 
     manifest {
         attributes([
-                'Specification-Title'     : mod_id,
-                'Specification-Vendor'    : mod_authors,
+                'Specification-Title'     : 'cyberserver',
+                'Specification-Vendor'    : 'Cyberspectraa',
                 'Specification-Version'   : '1',
-                'Implementation-Title'    : mod_name,
-                'Implementation-Version'  : mod_version,
-                'Implementation-Vendor'   : mod_authors,
+                'Implementation-Title'    : 'CyberServer',
+                'Implementation-Version'  : '0.1.0',
+                'Implementation-Vendor'   : 'Cyberspectraa',
                 'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
         ])
     }
 
     finalizedBy 'reobfJar'
+}
+
+tasks.register('generatePhotonFx', JavaExec) {
+    dependsOn tasks.named('fxgenClasses')
+    classpath = sourceSets.fxgen.runtimeClasspath
+    mainClass = 'com.cyberspectraa.cyberserver.fxgen.SummoningFxGenerator'
+    args layout.buildDirectory.file('generated-cyberserver-pack/assets/cyberserver/fx/summoning.fx').get().asFile.absolutePath
+}
+
+tasks.register('buildCyberServerResourcePack', Zip) {
+    dependsOn tasks.named('generatePhotonFx')
+    archiveFileName = 'CyberServer-Resources-0.1.0.zip'
+    destinationDirectory = layout.buildDirectory.dir('resourcepack')
+    from('cyberserver-resourcepack')
+    from(layout.buildDirectory.dir('generated-cyberserver-pack'))
+}
+
+tasks.named('build').configure {
+    dependsOn tasks.named('buildCyberServerResourcePack')
 }
 
 tasks.withType(JavaCompile).configureEach {
