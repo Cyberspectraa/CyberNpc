@@ -21,5 +21,6 @@
   "item.cybernpc.opened_letter": "Opened Letter",
   "block.cybernpc.drop_box": "Drop Box",
   "block.cybernpc.letter_box": "Letter Box",
-  "itemGroup.cybernpc": "CyberNpc"
+  "itemGroup.cybernpc": "CyberNpc",
+  "subtitles.cybernpc.courier_breathing": "Courier breathes heavily"
 }

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.35.2
+
+### Courier breathing easter egg
+- Added the user-provided slow male breathing clip as a Courier proximity easter egg.
+- The source audio was converted to a Minecraft-ready mono OGG and softened by 3 dB.
+- Kept a compact inhale/exhale segment at roughly 2.4 seconds so the joke is noticeable without lingering too long.
+- The sound only triggers when a player gets within about 2.6 blocks of a Courier.
+- Proximity is checked every 10 ticks rather than every tick to keep the easter egg effectively free for server performance.
+- The breathing plays from the Courier itself through the NEUTRAL sound category at a deliberately reduced 0.42 volume.
+- Once triggered, it has an 8-second rearm cooldown.
+- The player must also back out beyond roughly 3.6 blocks before the sound can arm again, preventing spam from standing beside the Courier or jittering at the trigger boundary.
+- Added subtitle support: "Courier breathes heavily".
+- Banker, Wild NPC and ordinary MAIN/QUEST NPCs do not use this sound.
+
 ## 0.35.1
 
 ### Legacy Spectral Mail visuals restored
