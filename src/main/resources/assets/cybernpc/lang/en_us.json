@@ -22,5 +22,6 @@
   "block.cybernpc.drop_box": "Drop Box",
   "block.cybernpc.letter_box": "Letter Box",
   "itemGroup.cybernpc": "CyberNpc",
-  "subtitles.cybernpc.courier_breathing": "Courier breathes heavily"
+  "subtitles.cybernpc.courier_breathing": "Courier breathes heavily",
+  "item.cybernpc.town_register": "Town Register"
 }
