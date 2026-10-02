@@ -545,8 +545,8 @@ public class CyberNpcEntity extends PathfinderMob {
         NpcServiceRole serviceRole = NpcServiceRole.fromRole(resolved);
 
         if (!level().isClientSide
-                && previousRole == NpcServiceRole.COURIER
-                && serviceRole != NpcServiceRole.COURIER) {
+                && previousRole != NpcServiceRole.NONE
+                && previousRole != serviceRole) {
             serviceBrain.release();
         }
 
