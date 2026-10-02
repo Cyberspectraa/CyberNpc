@@ -5,7 +5,7 @@
 ### Courier breathing easter egg
 - Added the user-provided slow male breathing clip as a Courier proximity easter egg.
 - The source audio was converted to a Minecraft-ready mono OGG and softened by 3 dB.
-- Kept one full inhale/exhale cycle at roughly 4.5 seconds so the joke is noticeable without lingering too long.
+- Kept a compact inhale/exhale segment at roughly 2.4 seconds so the joke is noticeable without lingering too long.
 - The sound only triggers when a player gets within about 2.6 blocks of a Courier.
 - Proximity is checked every 10 ticks rather than every tick to keep the easter egg effectively free for server performance.
 - The breathing plays from the Courier itself through the NEUTRAL sound category at a deliberately reduced 0.42 volume.
