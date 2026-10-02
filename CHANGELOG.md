@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.38.0
+
+### Letter-writing UI overhaul
+- Rebuilt the Letter Paper screen into a larger but still compact parchment-style layout.
+- Replaced the unreliable tiny left/right recipient arrows with a visible clickable online-player list.
+- Online recipients are shown five at a time with clear Prev / Next paging controls.
+- Players can still type a known/offline player name manually in the recipient field.
+- Replaced the single-line message field with Minecraft's real multiline text editor.
+- Letter messages keep the existing 256-character server limit and now show a live character counter.
+- Seal Letter only becomes active once both recipient and message are non-empty.
+- The server remains authoritative for recipient lookup, Letter Paper consumption and Addressed Letter creation.
+
+### Real bell-driven Guard alarms
+- Guard alarms now use BellBlock.attemptToRing(...) directly instead of relying on the generic FakePlayer block-use path.
+- A special NPC only broadcasts a bell alarm after the actual Minecraft BellBlock ring succeeds.
+- Guards calling backup also physically ring the BellBlock before nearby Guards are notified.
+- Added one shared GuardAlarmSystem so NPC alarms and player alarms use the same response path.
+- Right-clicking a bell with the main hand now calls nearby Guards even when the player has no known target.
+- Player-rung bells make Guards converge on the bell, remain there briefly, scan the area for danger and then return to normal duty.
+- NPC emergency bells carry the actual hostile/attacker target, so responding Guards can move straight to the threat.
+- Player bell use is handled server-side through the real BellBlock ring and avoids a duplicate second server ring.
+
+### Invisible Guard Posts
+- Added the Guard Post Marker item to the CyberNpc creative tab.
+- Placing the marker creates an invisible, no-collision Guard Post block.
+- The marker keeps a small selection shape for administration while remaining visually invisible in normal play.
+- Guard Posts remember the direction the player was facing when placed, allowing gate/lookout Guards to face the intended direction.
+- Sneak-right-click the supporting block with a Guard Post Marker to remove a nearby Guard Post without needing to see the invisible block directly.
+- Guard Post locations are stored persistently in world SavedData.
+- Post assignment itself is lightweight/transient so stale assignments do not survive crashes or permanently lock a post.
+
+### Guard Post shifts
+- Idle Guards now prefer available Guard Posts within their configured 48-block town radius before normal random patrol.
+- One loaded Guard claims one post at a time so multiple Guards do not stack on the same gate position.
+- Guards physically walk to their claimed post, stop there and face the post's saved direction.
+- A post shift lasts roughly 30–60 seconds.
+- After a shift, the Guard releases the post and takes a short 8–18 second patrol/rest interval, allowing another Guard to rotate onto it.
+- Guard Post claims are released on Guard death, permanent removal, role change and service cleanup.
+- Alerts immediately release a Guard's current post so they can answer the bell or threat.
+- If there are more Guards than posts, remaining Guards continue normal town patrols.
+
 ## 0.37.0
 
 ### Special NPC configuration fixes

@@ -50,7 +50,8 @@ public final class ModCreativeTabs {
                                 output.accept(ModItems.DROP_BOX.get());
                                 output.accept(ModItems.LETTER_BOX.get());
 
-                                // Special-NPC and developer utilities last.
+                                // Town defence / special-NPC utilities.
+                                output.accept(ModItems.GUARD_POST.get());
                                 output.accept(ModItems.TOWN_REGISTER.get());
                                 output.accept(ModItems.SPECIAL_NPC_REMOVAL_STICK.get());
                                 output.accept(ModItems.DEVELOPER_GLASSES.get());

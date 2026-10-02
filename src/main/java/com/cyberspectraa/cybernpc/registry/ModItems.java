@@ -6,6 +6,7 @@ import com.cyberspectraa.cybernpc.item.AddressedLetterItem;
 import com.cyberspectraa.cybernpc.item.CyberNpcSpawnEggItem;
 import com.cyberspectraa.cybernpc.item.DeveloperGlassesItem;
 import com.cyberspectraa.cybernpc.item.LetterPaperItem;
+import com.cyberspectraa.cybernpc.item.GuardPostMarkerItem;
 import com.cyberspectraa.cybernpc.item.OpenedLetterItem;
 import com.cyberspectraa.cybernpc.item.SealedLetterItem;
 import com.cyberspectraa.cybernpc.item.SpecialNpcRemovalStickItem;
@@ -134,6 +135,12 @@ public final class ModItems {
                     new BlockItem(
                             ModBlocks.LETTER_BOX.get(),
                             new Item.Properties()
+                    ));
+
+    public static final RegistryObject<Item> GUARD_POST =
+            ITEMS.register("guard_post", () ->
+                    new GuardPostMarkerItem(
+                            new Item.Properties().stacksTo(64)
                     ));
 
     public static final RegistryObject<Item> TOWN_REGISTER =
