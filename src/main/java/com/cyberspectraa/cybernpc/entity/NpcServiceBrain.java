@@ -13,17 +13,30 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.util.DefaultRandomPos;
+import net.minecraft.world.entity.monster.AbstractSkeleton;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.monster.Spider;
+import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 
 final class NpcServiceBrain {
     private static final int SEARCH_INTERVAL = 40;
@@ -42,6 +55,26 @@ final class NpcServiceBrain {
     private static final double BREATH_RESET_DISTANCE = 3.6D;
     private static final float BREATH_VOLUME = 0.42F;
 
+    private static final int THREAT_SCAN_INTERVAL = 10;
+    private static final int BELL_ALERT_COOLDOWN_TICKS = 200;
+    private static final int PANIC_AFTER_RING_TICKS = 100;
+    private static final int BELL_SEARCH_RADIUS = 24;
+    private static final int BELL_SEARCH_VERTICAL = 6;
+    private static final double BELL_ARRIVE_SQR = 9.0D;
+
+    private static final int GUARD_SCAN_INTERVAL = 20;
+    private static final int GUARD_ATTACK_COOLDOWN = 12;
+    private static final int GUARD_ALERT_TICKS = 600;
+    private static final double GUARD_SCAN_RADIUS = 24.0D;
+    private static final double GUARD_TOWN_RADIUS = 48.0D;
+    private static final double GUARD_TOWN_RADIUS_SQR =
+            GUARD_TOWN_RADIUS * GUARD_TOWN_RADIUS;
+    private static final double GUARD_ATTACK_DISTANCE_SQR = 8.0D;
+    private static final double GUARD_ALERT_RADIUS = 72.0D;
+    private static final int GUARD_PATROL_MIN_RADIUS = 10;
+    private static final int GUARD_PATROL_EXTRA_RADIUS = 24;
+    private static final double GUARD_PATROL_REACHED_SQR = 6.25D;
+
     private final CyberNpcEntity npc;
     private final List<Long> satchelIds = new ArrayList<>();
 
@@ -54,6 +87,27 @@ final class NpcServiceBrain {
     private int breathCheckCooldown;
     private int breathRearmCooldown;
     private boolean breathPlayerClose;
+
+    private int threatScanCooldown;
+    private int bellAlertCooldown;
+    @Nullable
+    private UUID panicThreatId;
+    @Nullable
+    private BlockPos panicBellPos;
+    private boolean panicBellRung;
+    private int panicTicks;
+
+    private int guardScanCooldown;
+    private int guardAttackCooldown;
+    private int guardAlertTicks;
+    @Nullable
+    private UUID guardTargetId;
+    @Nullable
+    private BlockPos guardAlarmBellPos;
+    private boolean guardCallingBackup;
+    @Nullable
+    private BlockPos guardPatrolTarget;
+    private int guardPatrolPauseTicks;
 
     NpcServiceBrain(CyberNpcEntity npc) {
         this.npc = npc;
@@ -79,6 +133,15 @@ final class NpcServiceBrain {
             return;
         }
 
+        if (bellAlertCooldown > 0) {
+            bellAlertCooldown--;
+        }
+
+        if (role != NpcServiceRole.GUARD
+                && tickSpecialNpcDanger(level)) {
+            return;
+        }
+
         if (role == NpcServiceRole.BANKER) {
             tickBanker(level, data, record);
             return;
@@ -87,6 +150,11 @@ final class NpcServiceBrain {
         if (role == NpcServiceRole.COURIER) {
             tickBreathingEasterEgg(level);
             tickCourier(level, data, record);
+            return;
+        }
+
+        if (role == NpcServiceRole.GUARD) {
+            tickGuard(level, data, record);
         }
     }
 
