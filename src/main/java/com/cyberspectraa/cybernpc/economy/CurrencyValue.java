@@ -1,7 +1,11 @@
 package com.cyberspectraa.cybernpc.economy;
 
 import com.cyberspectraa.cybernpc.registry.ModItems;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public final class CurrencyValue {
     public static final long COPPER = 1L;
@@ -40,6 +44,62 @@ public final class CurrencyValue {
         }
 
         return 0L;
+    }
+
+    public static List<ItemStack> makePayout(long amount) {
+        long remaining = Math.max(0L, amount);
+        List<ItemStack> result = new ArrayList<>();
+
+        remaining = addPayout(
+                result,
+                ModItems.DRAGON_COIN.get(),
+                DRAGON,
+                remaining
+        );
+        remaining = addPayout(
+                result,
+                ModItems.PLATINUM_COIN.get(),
+                PLATINUM,
+                remaining
+        );
+        remaining = addPayout(
+                result,
+                ModItems.GOLD_COIN.get(),
+                GOLD,
+                remaining
+        );
+        remaining = addPayout(
+                result,
+                ModItems.SILVER_COIN.get(),
+                SILVER,
+                remaining
+        );
+        addPayout(
+                result,
+                ModItems.COPPER_COIN.get(),
+                COPPER,
+                remaining
+        );
+
+        return result;
+    }
+
+    private static long addPayout(
+            List<ItemStack> result,
+            Item item,
+            long unitValue,
+            long remaining
+    ) {
+        long count = remaining / unitValue;
+        remaining %= unitValue;
+
+        while (count > 0L) {
+            int stackSize = (int) Math.min(64L, count);
+            result.add(new ItemStack(item, stackSize));
+            count -= stackSize;
+        }
+
+        return remaining;
     }
 
     public static boolean isCurrency(ItemStack stack) {
