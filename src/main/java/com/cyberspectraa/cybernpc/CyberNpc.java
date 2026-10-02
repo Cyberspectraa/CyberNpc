@@ -7,6 +7,7 @@ import com.cyberspectraa.cybernpc.registry.ModCreativeTabs;
 import com.cyberspectraa.cybernpc.registry.ModEffects;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.cyberspectraa.cybernpc.registry.ModItems;
+import com.cyberspectraa.cybernpc.registry.ModSounds;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
@@ -23,6 +24,7 @@ public final class CyberNpc {
         ModEffects.MOB_EFFECTS.register(modEventBus);
         ModBlocks.BLOCKS.register(modEventBus);
         ModItems.ITEMS.register(modEventBus);
+        ModSounds.SOUND_EVENTS.register(modEventBus);
         ModCreativeTabs.TABS.register(modEventBus);
 
         MinecraftForge.EVENT_BUS.addListener(CyberNpcCommands::register);
