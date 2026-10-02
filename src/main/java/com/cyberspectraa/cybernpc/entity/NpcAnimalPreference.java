@@ -24,7 +24,7 @@ final class NpcAnimalPreference {
         }
 
         if (animal instanceof AbstractHorse
-                && npc.getWildClass() == WildNpcClass.HORSE_TAMER) {
+                && npc.getWildClass() == WildNpcClass.RANGER) {
             return Opinion.LIKE;
         }
 
