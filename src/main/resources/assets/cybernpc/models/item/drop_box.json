@@ -1,1 +1,3 @@
-{"parent":"cybernpc:block/drop_box"}
+{
+  "parent": "cybernpc:block/drop_box"
+}
