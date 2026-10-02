@@ -46,9 +46,14 @@ public final class SummoningFxGenerator {
             throw new IllegalStateException("Could not create " + parent);
         }
 
-        // Mirror the relevant vanilla launcher setup before touching registries.
+        // The serializer needs built-in registry classes, but Forge's full
+        // Bootstrap.bootStrap() also initializes networking and expects a running
+        // FML launcher. For this build-only process we only open vanilla's
+        // bootstrap guard, then let BuiltInRegistries initialise normally on demand.
         SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
+        var bootstrapField = Bootstrap.class.getDeclaredField("isBootstrapped");
+        bootstrapField.setAccessible(true);
+        bootstrapField.setBoolean(null, true);
         TypedPayloadRegistries.init();
         TypedPayloadRegistries.postInit();
 
