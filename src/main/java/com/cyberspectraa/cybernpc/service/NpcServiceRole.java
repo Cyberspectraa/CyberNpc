@@ -5,7 +5,8 @@ import java.util.Locale;
 public enum NpcServiceRole {
     NONE(""),
     BANKER("Banker"),
-    COURIER("Courier");
+    COURIER("Courier"),
+    GUARD("Guard");
 
     private final String displayName;
 
@@ -27,6 +28,7 @@ public enum NpcServiceRole {
         return switch (normalized) {
             case "banker", "bank" -> BANKER;
             case "courier", "mailman", "postman", "mail" -> COURIER;
+            case "guard", "town_guard", "town guard" -> GUARD;
             default -> NONE;
         };
     }

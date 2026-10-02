@@ -290,6 +290,22 @@ public final class SpecialNpcSavedData extends SavedData {
         return specialId == null ? null : records.get(specialId);
     }
 
+    public boolean removePermanent(UUID specialId) {
+        if (specialId == null) {
+            return false;
+        }
+
+        SpecialNpcRecord removed = records.remove(specialId);
+        if (removed == null) {
+            return false;
+        }
+
+        // Removing the record also cancels any pending beam/respawn because
+        // tick() only processes records still present in this map.
+        setDirty();
+        return true;
+    }
+
     public boolean setHome(
             UUID specialId,
             Anchor anchor

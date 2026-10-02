@@ -2,6 +2,7 @@ package com.cyberspectraa.cybernpc;
 
 import com.cyberspectraa.cybernpc.command.BankMailCommands;
 import com.cyberspectraa.cybernpc.command.CyberNpcCommands;
+import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.registry.ModBlocks;
 import com.cyberspectraa.cybernpc.registry.ModCreativeTabs;
 import com.cyberspectraa.cybernpc.registry.ModEffects;
@@ -26,6 +27,7 @@ public final class CyberNpc {
         ModItems.ITEMS.register(modEventBus);
         ModSounds.SOUND_EVENTS.register(modEventBus);
         ModCreativeTabs.TABS.register(modEventBus);
+        CyberNpcNetwork.register();
 
         MinecraftForge.EVENT_BUS.addListener(CyberNpcCommands::register);
         MinecraftForge.EVENT_BUS.addListener(BankMailCommands::register);
