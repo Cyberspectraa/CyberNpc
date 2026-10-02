@@ -15,6 +15,7 @@ import com.lowdragmc.photon.client.gameobject.emitter.data.shape.Sphere;
 import com.lowdragmc.photon.client.gameobject.emitter.particle.ParticleEmitter;
 import com.mojang.blaze3d.platform.GlStateManager.DestFactor;
 import com.mojang.blaze3d.platform.GlStateManager.SourceFactor;
+import net.minecraft.SharedConstants;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.resources.ResourceLocation;
@@ -45,8 +46,8 @@ public final class SummoningFxGenerator {
             throw new IllegalStateException("Could not create " + parent);
         }
 
-        // The exporter runs outside the normal game launcher. Bootstrap vanilla
-        // registries first, then initialise the LDLib serializer payload registry.
+        // Mirror the relevant vanilla launcher setup before touching registries.
+        SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
         TypedPayloadRegistries.init();
         TypedPayloadRegistries.postInit();
