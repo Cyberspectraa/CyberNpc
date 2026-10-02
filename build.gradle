@@ -40,8 +40,8 @@ repositories {
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     // Compile against the exact Photon 1.20.1 Forge release the pack is using.
-    compileOnly(fg.deobf("curse.maven:photon-871522:7501597")) { transitive = false }
-    compileOnly(fg.deobf("com.lowdragmc.ldlib:ldlib-forge-1.20.1:1.0.42")) { transitive = false }
+    compileOnly("curse.maven:photon-871522:7501597") { transitive = false }
+    compileOnly("com.lowdragmc.ldlib:ldlib-forge-1.20.1:1.0.42") { transitive = false }
 }
 
 tasks.named('processResources', ProcessResources).configure {
