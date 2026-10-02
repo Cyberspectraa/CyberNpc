@@ -41,6 +41,7 @@ public final class ModEvents {
             event.accept(ModItems.WILD_NPC_SPAWN_EGG);
             event.accept(ModItems.BANKER_NPC_SPAWN_EGG);
             event.accept(ModItems.COURIER_NPC_SPAWN_EGG);
+            event.accept(ModItems.GUARD_NPC_SPAWN_EGG);
         }
 
         if (event.getTabKey().equals(CreativeModeTabs.TOOLS_AND_UTILITIES)) {
