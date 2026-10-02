@@ -1155,6 +1155,12 @@ final class NpcServiceBrain {
         pickupPos = null;
         pickedUp = false;
         repathCooldown = 0;
+        clearPanic();
+        guardTargetId = null;
+        guardAlarmBellPos = null;
+        guardCallingBackup = false;
+        guardPatrolTarget = null;
+        guardPatrolPauseTicks = 0;
         clearVisualLetter();
     }
 
@@ -1162,11 +1168,27 @@ final class NpcServiceBrain {
         NpcServiceRole role = NpcServiceRole.fromRole(npc.getRole());
 
         if (role == NpcServiceRole.BANKER) {
-            return "serving the bank";
+            return panicThreatId != null
+                    ? "calling for guards"
+                    : "serving the bank";
+        }
+
+        if (role == NpcServiceRole.GUARD) {
+            if (guardCallingBackup) {
+                return "ringing the alarm bell";
+            }
+            if (guardTargetId != null) {
+                return "responding to danger";
+            }
+            return "patrolling the town";
         }
 
         if (role != NpcServiceRole.COURIER) {
             return "inactive";
+        }
+
+        if (panicThreatId != null) {
+            return "calling for guards";
         }
 
         if (!satchelIds.isEmpty()) {
@@ -1199,6 +1221,23 @@ final class NpcServiceBrain {
         );
         breathRearmCooldown = 0;
         breathPlayerClose = false;
+        threatScanCooldown = Math.floorMod(
+                npc.getUUID().hashCode() * 7,
+                THREAT_SCAN_INTERVAL
+        );
+        bellAlertCooldown = 0;
+        clearPanic();
+        guardScanCooldown = Math.floorMod(
+                npc.getUUID().hashCode() * 11,
+                GUARD_SCAN_INTERVAL
+        );
+        guardAttackCooldown = 0;
+        guardAlertTicks = 0;
+        guardTargetId = null;
+        guardAlarmBellPos = null;
+        guardCallingBackup = false;
+        guardPatrolTarget = null;
+        guardPatrolPauseTicks = 0;
         clearVisualLetter();
     }
 
