@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {"type": "minecraft:item", "name": "cybernpc:letter_box"}
+      ],
+      "conditions": [
+        {"condition": "minecraft:survives_explosion"}
+      ]
+    }
+  ]
+}

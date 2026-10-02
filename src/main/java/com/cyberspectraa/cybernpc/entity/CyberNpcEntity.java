@@ -3,8 +3,12 @@ package com.cyberspectraa.cybernpc.entity;
 import com.cyberspectraa.cybernpc.compat.BetterHorsesCompat;
 import com.cyberspectraa.cybernpc.compat.IronSpellsCompat;
 import com.cyberspectraa.cybernpc.effect.ZombificationEffect;
+import com.cyberspectraa.cybernpc.economy.BankSavedData;
+import com.cyberspectraa.cybernpc.economy.CurrencyValue;
 import com.cyberspectraa.cybernpc.registry.ModEffects;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
+import com.cyberspectraa.cybernpc.registry.ModItems;
+import com.cyberspectraa.cybernpc.service.NpcServiceRole;
 import com.cyberspectraa.cybernpc.world.CyberNpcWorldClaims;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -415,6 +419,7 @@ public class CyberNpcEntity extends PathfinderMob {
     private final NpcAttentionBrain attentionBrain;
     private final NpcEnvironmentalReactionBrain environmentBrain;
     private final NpcVocalizationController vocalizations;
+    private final NpcServiceBrain serviceBrain;
 
     public CyberNpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -425,6 +430,7 @@ public class CyberNpcEntity extends PathfinderMob {
         attentionBrain = new NpcAttentionBrain(this, playerInteractions, intentions);
         environmentBrain = new NpcEnvironmentalReactionBrain(this, intentions);
         vocalizations = new NpcVocalizationController(this);
+        serviceBrain = new NpcServiceBrain(this);
 
         getNavigation().setCanFloat(true);
         if (getNavigation() instanceof GroundPathNavigation groundNavigation) {
@@ -513,8 +519,31 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     public void setRole(String role) {
+        NpcServiceRole previousRole =
+                NpcServiceRole.fromRole(entityData.get(DATA_ROLE));
+
         String cleaned = role == null ? "" : role.trim();
-        entityData.set(DATA_ROLE, cleaned.isEmpty() ? "Citizen" : cleaned);
+        String resolved = cleaned.isEmpty() ? "Citizen" : cleaned;
+        NpcServiceRole serviceRole = NpcServiceRole.fromRole(resolved);
+
+        if (!level().isClientSide
+                && previousRole == NpcServiceRole.COURIER
+                && serviceRole != NpcServiceRole.COURIER) {
+            serviceBrain.release();
+        }
+
+        entityData.set(DATA_ROLE, resolved);
+
+
+        if (serviceRole != NpcServiceRole.NONE) {
+            setCanWander(false);
+            setPersistenceRequired();
+
+            if (getCustomName() == null) {
+                setCustomName(Component.literal(serviceRole.displayName()));
+                setCustomNameVisible(true);
+            }
+        }
     }
 
     public NpcType getNpcType() {
@@ -2152,7 +2181,14 @@ public class CyberNpcEntity extends PathfinderMob {
 
         super.tick();
 
-        if (level().isClientSide || getNpcType() != NpcType.WILD) {
+        if (level().isClientSide) {
+            return;
+        }
+
+        if (getNpcType() != NpcType.WILD) {
+            if (isAlive()) {
+                serviceBrain.tick();
+            }
             return;
         }
 
@@ -7057,6 +7093,8 @@ public class CyberNpcEntity extends PathfinderMob {
         if (level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
             CyberNpcWorldClaims.get(serverLevel).releaseOwner(getUUID());
         }
+
+        serviceBrain.release();
         claimedCookingStation = null;
     }
 
@@ -7115,7 +7153,69 @@ public class CyberNpcEntity extends PathfinderMob {
     @Override
     protected InteractionResult mobInteract(Player player, InteractionHand hand) {
         if (!level().isClientSide && hand == InteractionHand.MAIN_HAND) {
-            String displayName = getCustomName() != null ? getCustomName().getString() : "Cyber NPC";
+            NpcServiceRole serviceRole =
+                    NpcServiceRole.fromRole(getRole());
+
+            if (serviceRole == NpcServiceRole.BANKER
+                    && level() instanceof ServerLevel serverLevel) {
+                ItemStack held = player.getItemInHand(hand);
+                long deposit = CurrencyValue.valueOf(held);
+                BankSavedData bank = BankSavedData.get(serverLevel);
+
+                if (deposit > 0L) {
+                    if (!player.getAbilities().instabuild) {
+                        held.setCount(0);
+                    }
+
+                    long balance = bank.deposit(
+                            player.getUUID(),
+                            deposit
+                    );
+
+                    level().playSound(
+                            null,
+                            blockPosition(),
+                            SoundEvents.EXPERIENCE_ORB_PICKUP,
+                            SoundSource.NEUTRAL,
+                            0.55F,
+                            1.15F
+                    );
+
+                    player.sendSystemMessage(Component.literal(
+                            "Deposited "
+                                    + CurrencyValue.format(deposit)
+                                    + " credits. Balance: "
+                                    + CurrencyValue.format(balance)
+                                    + " credits."
+                    ));
+                } else {
+                    long balance = bank.getBalance(
+                            player.getUUID()
+                    );
+
+                    player.sendSystemMessage(Component.literal(
+                            "Bank balance: "
+                                    + CurrencyValue.format(balance)
+                                    + " credits."
+                    ));
+                    player.sendSystemMessage(Component.literal(
+                            "Hold CyberNpc coins and right-click the Banker to deposit them."
+                    ));
+                }
+
+                return InteractionResult.CONSUME;
+            }
+
+            if (serviceRole == NpcServiceRole.COURIER) {
+                player.sendSystemMessage(Component.literal(
+                        "Courier — " + serviceBrain.status()
+                ));
+                return InteractionResult.CONSUME;
+            }
+
+            String displayName = getCustomName() != null
+                    ? getCustomName().getString()
+                    : "Cyber NPC";
 
             if (getNpcType() == NpcType.WILD) {
                 player.sendSystemMessage(Component.literal(
@@ -7128,7 +7228,9 @@ public class CyberNpcEntity extends PathfinderMob {
                                 + " — Hunger " + getHungerBar()
                 ));
             } else {
-                player.sendSystemMessage(Component.literal(displayName + " — " + getRole()));
+                player.sendSystemMessage(Component.literal(
+                        displayName + " — " + getRole()
+                ));
             }
         }
 
@@ -7199,6 +7301,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         corralBrain.addSaveData(tag);
         sleepBrain.addSaveData(tag);
+        serviceBrain.addSaveData(tag);
     }
 
     @Override
@@ -7441,6 +7544,7 @@ public class CyberNpcEntity extends PathfinderMob {
         fleeRepathCooldown = 0;
         corralBrain.readSaveData(tag);
         sleepBrain.readSaveData(tag);
+        serviceBrain.readSaveData(tag);
         intentions.clear();
         initializeStaggeredAiTimers();
 
