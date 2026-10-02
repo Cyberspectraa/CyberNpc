@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {"item": "minecraft:paper"},
+    {"item": "minecraft:black_dye"}
+  ],
+  "result": {
+    "item": "cybernpc:letter_paper",
+    "count": 2
+  }
+}
