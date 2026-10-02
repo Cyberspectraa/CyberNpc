@@ -4,7 +4,7 @@ license="All Rights Reserved"
 
 [[mods]]
 modId="season2arrival"
-version="0.1.0"
+version="0.2.0"
 displayName="Season 2 Arrival"
 authors="Cyberspectraa"
 displayTest="MATCH_VERSION"
@@ -23,3 +23,11 @@ mandatory=true
 versionRange="[1.20.1,1.21)"
 ordering="NONE"
 side="BOTH"
+
+
+[[dependencies.season2arrival]]
+modId="photon"
+mandatory=false
+versionRange="[1.1.17,)"
+ordering="AFTER"
+side="CLIENT"
