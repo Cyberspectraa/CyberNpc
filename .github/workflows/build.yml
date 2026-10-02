@@ -1,4 +1,4 @@
-name: Build CyberNpc
+name: Build CyberServer
 
 on:
   push:
@@ -33,9 +33,11 @@ jobs:
       - name: Build
         run: gradle build --no-daemon --stacktrace
 
-      - name: Upload compiled JAR
+      - name: Upload CyberServer test package
         uses: actions/upload-artifact@v4
         with:
-          name: CyberNpc-0.34.0
-          path: build/libs/CyberNpc-0.34.0-forge-1.20.1.jar
+          name: CyberServer-0.1.0-test
+          path: |
+            build/libs/CyberServer-0.1.0-forge-1.20.1.jar
+            build/resourcepack/CyberServer-Resources-0.1.0.zip
           if-no-files-found: error
