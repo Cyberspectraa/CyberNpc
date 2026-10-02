@@ -160,7 +160,11 @@ public final class MailSavedData extends SavedData {
         for (MailRecord record : records.values()) {
             if (record.state() != MailState.PENDING
                     || !record.dimension().equals(dimension)
-                    || record.pickupPos() == null) {
+                    || record.pickupPos() == null
+                    || !dropBoxes.contains(new PostalAddress(
+                    record.dimension(),
+                    record.pickupPos()
+            ))) {
                 continue;
             }
 
