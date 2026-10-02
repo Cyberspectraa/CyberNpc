@@ -18,6 +18,7 @@ import com.mojang.blaze3d.platform.GlStateManager.SourceFactor;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.Bootstrap;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -44,8 +45,9 @@ public final class SummoningFxGenerator {
             throw new IllegalStateException("Could not create " + parent);
         }
 
-        // Normally LDLib initializes this during mod startup. The build-time exporter
-        // runs outside Minecraft, so initialise the serializer payload registry explicitly.
+        // The exporter runs outside the normal game launcher. Bootstrap vanilla
+        // registries first, then initialise the LDLib serializer payload registry.
+        Bootstrap.bootStrap();
         TypedPayloadRegistries.init();
         TypedPayloadRegistries.postInit();
 
