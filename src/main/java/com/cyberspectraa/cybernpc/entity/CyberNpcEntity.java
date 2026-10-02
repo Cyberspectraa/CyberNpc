@@ -1411,13 +1411,6 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void initializeRangerLoadout() {
-        if (!BetterHorsesCompat.isLoaded()) {
-            setWildClass(WildNpcClass.CLASSLESS);
-            classLoadoutInitialized = false;
-            initializeClasslessLoadout();
-            return;
-        }
-
         WildNpcGearTier tier = getGearTier();
 
         ItemStack sword = switch (tier) {
@@ -1430,9 +1423,12 @@ public class CyberNpcEntity extends PathfinderMob {
         applyWeaponEnchantments(sword, tier);
         inventory.add(sword);
 
-        ItemStack upgradedSaddle = BetterHorsesCompat.createUpgradedSaddle();
-        if (!upgradedSaddle.isEmpty()) {
-            inventory.add(upgradedSaddle);
+        if (BetterHorsesCompat.isLoaded()) {
+            ItemStack upgradedSaddle =
+                    BetterHorsesCompat.createUpgradedSaddle();
+            if (!upgradedSaddle.isEmpty()) {
+                inventory.add(upgradedSaddle);
+            }
         }
 
         switch (tier) {
