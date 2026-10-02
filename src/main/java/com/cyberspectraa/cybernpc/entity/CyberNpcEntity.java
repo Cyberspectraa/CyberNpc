@@ -7287,36 +7287,41 @@ public class CyberNpcEntity extends PathfinderMob {
             if (serviceRole == NpcServiceRole.BANKER
                     && level() instanceof ServerLevel serverLevel) {
                 ItemStack held = player.getItemInHand(hand);
-                long unitValue = CurrencyValue.unitValueOf(held);
                 long deposit = CurrencyValue.valueOf(held);
                 BankSavedData bank = BankSavedData.get(serverLevel);
 
-                if (unitValue > 0L && player.isShiftKeyDown()) {
+                if (held.isEmpty() && player.isShiftKeyDown()) {
                     long balance = bank.getBalance(player.getUUID());
-                    int count = (int) Math.min(
-                            64L,
-                            balance / unitValue
-                    );
 
-                    if (count <= 0) {
+                    if (balance <= 0L) {
                         player.sendSystemMessage(Component.literal(
-                                "You do not have enough balance for that coin denomination."
+                                "Your bank balance is empty."
                         ));
                         return InteractionResult.CONSUME;
                     }
 
-                    long withdrawn = unitValue * count;
-                    if (!bank.withdraw(player.getUUID(), withdrawn)) {
+                    // Bound one physical payout to a normal inventory-sized
+                    // amount so an absurd balance cannot create thousands of
+                    // dropped item stacks in a single click.
+                    long withdrawn = Math.min(
+                            balance,
+                            23_040_000L
+                    );
+
+                    if (!bank.withdraw(
+                            player.getUUID(),
+                            withdrawn
+                    )) {
                         return InteractionResult.CONSUME;
                     }
 
-                    ItemStack payout = new ItemStack(
-                            held.getItem(),
-                            count
-                    );
-
-                    if (!player.getInventory().add(payout)) {
-                        player.drop(payout, false);
+                    int droppedStacks = 0;
+                    for (ItemStack payout
+                            : CurrencyValue.makePayout(withdrawn)) {
+                        if (!player.getInventory().add(payout)) {
+                            player.drop(payout, false);
+                            droppedStacks++;
+                        }
                     }
 
                     level().playSound(
@@ -7328,16 +7333,16 @@ public class CyberNpcEntity extends PathfinderMob {
                             0.92F
                     );
 
+                    long remaining = bank.getBalance(player.getUUID());
                     player.sendSystemMessage(Component.literal(
                             "Withdrew "
-                                    + count + " "
-                                    + held.getHoverName().getString()
-                                    + (count == 1 ? "" : "s")
-                                    + " (" + CurrencyValue.format(withdrawn)
-                                    + " credits). Balance: "
-                                    + CurrencyValue.format(
-                                    bank.getBalance(player.getUUID())
-                            ) + " credits."
+                                    + CurrencyValue.format(withdrawn)
+                                    + " credits as coins. Balance: "
+                                    + CurrencyValue.format(remaining)
+                                    + " credits."
+                                    + (droppedStacks > 0
+                                    ? " Some coins were dropped because your inventory was full."
+                                    : "")
                     ));
 
                     return InteractionResult.CONSUME;
@@ -7369,27 +7374,28 @@ public class CyberNpcEntity extends PathfinderMob {
                                     + CurrencyValue.format(balance)
                                     + " credits."
                     ));
-                } else {
-                    long balance = bank.getBalance(
-                            player.getUUID()
-                    );
 
-                    player.sendSystemMessage(Component.literal(
-                            "Bank balance: "
-                                    + CurrencyValue.format(balance)
-                                    + " credits."
-                    ));
-                    player.sendSystemMessage(Component.literal(
-                            "Right-click with coins to deposit. Sneak-right-click with a coin type to withdraw up to a stack of that denomination."
-                    ));
+                    return InteractionResult.CONSUME;
                 }
+
+                long balance = bank.getBalance(player.getUUID());
+                player.sendSystemMessage(Component.literal(
+                        "Bank balance: "
+                                + CurrencyValue.format(balance)
+                                + " credits."
+                ));
+                player.sendSystemMessage(Component.literal(
+                        "Hold coins and right-click to deposit. Sneak-right-click with an empty hand to withdraw your balance as coins."
+                ));
 
                 return InteractionResult.CONSUME;
             }
 
-            if (serviceRole == NpcServiceRole.COURIER) {
+            if (serviceRole == NpcServiceRole.COURIER
+                    || serviceRole == NpcServiceRole.GUARD) {
                 player.sendSystemMessage(Component.literal(
-                        "Courier — " + serviceBrain.status()
+                        serviceRole.displayName()
+                                + " — " + serviceBrain.status()
                 ));
                 return InteractionResult.CONSUME;
             }
