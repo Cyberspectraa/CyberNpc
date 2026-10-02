@@ -15,18 +15,17 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 
 import javax.annotation.Nullable;
 import java.util.List;
 
-public final class DropBoxBlock extends Block {
+public final class DropBoxBlock extends PostalBlockBase {
     private static final int CAPACITY = 64;
 
     public DropBoxBlock(Properties properties) {
-        super(properties);
+        super(Kind.DROP_BOX, properties);
     }
 
     @Override
