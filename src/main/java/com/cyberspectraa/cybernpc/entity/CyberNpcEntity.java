@@ -7195,8 +7195,61 @@ public class CyberNpcEntity extends PathfinderMob {
             if (serviceRole == NpcServiceRole.BANKER
                     && level() instanceof ServerLevel serverLevel) {
                 ItemStack held = player.getItemInHand(hand);
+                long unitValue = CurrencyValue.unitValueOf(held);
                 long deposit = CurrencyValue.valueOf(held);
                 BankSavedData bank = BankSavedData.get(serverLevel);
+
+                if (unitValue > 0L && player.isShiftKeyDown()) {
+                    long balance = bank.getBalance(player.getUUID());
+                    int count = (int) Math.min(
+                            64L,
+                            balance / unitValue
+                    );
+
+                    if (count <= 0) {
+                        player.sendSystemMessage(Component.literal(
+                                "You do not have enough balance for that coin denomination."
+                        ));
+                        return InteractionResult.CONSUME;
+                    }
+
+                    long withdrawn = unitValue * count;
+                    if (!bank.withdraw(player.getUUID(), withdrawn)) {
+                        return InteractionResult.CONSUME;
+                    }
+
+                    ItemStack payout = new ItemStack(
+                            held.getItem(),
+                            count
+                    );
+
+                    if (!player.getInventory().add(payout)) {
+                        player.drop(payout, false);
+                    }
+
+                    level().playSound(
+                            null,
+                            blockPosition(),
+                            SoundEvents.EXPERIENCE_ORB_PICKUP,
+                            SoundSource.NEUTRAL,
+                            0.55F,
+                            0.92F
+                    );
+
+                    player.sendSystemMessage(Component.literal(
+                            "Withdrew "
+                                    + count + " "
+                                    + held.getHoverName().getString()
+                                    + (count == 1 ? "" : "s")
+                                    + " (" + CurrencyValue.format(withdrawn)
+                                    + " credits). Balance: "
+                                    + CurrencyValue.format(
+                                    bank.getBalance(player.getUUID())
+                            ) + " credits."
+                    ));
+
+                    return InteractionResult.CONSUME;
+                }
 
                 if (deposit > 0L) {
                     if (!player.getAbilities().instabuild) {
@@ -7235,7 +7288,7 @@ public class CyberNpcEntity extends PathfinderMob {
                                     + " credits."
                     ));
                     player.sendSystemMessage(Component.literal(
-                            "Hold CyberNpc coins and right-click the Banker to deposit them."
+                            "Right-click with coins to deposit. Sneak-right-click with a coin type to withdraw up to a stack of that denomination."
                     ));
                 }
 
