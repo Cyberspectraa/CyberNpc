@@ -26,8 +26,17 @@ sourceSets {
     }
 }
 
+repositories {
+    maven {
+        url = "https://cursemaven.com"
+        content { includeGroup "curse.maven" }
+    }
+}
+
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    // Compile against the exact Photon 1.20.1 Forge release the pack is using.
+    compileOnly fg.deobf("curse.maven:photon-871522:7501597")
 }
 
 tasks.named('processResources', ProcessResources).configure {
@@ -44,7 +53,7 @@ tasks.named('jar', Jar).configure {
                 'Specification-Vendor'    : 'Cyberspectraa',
                 'Specification-Version'   : '1',
                 'Implementation-Title'    : 'Season 2 Arrival',
-                'Implementation-Version'  : '0.1.0',
+                'Implementation-Version'  : '0.2.0',
                 'Implementation-Vendor'   : 'Cyberspectraa',
                 'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
         ])
