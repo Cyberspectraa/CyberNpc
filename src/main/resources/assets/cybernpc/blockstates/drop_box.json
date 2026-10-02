@@ -1,5 +1,8 @@
 {
   "variants": {
-    "": {"model": "cybernpc:block/drop_box"}
+    "facing=north": { "model": "cybernpc:block/drop_box" },
+    "facing=east":  { "model": "cybernpc:block/drop_box", "y": 90 },
+    "facing=south": { "model": "cybernpc:block/drop_box", "y": 180 },
+    "facing=west":  { "model": "cybernpc:block/drop_box", "y": 270 }
   }
 }
