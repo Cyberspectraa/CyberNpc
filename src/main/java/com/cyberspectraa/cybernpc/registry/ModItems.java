@@ -8,6 +8,7 @@ import com.cyberspectraa.cybernpc.item.DeveloperGlassesItem;
 import com.cyberspectraa.cybernpc.item.LetterPaperItem;
 import com.cyberspectraa.cybernpc.item.OpenedLetterItem;
 import com.cyberspectraa.cybernpc.item.SealedLetterItem;
+import com.cyberspectraa.cybernpc.item.TownRegisterItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.registries.DeferredRegister;
@@ -120,6 +121,12 @@ public final class ModItems {
                     new BlockItem(
                             ModBlocks.LETTER_BOX.get(),
                             new Item.Properties()
+                    ));
+
+    public static final RegistryObject<Item> TOWN_REGISTER =
+            ITEMS.register("town_register", () ->
+                    new TownRegisterItem(
+                            new Item.Properties().stacksTo(1)
                     ));
 
     public static final RegistryObject<Item> DEVELOPER_GLASSES =
