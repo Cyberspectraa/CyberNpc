@@ -1,6 +1,5 @@
 package com.cyberspectraa.cybernpc.entity;
 
-import com.cyberspectraa.cybernpc.compat.BetterHorsesCompat;
 import com.cyberspectraa.cybernpc.compat.IronSpellsCompat;
 import net.minecraft.util.RandomSource;
 
@@ -104,10 +103,6 @@ public enum WildNpcClass {
     }
 
     public boolean isAvailable() {
-        if (this == RANGER && !BetterHorsesCompat.isLoaded()) {
-            return false;
-        }
-
         return !requiresIronSpells || IronSpellsCompat.isLoaded();
     }
 }
