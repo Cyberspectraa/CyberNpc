@@ -33,6 +33,7 @@ public final class ModCreativeTabs {
                                 output.accept(ModItems.WILD_NPC_SPAWN_EGG.get());
                                 output.accept(ModItems.BANKER_NPC_SPAWN_EGG.get());
                                 output.accept(ModItems.COURIER_NPC_SPAWN_EGG.get());
+                                output.accept(ModItems.GUARD_NPC_SPAWN_EGG.get());
 
                                 // Economy.
                                 output.accept(ModItems.COPPER_COIN.get());
@@ -51,6 +52,7 @@ public final class ModCreativeTabs {
 
                                 // Special-NPC and developer utilities last.
                                 output.accept(ModItems.TOWN_REGISTER.get());
+                                output.accept(ModItems.SPECIAL_NPC_REMOVAL_STICK.get());
                                 output.accept(ModItems.DEVELOPER_GLASSES.get());
                             })
                             .build()
