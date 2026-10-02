@@ -7,5 +7,19 @@
   "item.cybernpc.wild_npc_spawn_egg": "Wild NPC Spawn Egg",
   "item.cybernpc.developer_glasses": "Developer Glasses",
   "key.cybernpc.developer_glasses_cycle": "Cycle Developer Glasses Tab",
-  "key.categories.cybernpc": "CyberNpc"
+  "key.categories.cybernpc": "CyberNpc",
+  "item.cybernpc.banker_npc_spawn_egg": "Banker NPC Spawn Egg",
+  "item.cybernpc.courier_npc_spawn_egg": "Courier NPC Spawn Egg",
+  "item.cybernpc.copper_coin": "Copper Coin",
+  "item.cybernpc.silver_coin": "Silver Coin",
+  "item.cybernpc.gold_coin": "Gold Coin",
+  "item.cybernpc.platinum_coin": "Platinum Coin",
+  "item.cybernpc.dragon_coin": "Dragon Coin",
+  "item.cybernpc.letter_paper": "Letter Paper",
+  "item.cybernpc.addressed_letter": "Addressed Letter",
+  "item.cybernpc.sealed_letter": "Sealed Letter",
+  "item.cybernpc.opened_letter": "Opened Letter",
+  "block.cybernpc.drop_box": "Drop Box",
+  "block.cybernpc.letter_box": "Letter Box",
+  "itemGroup.cybernpc": "CyberNpc"
 }
