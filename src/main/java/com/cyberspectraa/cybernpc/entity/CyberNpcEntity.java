@@ -2853,6 +2853,62 @@ public class CyberNpcEntity extends PathfinderMob {
         );
     }
 
+    private void tickPlayerLikeSwimming() {
+        if (isPassenger() || isSleeping()) {
+            if (isSwimming()) {
+                setSwimming(false);
+            }
+            return;
+        }
+
+        if (!isInWaterOrBubble()) {
+            if (isSwimming()) {
+                setSwimming(false);
+            }
+            return;
+        }
+
+        Path path = getNavigation().getPath();
+        boolean movingToGoal =
+                path != null && !path.isDone() && path.getTarget() != null;
+
+        boolean underwater = isUnderWater();
+        setSwimming(underwater && movingToGoal);
+
+        Vec3 movement = getDeltaMovement();
+        double upward = underwater ? 0.035D : 0.012D;
+
+        if (underwater
+                && getAirSupply() < getMaxAirSupply() / 2) {
+            upward = 0.085D;
+        }
+
+        if (movingToGoal) {
+            Vec3 target = Vec3.atCenterOf(path.getTarget());
+            Vec3 horizontal = new Vec3(
+                    target.x - getX(),
+                    0.0D,
+                    target.z - getZ()
+            );
+
+            if (horizontal.lengthSqr() > 0.01D) {
+                horizontal = horizontal.normalize();
+                double push = isSprinting() ? 0.045D : 0.030D;
+                movement = movement.add(
+                        horizontal.x * push,
+                        upward,
+                        horizontal.z * push
+                );
+            } else {
+                movement = movement.add(0.0D, upward, 0.0D);
+            }
+        } else {
+            movement = movement.add(0.0D, upward, 0.0D);
+        }
+
+        setDeltaMovement(movement);
+    }
+
     private boolean canUseHorse(
             AbstractHorse horse,
             boolean alreadyClaimedByThisNpc
