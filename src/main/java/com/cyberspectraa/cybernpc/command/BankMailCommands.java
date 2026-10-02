@@ -19,35 +19,47 @@ public final class BankMailCommands {
     public static void register(RegisterCommandsEvent event) {
         event.getDispatcher().register(
                 Commands.literal("bal")
-                        .executes(context -> balance(context.getSource()))
+                        .executes(context ->
+                                balance(context.getSource())
+                        )
         );
 
         event.getDispatcher().register(
                 Commands.literal("mail")
-                        .then(Commands.literal("write")
-                                .then(Commands.argument(
-                                                "player",
-                                                EntityArgument.player()
-                                        )
-                                        .then(Commands.argument(
-                                                        "message",
-                                                        StringArgumentType.greedyString()
-                                                )
-                                                .executes(context -> writeLetter(
-                                                        context.getSource(),
-                                                        EntityArgument.getPlayer(
-                                                                context,
-                                                                "player"
-                                                        ),
-                                                        StringArgumentType.getString(
-                                                                context,
-                                                                "message"
+                        .then(
+                                Commands.literal("write")
+                                        .then(
+                                                Commands.argument(
+                                                                "player",
+                                                                EntityArgument.player()
                                                         )
-                                                ))))
-                        .then(Commands.literal("help")
-                                .executes(context -> mailHelp(
-                                        context.getSource()
-                                )))
+                                                        .then(
+                                                                Commands.argument(
+                                                                                "message",
+                                                                                StringArgumentType.greedyString()
+                                                                        )
+                                                                        .executes(context ->
+                                                                                writeLetter(
+                                                                                        context.getSource(),
+                                                                                        EntityArgument.getPlayer(
+                                                                                                context,
+                                                                                                "player"
+                                                                                        ),
+                                                                                        StringArgumentType.getString(
+                                                                                                context,
+                                                                                                "message"
+                                                                                        )
+                                                                                )
+                                                                        )
+                                                        )
+                                        )
+                        )
+                        .then(
+                                Commands.literal("help")
+                                        .executes(context ->
+                                                mailHelp(context.getSource())
+                                        )
+                        )
         );
     }
 
