@@ -1,1 +1,3 @@
-{"parent":"cybernpc:block/letter_box"}
+{
+  "parent": "cybernpc:block/letter_box"
+}

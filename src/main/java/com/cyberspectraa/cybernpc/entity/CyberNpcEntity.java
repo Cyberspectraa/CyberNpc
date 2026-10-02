@@ -635,6 +635,10 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     public boolean isSlimModel() {
+        if (NpcServiceRole.fromRole(getRole()) == NpcServiceRole.COURIER) {
+            return false;
+        }
+
         return getAppearanceGender().slim();
     }
 

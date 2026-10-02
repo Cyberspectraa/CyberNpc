@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.35.1
+
+### Legacy Spectral Mail visuals restored
+- Ported the complete old Spectral Mail model/texture asset set into the CyberNpc namespace.
+- Drop Box now uses the original red multi-cuboid postal model and original top/front/side/bottom textures.
+- Letter Box now uses the original wooden multi-cuboid mailbox model and matching original textures.
+- Restored horizontal facing for both postal blocks so the front of each model rotates correctly when placed.
+- Restored the old model-matched collision/selection shapes instead of treating the postal blocks as full cubes.
+- Letter Paper, Addressed Letter, Sealed Letter and Opened Letter now use their original Spectral Mail item artwork.
+- The new CyberNpc Courier now uses the original bundled postman skin from Spectral Mail.
+- Courier rendering is forced to the wide player model so the restored postman skin maps correctly.
+- All assets use `cybernpc:` resource locations; Spectral Mail remains retired and is not a dependency.
+
+### Dragon Currency visuals restored
+- Ported the complete old Dragon Currency model/texture asset set into the CyberNpc namespace.
+- Copper, Silver, Gold, Platinum and Dragon Coins now use their original coin artwork instead of temporary vanilla item textures.
+- Imported the original Coin Pouch, denomination-display and pouch-button models/textures for future reuse.
+- Imported the original bank and coin-pouch GUI textures for future CyberNpc banking UI work.
+- The extra pouch/GUI assets are visual resources only in this release; no old withdrawal or pouch behavior has been re-enabled.
+- Dragon Currency remains retired and is not a dependency.
+
 ## 0.35.0
 
 ### Banker and Courier service NPCs

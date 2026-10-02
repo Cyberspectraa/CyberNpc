@@ -1,5 +1,8 @@
 {
   "variants": {
-    "": {"model": "cybernpc:block/letter_box"}
+    "facing=north": { "model": "cybernpc:block/letter_box" },
+    "facing=east":  { "model": "cybernpc:block/letter_box", "y": 90 },
+    "facing=south": { "model": "cybernpc:block/letter_box", "y": 180 },
+    "facing=west":  { "model": "cybernpc:block/letter_box", "y": 270 }
   }
 }
