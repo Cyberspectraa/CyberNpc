@@ -519,11 +519,22 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     public void setRole(String role) {
+        NpcServiceRole previousRole =
+                NpcServiceRole.fromRole(entityData.get(DATA_ROLE));
+
         String cleaned = role == null ? "" : role.trim();
         String resolved = cleaned.isEmpty() ? "Citizen" : cleaned;
+        NpcServiceRole serviceRole = NpcServiceRole.fromRole(resolved);
+
+        if (!level().isClientSide
+                && previousRole == NpcServiceRole.COURIER
+                && serviceRole != NpcServiceRole.COURIER) {
+            serviceBrain.release();
+        }
+
         entityData.set(DATA_ROLE, resolved);
 
-        NpcServiceRole serviceRole = NpcServiceRole.fromRole(resolved);
+
         if (serviceRole != NpcServiceRole.NONE) {
             setCanWander(false);
             setPersistenceRequired();
