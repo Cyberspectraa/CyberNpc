@@ -420,10 +420,6 @@ final class NpcServiceBrain {
             npc.getNavigation().stop();
             npc.setSprinting(false);
 
-            if (guardBellHoldTicks <= 0) {
-                guardBellHoldTicks = 120;
-            }
-
             if (guardBellHoldTicks > 0) {
                 guardBellHoldTicks--;
 
@@ -827,7 +823,7 @@ final class NpcServiceBrain {
         }
 
         guardRespondBellPos = bellPos.immutable();
-        guardBellHoldTicks = 0;
+        guardBellHoldTicks = 120;
         guardAlertTicks = GUARD_ALERT_TICKS;
         guardCallingBackup = false;
         guardAlarmBellPos = null;
@@ -1297,6 +1293,7 @@ final class NpcServiceBrain {
     void release() {
         if (npc.level() instanceof ServerLevel level) {
             MailSavedData.get(level).releaseCourier(npc.getUUID());
+            releaseGuardPost(level);
         }
 
         satchelIds.clear();
@@ -1309,6 +1306,11 @@ final class NpcServiceBrain {
         guardCallingBackup = false;
         guardPatrolTarget = null;
         guardPatrolPauseTicks = 0;
+        guardPostTarget = null;
+        guardPostDutyTicks = 0;
+        guardPostRestTicks = 0;
+        guardRespondBellPos = null;
+        guardBellHoldTicks = 0;
         clearVisualLetter();
     }
 
@@ -1327,6 +1329,12 @@ final class NpcServiceBrain {
             }
             if (guardTargetId != null) {
                 return "responding to danger";
+            }
+            if (guardRespondBellPos != null) {
+                return "answering the town bell";
+            }
+            if (guardPostTarget != null) {
+                return "standing guard";
             }
             return "patrolling the town";
         }
@@ -1386,6 +1394,11 @@ final class NpcServiceBrain {
         guardCallingBackup = false;
         guardPatrolTarget = null;
         guardPatrolPauseTicks = 0;
+        guardPostTarget = null;
+        guardPostDutyTicks = 0;
+        guardPostRestTicks = 0;
+        guardRespondBellPos = null;
+        guardBellHoldTicks = 0;
         clearVisualLetter();
     }
 
