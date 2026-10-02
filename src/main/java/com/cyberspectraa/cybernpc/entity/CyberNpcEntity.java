@@ -7188,6 +7188,23 @@ public class CyberNpcEntity extends PathfinderMob {
 
     @Override
     protected InteractionResult mobInteract(Player player, InteractionHand hand) {
+        ItemStack heldForTool = player.getItemInHand(hand);
+
+        // Configuration/removal tools must win over the role's normal use
+        // interaction. Otherwise Banker/Courier consume the right-click before
+        // the item's interactLivingEntity hook ever gets a chance to run.
+        if (hand == InteractionHand.MAIN_HAND
+                && (heldForTool.is(ModItems.TOWN_REGISTER.get())
+                || heldForTool.is(
+                ModItems.SPECIAL_NPC_REMOVAL_STICK.get()
+        ))) {
+            return heldForTool.interactLivingEntity(
+                    player,
+                    this,
+                    hand
+            );
+        }
+
         if (!level().isClientSide && hand == InteractionHand.MAIN_HAND) {
             NpcServiceRole serviceRole =
                     NpcServiceRole.fromRole(getRole());
