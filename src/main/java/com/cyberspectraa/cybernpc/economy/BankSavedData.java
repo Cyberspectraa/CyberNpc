@@ -89,6 +89,20 @@ public final class BankSavedData extends SavedData {
         return next;
     }
 
+    public boolean withdraw(UUID playerId, long amount) {
+        if (playerId == null || amount <= 0L) {
+            return false;
+        }
+
+        long current = getBalance(playerId);
+        if (current < amount) {
+            return false;
+        }
+
+        setBalance(playerId, current - amount);
+        return true;
+    }
+
     public void setBalance(UUID playerId, long amount) {
         if (playerId == null) {
             return;
