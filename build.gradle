@@ -47,8 +47,8 @@ dependencies {
     minecraft "net.minecraftforge:forge:1.20.1-47.4.10"
 
     // Build-time only. These never get bundled into CyberServer.jar.
-    fxgenImplementation("curse.maven:photon-871522:7501597") { transitive = false }
-    fxgenImplementation("com.lowdragmc.ldlib:ldlib-forge-1.20.1:1.0.42") { transitive = false }
+    fxgenImplementation fg.deobf("curse.maven:photon-871522:7501597@jar")
+    fxgenImplementation fg.deobf("com.lowdragmc.ldlib:ldlib-forge-1.20.1:1.0.42@jar")
 }
 
 tasks.named('processResources', ProcessResources).configure {
