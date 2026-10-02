@@ -65,6 +65,7 @@ public final class LetterWritingScreen extends Screen {
         );
         recipientBox.setMaxLength(32);
         recipientBox.setHint(Component.literal("Player name"));
+        recipientBox.setResponder(value -> updateSealButton());
         addRenderableWidget(recipientBox);
 
         messageBox = new MultiLineEditBox(
@@ -98,7 +99,7 @@ public final class LetterWritingScreen extends Screen {
         }
 
         previousButton = Button.builder(
-                        Component.literal("Previous"),
+                        Component.literal("Prev"),
                         pressed -> changePage(-1)
                 )
                 .bounds(
@@ -162,7 +163,9 @@ public final class LetterWritingScreen extends Screen {
                         .map(GameProfile::getName)
                         .filter(name -> !name.equalsIgnoreCase(self))
                         .sorted(Comparator.comparing(
-                                String::toLowerCase
+                                name -> name.toLowerCase(
+                                        java.util.Locale.ROOT
+                                )
                         ))
                         .toList()
         );
