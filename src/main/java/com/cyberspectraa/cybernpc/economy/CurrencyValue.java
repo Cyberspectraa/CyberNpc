@@ -15,23 +15,31 @@ public final class CurrencyValue {
             return 0L;
         }
 
-        long perItem;
+        return unitValueOf(stack) * stack.getCount();
+    }
 
-        if (stack.is(ModItems.COPPER_COIN.get())) {
-            perItem = COPPER;
-        } else if (stack.is(ModItems.SILVER_COIN.get())) {
-            perItem = SILVER;
-        } else if (stack.is(ModItems.GOLD_COIN.get())) {
-            perItem = GOLD;
-        } else if (stack.is(ModItems.PLATINUM_COIN.get())) {
-            perItem = PLATINUM;
-        } else if (stack.is(ModItems.DRAGON_COIN.get())) {
-            perItem = DRAGON;
-        } else {
+    public static long unitValueOf(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
             return 0L;
         }
 
-        return perItem * stack.getCount();
+        if (stack.is(ModItems.COPPER_COIN.get())) {
+            return COPPER;
+        }
+        if (stack.is(ModItems.SILVER_COIN.get())) {
+            return SILVER;
+        }
+        if (stack.is(ModItems.GOLD_COIN.get())) {
+            return GOLD;
+        }
+        if (stack.is(ModItems.PLATINUM_COIN.get())) {
+            return PLATINUM;
+        }
+        if (stack.is(ModItems.DRAGON_COIN.get())) {
+            return DRAGON;
+        }
+
+        return 0L;
     }
 
     public static boolean isCurrency(ItemStack stack) {
