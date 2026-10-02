@@ -49,7 +49,8 @@ public final class ModCreativeTabs {
                                 output.accept(ModItems.DROP_BOX.get());
                                 output.accept(ModItems.LETTER_BOX.get());
 
-                                // Developer utility last.
+                                // Special-NPC and developer utilities last.
+                                output.accept(ModItems.TOWN_REGISTER.get());
                                 output.accept(ModItems.DEVELOPER_GLASSES.get());
                             })
                             .build()

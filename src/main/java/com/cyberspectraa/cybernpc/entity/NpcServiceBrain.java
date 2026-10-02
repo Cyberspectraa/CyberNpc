@@ -7,29 +7,35 @@ import com.cyberspectraa.cybernpc.mail.MailState;
 import com.cyberspectraa.cybernpc.registry.ModItems;
 import com.cyberspectraa.cybernpc.registry.ModSounds;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
+import com.cyberspectraa.cybernpc.service.SpecialNpcSavedData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
 
 final class NpcServiceBrain {
     private static final int SEARCH_INTERVAL = 40;
     private static final int REPATH_INTERVAL = 10;
     private static final double SEARCH_RADIUS_SQR = 96.0D * 96.0D;
     private static final double ARRIVE_SQR = 3.0D * 3.0D;
-    private static final double HOME_ARRIVE_SQR = 4.0D * 4.0D;
+    private static final double ANCHOR_ARRIVE_SQR = 3.5D * 3.5D;
+    private static final double DIRECT_PLAYER_DELIVERY_RADIUS_SQR =
+            48.0D * 48.0D;
     private static final int LETTER_BOX_CAPACITY = 9;
+    private static final int SATCHEL_CAPACITY = 9;
 
-    // Craig-the-mailman style proximity easter egg. The sound is intentionally
-    // subtle, only checks every half second, and requires the player to leave
-    // the outer radius before it can arm again.
     private static final int BREATH_CHECK_INTERVAL = 10;
     private static final int BREATH_REARM_COOLDOWN_TICKS = 160;
     private static final double BREATH_TRIGGER_DISTANCE = 2.6D;
@@ -37,13 +43,12 @@ final class NpcServiceBrain {
     private static final float BREATH_VOLUME = 0.42F;
 
     private final CyberNpcEntity npc;
+    private final List<Long> satchelIds = new ArrayList<>();
 
     @Nullable
-    private BlockPos homePos;
+    private BlockPos pickupPos;
 
-    private long activeMailId = -1L;
     private boolean pickedUp;
-    private boolean returningHome;
     private int searchCooldown;
     private int repathCooldown;
     private int breathCheckCooldown;
@@ -61,39 +66,102 @@ final class NpcServiceBrain {
         }
 
         NpcServiceRole role = NpcServiceRole.fromRole(npc.getRole());
-        if (role != NpcServiceRole.COURIER) {
+        if (role == NpcServiceRole.NONE) {
             clearVisualLetter();
-            breathPlayerClose = false;
-            breathCheckCooldown = 0;
-            breathRearmCooldown = 0;
             return;
         }
 
-        tickBreathingEasterEgg(level);
+        SpecialNpcSavedData data = SpecialNpcSavedData.get(level);
+        SpecialNpcSavedData.SpecialNpcRecord record =
+                data.getRecord(npc.getSpecialNpcId());
 
-        if (homePos == null) {
-            homePos = npc.blockPosition().immutable();
-        }
-
-        if (activeMailId >= 0L) {
-            tickActiveMail(level);
+        if (record == null) {
             return;
         }
 
-        if (returningHome) {
-            if (homePos == null
-                    || npc.blockPosition().distSqr(homePos) <= HOME_ARRIVE_SQR) {
-                returningHome = false;
-                npc.getNavigation().stop();
-                return;
+        if (role == NpcServiceRole.BANKER) {
+            tickBanker(level, data, record);
+            return;
+        }
+
+        if (role == NpcServiceRole.COURIER) {
+            tickBreathingEasterEgg(level);
+            tickCourier(level, data, record);
+        }
+    }
+
+    private void tickBanker(
+            ServerLevel level,
+            SpecialNpcSavedData data,
+            SpecialNpcSavedData.SpecialNpcRecord record
+    ) {
+        clearVisualLetter();
+
+        SpecialNpcSavedData.Anchor desired =
+                record.returningToWork()
+                        ? record.work()
+                        : (level.isNight()
+                        ? firstNonNull(record.home(), record.work())
+                        : firstNonNull(record.work(), record.home()));
+
+        if (desired == null) {
+            npc.getNavigation().stop();
+            return;
+        }
+
+        if (moveToAnchor(level, desired, 0.72D)) {
+            if (record.returningToWork()
+                    && desired == record.work()) {
+                data.markReachedWork(record.specialId());
             }
+        }
+    }
 
-            navigateTo(homePos, 0.82D);
+    private void tickCourier(
+            ServerLevel level,
+            SpecialNpcSavedData data,
+            SpecialNpcSavedData.SpecialNpcRecord record
+    ) {
+        cleanSatchel(level);
+
+        if (!satchelIds.isEmpty()) {
+            tickCourierRoute(level, data, record);
+            return;
+        }
+
+        clearVisualLetter();
+        pickedUp = false;
+        pickupPos = null;
+
+        if (record.returningToWork()) {
+            if (record.work() != null
+                    && moveToAnchor(level, record.work(), 0.82D)) {
+                data.markReachedWork(record.specialId());
+            }
+            return;
+        }
+
+        if (level.isNight()) {
+            SpecialNpcSavedData.Anchor home =
+                    firstNonNull(record.home(), record.work());
+
+            if (home != null) {
+                moveToAnchor(level, home, 0.76D);
+            }
+            return;
+        }
+
+        SpecialNpcSavedData.Anchor work =
+                firstNonNull(record.work(), record.home());
+
+        if (work != null && !isAtAnchor(level, work)) {
+            moveToAnchor(level, work, 0.82D);
             return;
         }
 
         if (searchCooldown > 0) {
             searchCooldown--;
+            faceAnchor(work);
             return;
         }
         searchCooldown = SEARCH_INTERVAL;
@@ -107,24 +175,253 @@ final class NpcServiceBrain {
         );
 
         if (claimed == null) {
-            if (homePos != null
-                    && npc.blockPosition().distSqr(homePos) > HOME_ARRIVE_SQR) {
-                returningHome = true;
-            }
+            faceAnchor(work);
             return;
         }
 
         BlockPos pickup = claimed.pickupPos();
-        if (pickup == null || !level.hasChunkAt(pickup)) {
+        if (pickup == null
+                || !mail.isDropBoxRegistered(
+                level.dimension(),
+                pickup
+        )) {
             mail.returnToPending(claimed.id(), npc.getUUID());
-            searchCooldown = SEARCH_INTERVAL * 2;
             return;
         }
 
-        activeMailId = claimed.id();
+        satchelIds.add(claimed.id());
+        pickupPos = pickup.immutable();
         pickedUp = false;
-        returningHome = false;
         repathCooldown = 0;
+    }
+
+    private void tickCourierRoute(
+            ServerLevel level,
+            SpecialNpcSavedData data,
+            SpecialNpcSavedData.SpecialNpcRecord record
+    ) {
+        MailSavedData mail = MailSavedData.get(level);
+
+        if (!pickedUp) {
+            if (pickupPos == null
+                    || !mail.isDropBoxRegistered(
+                    level.dimension(),
+                    pickupPos
+            )) {
+                releaseSatchel(level);
+                return;
+            }
+
+            if (npc.blockPosition().distSqr(pickupPos) <= ARRIVE_SQR) {
+                List<MailRecord> extras = mail.claimPendingAt(
+                        level.dimension(),
+                        pickupPos,
+                        npc.getUUID(),
+                        Math.max(
+                                0,
+                                SATCHEL_CAPACITY - satchelIds.size()
+                        )
+                );
+
+                for (MailRecord extra : extras) {
+                    if (!satchelIds.contains(extra.id())) {
+                        satchelIds.add(extra.id());
+                    }
+                }
+
+                pickedUp = true;
+                showVisualLetter();
+                npc.getNavigation().stop();
+                npc.swing(InteractionHand.MAIN_HAND);
+                level.playSound(
+                        null,
+                        npc.blockPosition(),
+                        SoundEvents.BARREL_OPEN,
+                        SoundSource.NEUTRAL,
+                        0.45F,
+                        1.15F
+                );
+                return;
+            }
+
+            navigateTo(pickupPos, 0.80D);
+            return;
+        }
+
+        showVisualLetter();
+
+        DeliveryTarget target = findNearestDelivery(level, mail);
+        if (target != null) {
+            if (target.player != null) {
+                if (npc.distanceToSqr(target.player) <= ARRIVE_SQR) {
+                    deliverToPlayer(level, mail, target);
+                } else {
+                    navigateTo(target.player.blockPosition(), 0.82D);
+                }
+                return;
+            }
+
+            if (target.boxPos != null) {
+                if (npc.blockPosition().distSqr(target.boxPos) <= ARRIVE_SQR) {
+                    deliverToBox(level, mail, target);
+                } else {
+                    navigateTo(target.boxPos, 0.80D);
+                }
+                return;
+            }
+        }
+
+        SpecialNpcSavedData.Anchor work =
+                firstNonNull(record.work(), record.home());
+
+        if (work == null) {
+            npc.getNavigation().stop();
+            return;
+        }
+
+        if (moveToAnchor(level, work, 0.76D)) {
+            // Keep unavailable mail safe, but release it back to the queue once
+            // the Courier reaches the Post Office so another route can try later.
+            releaseSatchel(level);
+            data.markReachedWork(record.specialId());
+        }
+    }
+
+    @Nullable
+    private DeliveryTarget findNearestDelivery(
+            ServerLevel level,
+            MailSavedData mail
+    ) {
+        DeliveryTarget best = null;
+        double bestDistance = Double.MAX_VALUE;
+
+        for (long id : satchelIds) {
+            MailRecord record = mail.get(id);
+            if (!isOwnedTransit(record)) {
+                continue;
+            }
+
+            MailSavedData.PostalAddress box =
+                    mail.getLetterBox(record.recipientId());
+
+            if (box != null
+                    && box.dimension().equals(level.dimension())
+                    && mail.boxedCount(record.recipientId())
+                    < LETTER_BOX_CAPACITY
+                    && level.hasChunkAt(box.pos())) {
+                double distance = npc.blockPosition().distSqr(box.pos());
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    best = DeliveryTarget.forBox(id, box.pos());
+                }
+                continue;
+            }
+
+            ServerPlayer player = level.getServer()
+                    .getPlayerList()
+                    .getPlayer(record.recipientId());
+
+            if (player != null
+                    && player.level().dimension().equals(level.dimension())) {
+                double distance = npc.distanceToSqr(player);
+                if (distance <= DIRECT_PLAYER_DELIVERY_RADIUS_SQR
+                        && distance < bestDistance) {
+                    bestDistance = distance;
+                    best = DeliveryTarget.forPlayer(id, player);
+                }
+            }
+        }
+
+        return best;
+    }
+
+    private void deliverToBox(
+            ServerLevel level,
+            MailSavedData mail,
+            DeliveryTarget target
+    ) {
+        MailRecord record = mail.get(target.mailId);
+        if (!isOwnedTransit(record) || target.boxPos == null) {
+            satchelIds.remove(target.mailId);
+            return;
+        }
+
+        mail.markBoxed(record.id());
+        satchelIds.remove(record.id());
+        npc.swing(InteractionHand.MAIN_HAND);
+        level.playSound(
+                null,
+                target.boxPos,
+                SoundEvents.BARREL_CLOSE,
+                SoundSource.NEUTRAL,
+                0.50F,
+                1.25F
+        );
+
+        if (satchelIds.isEmpty()) {
+            clearVisualLetter();
+        }
+    }
+
+    private void deliverToPlayer(
+            ServerLevel level,
+            MailSavedData mail,
+            DeliveryTarget target
+    ) {
+        MailRecord record = mail.get(target.mailId);
+        ServerPlayer player = target.player;
+
+        if (!isOwnedTransit(record) || player == null) {
+            satchelIds.remove(target.mailId);
+            return;
+        }
+
+        ItemStack sealed = new ItemStack(ModItems.SEALED_LETTER.get());
+        MailItemData.writeRecordId(sealed, record.id());
+
+        if (!player.getInventory().add(sealed)) {
+            player.drop(sealed, false);
+        }
+
+        mail.markDelivered(record.id());
+        satchelIds.remove(record.id());
+        npc.swing(InteractionHand.MAIN_HAND);
+        level.playSound(
+                null,
+                npc.blockPosition(),
+                SoundEvents.ITEM_PICKUP,
+                SoundSource.NEUTRAL,
+                0.45F,
+                1.05F
+        );
+
+        if (satchelIds.isEmpty()) {
+            clearVisualLetter();
+        }
+    }
+
+    private void cleanSatchel(ServerLevel level) {
+        MailSavedData mail = MailSavedData.get(level);
+        Iterator<Long> iterator = satchelIds.iterator();
+
+        while (iterator.hasNext()) {
+            MailRecord record = mail.get(iterator.next());
+            if (!isOwnedTransit(record)) {
+                iterator.remove();
+            }
+        }
+
+        if (satchelIds.isEmpty()) {
+            pickedUp = false;
+            pickupPos = null;
+            clearVisualLetter();
+        }
+    }
+
+    private boolean isOwnedTransit(@Nullable MailRecord record) {
+        return record != null
+                && record.state() == MailState.IN_TRANSIT
+                && npc.getUUID().equals(record.courierId());
     }
 
     private void tickBreathingEasterEgg(ServerLevel level) {
@@ -173,90 +470,46 @@ final class NpcServiceBrain {
         }
     }
 
-    private void tickActiveMail(ServerLevel level) {
-        MailSavedData mail = MailSavedData.get(level);
-        MailRecord record = mail.get(activeMailId);
-
-        if (record == null
-                || record.state() != MailState.IN_TRANSIT
-                || record.courierId() == null
-                || !record.courierId().equals(npc.getUUID())) {
-            clearActiveMail(false);
-            return;
-        }
-
-        if (!pickedUp) {
-            BlockPos pickup = record.pickupPos();
-            if (pickup == null) {
-                mail.returnToPending(activeMailId, npc.getUUID());
-                clearActiveMail(false);
-                return;
-            }
-
-            if (npc.blockPosition().distSqr(pickup) <= ARRIVE_SQR) {
-                pickedUp = true;
-                showVisualLetter();
-                npc.getNavigation().stop();
-                repathCooldown = 0;
-                return;
-            }
-
-            navigateTo(pickup, 0.78D);
-            return;
-        }
-
-        MailSavedData.PostalAddress box = mail.getLetterBox(
-                record.recipientId()
-        );
-
-        if (box != null
-                && box.dimension().equals(level.dimension())
-                && mail.boxedCount(record.recipientId()) < LETTER_BOX_CAPACITY
-                && level.hasChunkAt(box.pos())) {
-            if (npc.blockPosition().distSqr(box.pos()) <= ARRIVE_SQR) {
-                mail.markBoxed(record.id());
-                clearActiveMail(true);
-                return;
-            }
-
-            navigateTo(box.pos(), 0.78D);
-            return;
-        }
-
-        ServerPlayer recipient = level.getServer()
-                .getPlayerList()
-                .getPlayer(record.recipientId());
-
-        if (recipient != null
-                && recipient.level().dimension().equals(level.dimension())) {
-            if (npc.distanceToSqr(recipient) <= ARRIVE_SQR) {
-                ItemStack sealed = new ItemStack(
-                        ModItems.SEALED_LETTER.get()
-                );
-                MailItemData.writeRecordId(sealed, record.id());
-
-                if (!recipient.getInventory().add(sealed)) {
-                    recipient.drop(sealed, false);
-                }
-
-                mail.markDelivered(record.id());
-                clearActiveMail(true);
-                return;
-            }
-
-            navigateTo(recipient.blockPosition(), 0.82D);
-            return;
-        }
-
-        // No usable Letter Box and recipient is not currently available.
-        // Keep the authoritative letter assigned to this courier and head home
-        // rather than force-loading chunks or teleporting.
-        if (homePos != null
-                && npc.blockPosition().distSqr(homePos) > HOME_ARRIVE_SQR) {
-            navigateTo(homePos, 0.76D);
-        } else {
+    private boolean moveToAnchor(
+            ServerLevel level,
+            SpecialNpcSavedData.Anchor anchor,
+            double speed
+    ) {
+        if (!anchor.dimension().equals(level.dimension())) {
             npc.getNavigation().stop();
+            return false;
         }
+
+        if (isAtAnchor(level, anchor)) {
+            npc.getNavigation().stop();
+            npc.setSprinting(false);
+            npc.setYRot(anchor.yaw());
+            npc.setYHeadRot(anchor.yaw());
+            npc.setYBodyRot(anchor.yaw());
+            return true;
+        }
+
+        navigateTo(anchor.pos(), speed);
+        return false;
+    }
+
+    private boolean isAtAnchor(
+            ServerLevel level,
+            SpecialNpcSavedData.Anchor anchor
+    ) {
+        return anchor.dimension().equals(level.dimension())
+                && npc.blockPosition().distSqr(anchor.pos())
+                <= ANCHOR_ARRIVE_SQR;
+    }
+
+    private void faceAnchor(@Nullable SpecialNpcSavedData.Anchor anchor) {
+        if (anchor == null) {
+            return;
+        }
+
+        npc.setYRot(anchor.yaw());
+        npc.setYHeadRot(anchor.yaw());
+        npc.setYBodyRot(anchor.yaw());
     }
 
     private void navigateTo(BlockPos pos, double speed) {
@@ -267,76 +520,56 @@ final class NpcServiceBrain {
 
         repathCooldown = REPATH_INTERVAL;
 
-        boolean started = npc.getNavigation().moveTo(
+        npc.getNavigation().moveTo(
                 pos.getX() + 0.5D,
                 pos.getY(),
                 pos.getZ() + 0.5D,
                 speed
         );
-
-        if (!started && activeMailId < 0L) {
-            returningHome = false;
-        }
     }
 
     void release() {
-        if (npc.level() instanceof ServerLevel level
-                && activeMailId >= 0L) {
-            MailSavedData.get(level).returnToPending(
-                    activeMailId,
-                    npc.getUUID()
-            );
+        if (npc.level() instanceof ServerLevel level) {
+            MailSavedData.get(level).releaseCourier(npc.getUUID());
         }
 
-        clearActiveMail(false);
-        returningHome = false;
-    }
-
-    void setHome(BlockPos pos) {
-        homePos = pos == null ? null : pos.immutable();
-        returningHome = false;
-    }
-
-    @Nullable
-    BlockPos getHome() {
-        return homePos;
+        satchelIds.clear();
+        pickupPos = null;
+        pickedUp = false;
+        repathCooldown = 0;
+        clearVisualLetter();
     }
 
     String status() {
-        if (NpcServiceRole.fromRole(npc.getRole())
-                != NpcServiceRole.COURIER) {
+        NpcServiceRole role = NpcServiceRole.fromRole(npc.getRole());
+
+        if (role == NpcServiceRole.BANKER) {
+            return "serving the bank";
+        }
+
+        if (role != NpcServiceRole.COURIER) {
             return "inactive";
         }
 
-        if (activeMailId >= 0L) {
+        if (!satchelIds.isEmpty()) {
             return pickedUp
-                    ? "delivering letter #" + activeMailId
-                    : "collecting letter #" + activeMailId;
+                    ? "delivering " + satchelIds.size()
+                    + " letter" + (satchelIds.size() == 1 ? "" : "s")
+                    : "collecting mail";
         }
 
-        if (returningHome) {
-            return "returning to post office";
-        }
-
-        return "waiting for mail";
+        return "waiting at the post office";
     }
 
     void addSaveData(CompoundTag tag) {
-        if (homePos != null) {
-            tag.putLong("CyberNpcServiceHome", homePos.asLong());
-        }
+        // Home/work and current task ownership live in authoritative world
+        // SavedData, not inside the entity. This keeps death/respawn safe.
     }
 
     void readSaveData(CompoundTag tag) {
-        homePos = tag.contains("CyberNpcServiceHome")
-                ? BlockPos.of(tag.getLong("CyberNpcServiceHome"))
-                : null;
-
-        // MailSavedData releases old in-transit assignments on world load, so
-        // the courier also starts with a clean local task and searches again.
-        activeMailId = -1L;
+        satchelIds.clear();
+        pickupPos = null;
         pickedUp = false;
-        returningHome = false;
         searchCooldown = Math.floorMod(
                 npc.getUUID().hashCode(),
                 SEARCH_INTERVAL
@@ -351,15 +584,20 @@ final class NpcServiceBrain {
         clearVisualLetter();
     }
 
-    private void clearActiveMail(boolean returnHomeAfter) {
-        activeMailId = -1L;
+    private void releaseSatchel(ServerLevel level) {
+        MailSavedData.get(level).releaseCourier(npc.getUUID());
+        satchelIds.clear();
+        pickupPos = null;
         pickedUp = false;
-        repathCooldown = 0;
         clearVisualLetter();
-        returningHome = returnHomeAfter;
     }
 
     private void showVisualLetter() {
+        if (satchelIds.isEmpty()) {
+            clearVisualLetter();
+            return;
+        }
+
         ItemStack visual = new ItemStack(ModItems.SEALED_LETTER.get());
         npc.setItemSlot(EquipmentSlot.MAINHAND, visual);
     }
@@ -369,6 +607,50 @@ final class NpcServiceBrain {
         if (held.is(ModItems.SEALED_LETTER.get())
                 && MailItemData.getRecordId(held) < 0L) {
             npc.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+        }
+    }
+
+    @Nullable
+    private static SpecialNpcSavedData.Anchor firstNonNull(
+            @Nullable SpecialNpcSavedData.Anchor first,
+            @Nullable SpecialNpcSavedData.Anchor second
+    ) {
+        return first != null ? first : second;
+    }
+
+    private static final class DeliveryTarget {
+        private final long mailId;
+        @Nullable
+        private final BlockPos boxPos;
+        @Nullable
+        private final ServerPlayer player;
+
+        private DeliveryTarget(
+                long mailId,
+                @Nullable BlockPos boxPos,
+                @Nullable ServerPlayer player
+        ) {
+            this.mailId = mailId;
+            this.boxPos = boxPos;
+            this.player = player;
+        }
+
+        private static DeliveryTarget forBox(
+                long mailId,
+                BlockPos pos
+        ) {
+            return new DeliveryTarget(
+                    mailId,
+                    pos.immutable(),
+                    null
+            );
+        }
+
+        private static DeliveryTarget forPlayer(
+                long mailId,
+                ServerPlayer player
+        ) {
+            return new DeliveryTarget(mailId, null, player);
         }
     }
 }

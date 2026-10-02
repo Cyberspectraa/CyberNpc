@@ -186,6 +186,48 @@ public final class MailSavedData extends SavedData {
         return best;
     }
 
+    public List<MailRecord> claimPendingAt(
+            ResourceKey<Level> dimension,
+            BlockPos pickupPos,
+            UUID courierId,
+            int max
+    ) {
+        if (dimension == null
+                || pickupPos == null
+                || courierId == null
+                || max <= 0) {
+            return List.of();
+        }
+
+        List<MailRecord> claimed = records.values().stream()
+                .filter(record ->
+                        record.state() == MailState.PENDING
+                                && record.dimension().equals(dimension)
+                                && pickupPos.equals(record.pickupPos())
+                                && dropBoxes.contains(
+                                new PostalAddress(
+                                        record.dimension(),
+                                        record.pickupPos()
+                                )
+                        )
+                )
+                .sorted(Comparator.comparingLong(MailRecord::id))
+                .limit(max)
+                .toList();
+
+        if (claimed.isEmpty()) {
+            return List.of();
+        }
+
+        for (MailRecord record : claimed) {
+            record.setState(MailState.IN_TRANSIT);
+            record.setCourierId(courierId);
+        }
+
+        setDirty();
+        return claimed;
+    }
+
     public void returnToPending(long id, UUID courierId) {
         MailRecord record = records.get(id);
         if (record == null

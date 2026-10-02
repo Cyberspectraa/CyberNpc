@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.36.0
+
+### Persistent special NPC identity
+- Added a world-level Special NPC registry for Banker, Courier and future named/service NPC roles.
+- Every service NPC receives a permanent SpecialNpcId that survives entity death and respawning.
+- The live Minecraft entity UUID is no longer treated as the character's permanent identity.
+- Special NPC records persist role, display name, appearance/entity template, Home, Work and respawn state.
+- Newly spawned Banker/Courier NPCs automatically begin with Home and Work at their spawn location.
+- Special NPC world data is stored in CyberNpc SavedData and does not depend on a GUI or on the live entity remaining loaded.
+
+### Town Register
+- Added the Town Register utility item.
+- Right-click a Banker/Courier with the Town Register to select that permanent special NPC.
+- Right-click the block beside the desired standing position to set Work.
+- Sneak-right-click the block beside the desired standing position to set Home.
+- The selected NPC name is shown in the Town Register tooltip.
+- Home/Work anchors store dimension, position and facing direction.
+- The Town Register is available in the CyberNpc creative tab.
+- No custom configuration GUI is required.
+
+### Skyrim-style Home / Work routines
+- Banker now treats Work as the bank counter/service position and Home as its off-hours location.
+- Banker returns to Work during the day and Home at night, then faces the saved direction when it arrives.
+- Courier treats Work as its Post Office and Home as its off-hours location.
+- An idle daytime Courier returns to the Post Office before looking for a new route.
+- An idle nighttime Courier returns Home.
+- Special service movement remains a tiny deterministic state machine; Wild NPC AI is not added to Banker/Courier.
+
+### CyberServer special NPC respawning
+- Special NPC death no longer permanently removes Banker/Courier characters.
+- Special NPCs suppress their normal equipment death drops so respawning cannot duplicate service equipment/items.
+- Courier safely releases all in-transit mail back to authoritative postal data before its death is recorded.
+- After a 6-second respawn delay, CyberNpc resolves the actual configured CyberServer arrival/world spawn when CyberServer is installed.
+- CyberNpc calls CyberServer's real startArrival effect through a soft integration, so the same Photon beam/vanilla fallback sequence used for player arrival is reused.
+- The special NPC materializes around tick 27 of the CyberServer summon sequence, during the arrival burst rather than before the beam starts.
+- If CyberServer is absent or has no configured arrival spawn, CyberNpc falls back to the vanilla Overworld shared spawn without becoming hard-dependent on CyberServer.
+- After materializing, the special NPC is marked as returning to Work and resumes its normal role once it reaches the saved workplace.
+- Special NPCs are excluded from Wild-NPC zombie-conversion death behavior.
+
+### Physical Banker withdrawals
+- Banking remains screen-free.
+- Normal right-click with a CyberNpc coin stack deposits the held stack.
+- Sneak-right-click while holding a coin denomination withdraws as many of that denomination as the balance allows, up to one stack.
+- Empty-hand Banker interaction still shows balance and interaction instructions.
+- Withdrawals remain server-authoritative and cannot reduce a balance below zero.
+
+### Courier satchel routes
+- Courier now has a server-side satchel capacity of 9 letters.
+- Courier still claims only one route initially, walks physically to the Drop Box, then collects additional pending letters from that same Drop Box up to satchel capacity.
+- One Courier can therefore service several letters per trip instead of returning after every single delivery.
+- After pickup, Courier selects the nearest currently deliverable satchel stop.
+- Recipient Letter Boxes remain the preferred delivery target.
+- Direct player delivery only happens for online recipients in the same dimension within 48 blocks; Courier will not chase players across the map.
+- Letter Box delivery visibly swings the Courier's arm and plays a quiet postal-container sound.
+- If no satchel letter is currently deliverable, Courier returns to its Post Office and safely releases the remaining records back to the pending queue.
+- Courier routes still never force-load chunks.
+- Existing close-range breathing easter egg remains intact.
+
 ## 0.35.2
 
 ### Courier breathing easter egg

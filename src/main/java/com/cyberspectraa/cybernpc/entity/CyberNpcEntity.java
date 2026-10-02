@@ -9,6 +9,7 @@ import com.cyberspectraa.cybernpc.registry.ModEffects;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.cyberspectraa.cybernpc.registry.ModItems;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
+import com.cyberspectraa.cybernpc.service.SpecialNpcSavedData;
 import com.cyberspectraa.cybernpc.world.CyberNpcWorldClaims;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -421,6 +422,9 @@ public class CyberNpcEntity extends PathfinderMob {
     private final NpcVocalizationController vocalizations;
     private final NpcServiceBrain serviceBrain;
 
+    @Nullable
+    private UUID specialNpcId;
+
     public CyberNpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
         corralBrain = new WildNpcCorralBrain(this);
@@ -516,6 +520,20 @@ public class CyberNpcEntity extends PathfinderMob {
 
     public String getRole() {
         return entityData.get(DATA_ROLE);
+    }
+
+    @Nullable
+    public UUID getSpecialNpcId() {
+        return specialNpcId;
+    }
+
+    public void setSpecialNpcId(@Nullable UUID specialNpcId) {
+        this.specialNpcId = specialNpcId;
+    }
+
+    public boolean isSpecialServiceNpc() {
+        return NpcServiceRole.fromRole(getRole())
+                != NpcServiceRole.NONE;
     }
 
     public void setRole(String role) {
@@ -2191,6 +2209,11 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (getNpcType() != NpcType.WILD) {
             if (isAlive()) {
+                if (isSpecialServiceNpc()
+                        && level() instanceof ServerLevel serverLevel) {
+                    SpecialNpcSavedData.get(serverLevel)
+                            .ensureRegistered(this);
+                }
                 serviceBrain.tick();
             }
             return;
@@ -7104,11 +7127,14 @@ public class CyberNpcEntity extends PathfinderMob {
 
     @Override
     public void die(DamageSource source) {
-        boolean convertFromZombieKill = !level().isClientSide
+        boolean specialServiceNpc = isSpecialServiceNpc();
+
+        boolean convertFromZombieKill = !specialServiceNpc
+                && !level().isClientSide
                 && source.getEntity() instanceof Zombie
                 && getRandom().nextFloat() < ZOMBIE_KILL_CONVERSION_CHANCE;
 
-        if (convertFromZombieKill) {
+        if (convertFromZombieKill || specialServiceNpc) {
             suppressDeathLootForZombieConversion = true;
         }
 
@@ -7134,12 +7160,18 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         if (!level().isClientSide) {
-            if (source.getEntity() instanceof Player player
-                    && !player.isCreative()
-                    && !player.isSpectator()) {
-                notifySocialWitnessesOfPlayerAttack(player, true);
+            if (specialServiceNpc
+                    && level() instanceof ServerLevel serverLevel) {
+                SpecialNpcSavedData.get(serverLevel)
+                        .scheduleRespawn(this);
+            } else {
+                if (source.getEntity() instanceof Player player
+                        && !player.isCreative()
+                        && !player.isSpectator()) {
+                    notifySocialWitnessesOfPlayerAttack(player, true);
+                }
+                handlePartyDeath();
             }
-            handlePartyDeath();
         }
 
         IronSpellsCompat.clearCasterState(this);
@@ -7163,8 +7195,61 @@ public class CyberNpcEntity extends PathfinderMob {
             if (serviceRole == NpcServiceRole.BANKER
                     && level() instanceof ServerLevel serverLevel) {
                 ItemStack held = player.getItemInHand(hand);
+                long unitValue = CurrencyValue.unitValueOf(held);
                 long deposit = CurrencyValue.valueOf(held);
                 BankSavedData bank = BankSavedData.get(serverLevel);
+
+                if (unitValue > 0L && player.isShiftKeyDown()) {
+                    long balance = bank.getBalance(player.getUUID());
+                    int count = (int) Math.min(
+                            64L,
+                            balance / unitValue
+                    );
+
+                    if (count <= 0) {
+                        player.sendSystemMessage(Component.literal(
+                                "You do not have enough balance for that coin denomination."
+                        ));
+                        return InteractionResult.CONSUME;
+                    }
+
+                    long withdrawn = unitValue * count;
+                    if (!bank.withdraw(player.getUUID(), withdrawn)) {
+                        return InteractionResult.CONSUME;
+                    }
+
+                    ItemStack payout = new ItemStack(
+                            held.getItem(),
+                            count
+                    );
+
+                    if (!player.getInventory().add(payout)) {
+                        player.drop(payout, false);
+                    }
+
+                    level().playSound(
+                            null,
+                            blockPosition(),
+                            SoundEvents.EXPERIENCE_ORB_PICKUP,
+                            SoundSource.NEUTRAL,
+                            0.55F,
+                            0.92F
+                    );
+
+                    player.sendSystemMessage(Component.literal(
+                            "Withdrew "
+                                    + count + " "
+                                    + held.getHoverName().getString()
+                                    + (count == 1 ? "" : "s")
+                                    + " (" + CurrencyValue.format(withdrawn)
+                                    + " credits). Balance: "
+                                    + CurrencyValue.format(
+                                    bank.getBalance(player.getUUID())
+                            ) + " credits."
+                    ));
+
+                    return InteractionResult.CONSUME;
+                }
 
                 if (deposit > 0L) {
                     if (!player.getAbilities().instabuild) {
@@ -7203,7 +7288,7 @@ public class CyberNpcEntity extends PathfinderMob {
                                     + " credits."
                     ));
                     player.sendSystemMessage(Component.literal(
-                            "Hold CyberNpc coins and right-click the Banker to deposit them."
+                            "Right-click with coins to deposit. Sneak-right-click with a coin type to withdraw up to a stack of that denomination."
                     ));
                 }
 
@@ -7247,6 +7332,10 @@ public class CyberNpcEntity extends PathfinderMob {
         tag.putString("CyberNpcRole", getRole());
         tag.putBoolean("CyberNpcCanWander", canWander());
         tag.putString("CyberNpcType", getNpcType().serializedName());
+
+        if (specialNpcId != null) {
+            tag.putUUID("CyberNpcSpecialId", specialNpcId);
+        }
 
         ensureAppearance();
         tag.putString(
@@ -7311,6 +7400,10 @@ public class CyberNpcEntity extends PathfinderMob {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
+
+        specialNpcId = tag.hasUUID("CyberNpcSpecialId")
+                ? tag.getUUID("CyberNpcSpecialId")
+                : null;
 
         if (tag.contains("CyberNpcRole")) {
             setRole(tag.getString("CyberNpcRole"));
