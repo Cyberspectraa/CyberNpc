@@ -266,6 +266,20 @@ public final class MailSavedData extends SavedData {
         return dropBoxes.contains(new PostalAddress(dimension, pos));
     }
 
+    public int pendingCountAt(ResourceKey<Level> dimension, BlockPos pos) {
+        int count = 0;
+
+        for (MailRecord record : records.values()) {
+            if (record.state() == MailState.PENDING
+                    && record.dimension().equals(dimension)
+                    && pos.equals(record.pickupPos())) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
     public List<MailRecord> removePendingAt(
             ResourceKey<Level> dimension,
             BlockPos pos
@@ -310,6 +324,28 @@ public final class MailSavedData extends SavedData {
         if (existing != null
                 && existing.dimension().equals(dimension)
                 && existing.pos().equals(pos)) {
+            letterBoxes.remove(owner);
+            requeueBoxedMail(owner);
+            setDirty();
+        }
+    }
+
+    public void unregisterLetterBoxAt(
+            ResourceKey<Level> dimension,
+            BlockPos pos
+    ) {
+        UUID owner = null;
+
+        for (Map.Entry<UUID, PostalAddress> entry : letterBoxes.entrySet()) {
+            PostalAddress address = entry.getValue();
+            if (address.dimension().equals(dimension)
+                    && address.pos().equals(pos)) {
+                owner = entry.getKey();
+                break;
+            }
+        }
+
+        if (owner != null) {
             letterBoxes.remove(owner);
             requeueBoxedMail(owner);
             setDirty();
