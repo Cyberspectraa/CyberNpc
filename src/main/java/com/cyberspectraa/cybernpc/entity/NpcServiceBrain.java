@@ -5,12 +5,15 @@ import com.cyberspectraa.cybernpc.mail.MailRecord;
 import com.cyberspectraa.cybernpc.mail.MailSavedData;
 import com.cyberspectraa.cybernpc.mail.MailState;
 import com.cyberspectraa.cybernpc.registry.ModItems;
+import com.cyberspectraa.cybernpc.registry.ModSounds;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
@@ -24,6 +27,15 @@ final class NpcServiceBrain {
     private static final double HOME_ARRIVE_SQR = 4.0D * 4.0D;
     private static final int LETTER_BOX_CAPACITY = 9;
 
+    // Craig-the-mailman style proximity easter egg. The sound is intentionally
+    // subtle, only checks every half second, and requires the player to leave
+    // the outer radius before it can arm again.
+    private static final int BREATH_CHECK_INTERVAL = 10;
+    private static final int BREATH_REARM_COOLDOWN_TICKS = 160;
+    private static final double BREATH_TRIGGER_DISTANCE = 2.6D;
+    private static final double BREATH_RESET_DISTANCE = 3.6D;
+    private static final float BREATH_VOLUME = 0.42F;
+
     private final CyberNpcEntity npc;
 
     @Nullable
@@ -34,6 +46,9 @@ final class NpcServiceBrain {
     private boolean returningHome;
     private int searchCooldown;
     private int repathCooldown;
+    private int breathCheckCooldown;
+    private int breathRearmCooldown;
+    private boolean breathPlayerClose;
 
     NpcServiceBrain(CyberNpcEntity npc) {
         this.npc = npc;
@@ -48,8 +63,13 @@ final class NpcServiceBrain {
         NpcServiceRole role = NpcServiceRole.fromRole(npc.getRole());
         if (role != NpcServiceRole.COURIER) {
             clearVisualLetter();
+            breathPlayerClose = false;
+            breathCheckCooldown = 0;
+            breathRearmCooldown = 0;
             return;
         }
+
+        tickBreathingEasterEgg(level);
 
         if (homePos == null) {
             homePos = npc.blockPosition().immutable();
@@ -105,6 +125,52 @@ final class NpcServiceBrain {
         pickedUp = false;
         returningHome = false;
         repathCooldown = 0;
+    }
+
+    private void tickBreathingEasterEgg(ServerLevel level) {
+        if (breathRearmCooldown > 0) {
+            breathRearmCooldown--;
+        }
+
+        if (breathCheckCooldown > 0) {
+            breathCheckCooldown--;
+            return;
+        }
+
+        breathCheckCooldown = BREATH_CHECK_INTERVAL;
+
+        Player nearby = level.getNearestPlayer(
+                npc,
+                BREATH_RESET_DISTANCE
+        );
+
+        if (nearby == null) {
+            breathPlayerClose = false;
+            return;
+        }
+
+        double distanceSqr = npc.distanceToSqr(nearby);
+
+        if (distanceSqr <= BREATH_TRIGGER_DISTANCE
+                * BREATH_TRIGGER_DISTANCE) {
+            if (!breathPlayerClose && breathRearmCooldown <= 0) {
+                level.playSound(
+                        null,
+                        npc.getX(),
+                        npc.getY() + 1.1D,
+                        npc.getZ(),
+                        ModSounds.COURIER_BREATHING.get(),
+                        SoundSource.NEUTRAL,
+                        BREATH_VOLUME,
+                        1.0F
+                );
+
+                breathRearmCooldown =
+                        BREATH_REARM_COOLDOWN_TICKS;
+            }
+
+            breathPlayerClose = true;
+        }
     }
 
     private void tickActiveMail(ServerLevel level) {
@@ -276,6 +342,12 @@ final class NpcServiceBrain {
                 SEARCH_INTERVAL
         );
         repathCooldown = 0;
+        breathCheckCooldown = Math.floorMod(
+                npc.getUUID().hashCode(),
+                BREATH_CHECK_INTERVAL
+        );
+        breathRearmCooldown = 0;
+        breathPlayerClose = false;
         clearVisualLetter();
     }
 
