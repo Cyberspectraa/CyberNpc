@@ -25,5 +25,7 @@
   "subtitles.cybernpc.courier_breathing": "Courier breathes heavily",
   "item.cybernpc.town_register": "Town Register",
   "item.cybernpc.guard_npc_spawn_egg": "Guard NPC Spawn Egg",
-  "item.cybernpc.special_npc_removal_stick": "Special NPC Removal Stick"
+  "item.cybernpc.special_npc_removal_stick": "Special NPC Removal Stick",
+  "block.cybernpc.guard_post": "Guard Post",
+  "item.cybernpc.guard_post": "Guard Post Marker"
 }
