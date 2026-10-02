@@ -552,15 +552,90 @@ public class CyberNpcEntity extends PathfinderMob {
 
         entityData.set(DATA_ROLE, resolved);
 
+        if (getNavigation() instanceof GroundPathNavigation groundNavigation) {
+            boolean guard = serviceRole == NpcServiceRole.GUARD;
+            groundNavigation.setCanOpenDoors(!guard);
+            groundNavigation.setCanPassDoors(!guard);
+        }
 
         if (serviceRole != NpcServiceRole.NONE) {
             setCanWander(false);
             setPersistenceRequired();
 
+            if (serviceRole == NpcServiceRole.GUARD) {
+                ensureGuardEquipment();
+            }
+
             if (getCustomName() == null) {
                 setCustomName(Component.literal(serviceRole.displayName()));
                 setCustomNameVisible(true);
             }
+        }
+    }
+
+    InteractionResult useServiceBlock(BlockPos pos) {
+        return playerInteractions.rightClickBlock(pos);
+    }
+
+    void receiveGuardAlert(
+            @Nullable LivingEntity threat,
+            BlockPos bellPos
+    ) {
+        serviceBrain.receiveGuardAlert(threat, bellPos);
+    }
+
+    void ensureGuardEquipment() {
+        if (NpcServiceRole.fromRole(getRole()) != NpcServiceRole.GUARD) {
+            return;
+        }
+
+        if (getMainHandItem().isEmpty()) {
+            setItemSlot(
+                    EquipmentSlot.MAINHAND,
+                    new ItemStack(Items.IRON_SWORD)
+            );
+        }
+
+        if (getOffhandItem().isEmpty()) {
+            setItemSlot(
+                    EquipmentSlot.OFFHAND,
+                    new ItemStack(Items.SHIELD)
+            );
+        }
+
+        if (getItemBySlot(EquipmentSlot.HEAD).isEmpty()) {
+            setItemSlot(
+                    EquipmentSlot.HEAD,
+                    new ItemStack(Items.IRON_HELMET)
+            );
+        }
+        if (getItemBySlot(EquipmentSlot.CHEST).isEmpty()) {
+            setItemSlot(
+                    EquipmentSlot.CHEST,
+                    new ItemStack(Items.IRON_CHESTPLATE)
+            );
+        }
+        if (getItemBySlot(EquipmentSlot.LEGS).isEmpty()) {
+            setItemSlot(
+                    EquipmentSlot.LEGS,
+                    new ItemStack(Items.IRON_LEGGINGS)
+            );
+        }
+        if (getItemBySlot(EquipmentSlot.FEET).isEmpty()) {
+            setItemSlot(
+                    EquipmentSlot.FEET,
+                    new ItemStack(Items.IRON_BOOTS)
+            );
+        }
+
+        var maxHealth = getAttribute(Attributes.MAX_HEALTH);
+        if (maxHealth != null && maxHealth.getBaseValue() < 24.0D) {
+            maxHealth.setBaseValue(24.0D);
+        }
+
+        var attack = getAttribute(Attributes.ATTACK_DAMAGE);
+        if (attack != null && attack.getBaseValue() < 3.0D) {
+            attack.setBaseValue(3.0D);
         }
     }
 
