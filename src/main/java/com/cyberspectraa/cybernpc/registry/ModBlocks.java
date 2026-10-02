@@ -3,6 +3,7 @@ package com.cyberspectraa.cybernpc.registry;
 import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.block.DropBoxBlock;
 import com.cyberspectraa.cybernpc.block.LetterBoxBlock;
+import com.cyberspectraa.cybernpc.block.GuardPostBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -32,6 +33,16 @@ public final class ModBlocks {
                                     .mapColor(MapColor.WOOD)
                                     .strength(2.0F, 3.0F)
                                     .sound(SoundType.WOOD)
+                                    .noOcclusion()
+                    ));
+
+    public static final RegistryObject<Block> GUARD_POST =
+            BLOCKS.register("guard_post", () ->
+                    new GuardPostBlock(
+                            BlockBehaviour.Properties.of()
+                                    .mapColor(MapColor.NONE)
+                                    .strength(0.2F)
+                                    .noCollission()
                                     .noOcclusion()
                     ));
 
