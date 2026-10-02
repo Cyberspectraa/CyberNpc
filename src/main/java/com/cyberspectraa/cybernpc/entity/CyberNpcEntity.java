@@ -154,15 +154,21 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final double HORSE_SPRINT_NAV_SPEED = 1.45D;
     private static final double HORSE_SPRINT_DISTANCE_SQR = 100.0D;
 
-    private static final int EXPLORER_DISCOVERY_SCAN_INTERVAL = 40;
-    private static final int EXPLORER_MIN_REPORT_TICKS = 2400;
-    private static final int EXPLORER_MAX_EXPEDITION_TICKS = 9000;
-    private static final int EXPLORER_WAYPOINT_MIN_DISTANCE = 96;
-    private static final int EXPLORER_WAYPOINT_RANDOM_DISTANCE = 96;
-    private static final double EXPLORER_WAYPOINT_REACHED_SQR = 100.0D;
-    private static final double EXPLORER_HOME_REACHED_SQR = 12.0D * 12.0D;
-    private static final double EXPLORER_REPORT_RADIUS = 14.0D;
-    private static final double EXPLORER_LOCAL_NAV_STEP = 24.0D;
+    private static final int RANGER_PATROL_MIN_RADIUS = 20;
+    private static final int RANGER_PATROL_RANDOM_RADIUS = 14;
+    private static final double RANGER_PATROL_REACHED_SQR = 36.0D;
+    private static final double RANGER_HOME_RETURN_DISTANCE_SQR = 48.0D * 48.0D;
+    private static final double RANGER_SLEEP_RETURN_DISTANCE_SQR = 12.0D * 12.0D;
+    private static final int RANGER_PATROL_PAUSE_MIN_TICKS = 80;
+    private static final int RANGER_PATROL_PAUSE_RANDOM_TICKS = 120;
+    private static final double RANGER_LOCAL_NAV_STEP = 18.0D;
+    private static final int RANGER_VILLAGE_CHECK_INTERVAL = 200;
+
+    // Low-priority world scans are deliberately staggered between NPCs so a
+    // naturally populated village does not make every resident perform the
+    // same expensive query on the same server tick.
+    private static final int BACKGROUND_CLAIM_SCAN_INTERVAL = 100;
+    private static final int DEBUG_SYNC_INTERVAL = 20;
 
     private static final int CHAT_REACTION_COOLDOWN_TICKS = 40;
 
@@ -334,20 +340,18 @@ public class CyberNpcEntity extends PathfinderMob {
     private int horseRemountCooldown;
     private int horseRepathCooldown;
 
-    private final NpcDiscoveryMemory discoveryMemory =
-            new NpcDiscoveryMemory();
+    @Nullable
+    private BlockPos rangerHomePos;
 
     @Nullable
-    private BlockPos explorerHomePos;
+    private BlockPos rangerPatrolTarget;
 
-    @Nullable
-    private BlockPos explorerWaypoint;
-
-    private boolean explorerReturningHome;
-    private int explorerExpeditionTicks;
-    private int explorerDiscoveryScanCooldown;
-    private int explorerUnreportedDiscoveries;
-    private double explorerHeadingRadians = Double.NaN;
+    private double rangerPatrolAngle = Double.NaN;
+    private int rangerPatrolPauseTicks;
+    private int rangerVillageCheckCooldown;
+    private boolean rangerHomeIsVillage;
+    private boolean rangerReturningHomeForSleep;
+    private int backgroundClaimScanCooldown;
 
     private boolean chainmailMigrationChecked;
 
@@ -693,32 +697,24 @@ public class CyberNpcEntity extends PathfinderMob {
         return entityData.get(DATA_DEBUG_RELATIONSHIPS);
     }
 
-    public String getDebugDiscoveries() {
-        return discoveryMemory.debugSummary();
-    }
-
-    public String getDebugExplorerState() {
-        if (getWildClass() != WildNpcClass.HORSE_TAMER) {
-            return "not explorer";
+    public String getDebugRangerState() {
+        if (getWildClass() != WildNpcClass.RANGER) {
+            return "not ranger";
         }
 
-        if (explorerReturningHome) {
-            return "returning home"
-                    + (explorerUnreportedDiscoveries > 0
-                    ? " • " + explorerUnreportedDiscoveries + " new"
-                    : "");
+        if (rangerReturningHomeForSleep) {
+            return "returning home";
         }
 
         if (getVehicle() instanceof AbstractHorse) {
-            return "exploring"
-                    + (explorerUnreportedDiscoveries > 0
-                    ? " • " + explorerUnreportedDiscoveries + " new"
-                    : "");
+            return rangerPatrolPauseTicks > 0
+                    ? "watching perimeter"
+                    : "patrolling perimeter";
         }
 
-        return explorerUnreportedDiscoveries > 0
-                ? "home • " + explorerUnreportedDiscoveries + " unreported"
-                : "ready";
+        return horseTargetId != null
+                ? "going to horse"
+                : "local patrol";
     }
 
     public int getPlayerReputation(UUID playerId) {
@@ -1182,7 +1178,7 @@ public class CyberNpcEntity extends PathfinderMob {
             case KNIGHT -> initializeKnightLoadout();
             case ROGUE -> initializeRogueLoadout();
             case BERSERKER -> initializeBerserkerLoadout();
-            case HORSE_TAMER -> initializeHorseTamerLoadout();
+            case RANGER -> initializeRangerLoadout();
             case MAGE -> initializeMageLoadout();
             case CLERIC -> initializeClericLoadout();
             case SPELLBLADE -> initializeSpellbladeLoadout();
@@ -1414,7 +1410,7 @@ public class CyberNpcEntity extends PathfinderMob {
         }
     }
 
-    private void initializeHorseTamerLoadout() {
+    private void initializeRangerLoadout() {
         if (!BetterHorsesCompat.isLoaded()) {
             setWildClass(WildNpcClass.CLASSLESS);
             classLoadoutInitialized = false;
@@ -1750,7 +1746,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 armor = 0.5D;
                 attackDamage = 4.0D;
             }
-            case HORSE_TAMER -> {
+            case RANGER -> {
                 maxHealth = 22.0D;
                 movementSpeed = 0.440D;
                 armor = 0.5D;
@@ -2095,17 +2091,17 @@ public class CyberNpcEntity extends PathfinderMob {
         return sleepBrain.getClaimedBed();
     }
 
-    boolean shouldExplorerReturnBeforeSleeping() {
-        if (getWildClass() != WildNpcClass.HORSE_TAMER
+    boolean shouldRangerReturnBeforeSleeping() {
+        if (getWildClass() != WildNpcClass.RANGER
                 || !(getVehicle() instanceof AbstractHorse)
-                || explorerHomePos == null
-                || blockPosition().distSqr(explorerHomePos)
-                <= EXPLORER_HOME_REACHED_SQR) {
+                || rangerHomePos == null
+                || blockPosition().distSqr(rangerHomePos)
+                <= RANGER_SLEEP_RETURN_DISTANCE_SQR) {
             return false;
         }
 
-        explorerReturningHome = true;
-        explorerWaypoint = null;
+        rangerReturningHomeForSleep = true;
+        rangerPatrolTarget = rangerHomePos;
         return true;
     }
 
@@ -2131,11 +2127,12 @@ public class CyberNpcEntity extends PathfinderMob {
             setHunger(MAX_HUNGER);
             ensureWildProfile();
 
-            if (getWildClass() == WildNpcClass.HORSE_TAMER
-                    && explorerHomePos == null) {
-                explorerHomePos = blockPosition().immutable();
+            if (getWildClass() == WildNpcClass.RANGER
+                    && rangerHomePos == null) {
+                rangerHomePos = blockPosition().immutable();
             }
 
+            initializeStaggeredAiTimers();
             stowWeapons();
 
             if (spawnType == MobSpawnType.NATURAL
@@ -2190,9 +2187,15 @@ public class CyberNpcEntity extends PathfinderMob {
             horseRemountCooldown--;
         }
 
-        // Pen ownership is discovered independently from hunger so nearby pens
-        // are reserved immediately instead of only when livestock work starts.
-        corralBrain.tickClaimDiscovery();
+        // Claim discovery is useful but does not need to be a per-tick query.
+        // Staggering it is important once many naturally spawned NPCs share a
+        // settlement.
+        if (backgroundClaimScanCooldown > 0) {
+            backgroundClaimScanCooldown--;
+        } else {
+            backgroundClaimScanCooldown = BACKGROUND_CLAIM_SCAN_INTERVAL;
+            corralBrain.tickClaimDiscovery();
+        }
 
         tickMeleeSwingAnimation();
         tickSpellCastingVisual();
@@ -2262,7 +2265,7 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private boolean tickHorseUse() {
-        if (getWildClass() != WildNpcClass.HORSE_TAMER
+        if (getWildClass() != WildNpcClass.RANGER
                 || !BetterHorsesCompat.isLoaded()) {
             if (getVehicle() instanceof AbstractHorse horse) {
                 stopUsingHorse(horse);
@@ -2312,7 +2315,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
             horseSearchCooldown = HORSE_SEARCH_INTERVAL;
 
-            // Prefer the Horse Tamer's existing horse before looking for a new
+            // Prefer the Ranger's existing horse before looking for a new
             // wild horse. Better Horses ownership persists independently of
             // CyberNpc's temporary coordination claim.
             target = level().getEntitiesOfClass(
@@ -2368,22 +2371,19 @@ public class CyberNpcEntity extends PathfinderMob {
             return false;
         }
 
-        if (explorerHomePos == null) {
+        if (rangerHomePos == null) {
             BlockPos claimedBed = getClaimedBedPos();
-            explorerHomePos = claimedBed != null
+            rangerHomePos = claimedBed != null
                     ? claimedBed.immutable()
                     : blockPosition().immutable();
         }
 
-        horseRideOrigin = explorerHomePos;
+        horseRideOrigin = rangerHomePos;
         horseRideTicks = HORSE_RIDE_MIN_TICKS
                 + getRandom().nextInt(HORSE_RIDE_RANDOM_TICKS + 1);
         horseRepathCooldown = 0;
-
-        if (!explorerReturningHome && explorerExpeditionTicks <= 0) {
-            explorerWaypoint = null;
-            explorerHeadingRadians = Double.NaN;
-        }
+        rangerPatrolTarget = null;
+        rangerPatrolPauseTicks = 0;
 
         showReaction(NpcReactionIcon.MOUNT, 60);
         return true;
@@ -2549,105 +2549,133 @@ public class CyberNpcEntity extends PathfinderMob {
             return true;
         }
 
-        return tickHorseExplorerTravel(horse);
+        return tickRangerPatrol(horse);
     }
 
-    private boolean tickHorseExplorerTravel(AbstractHorse horse) {
+    private boolean tickRangerPatrol(AbstractHorse horse) {
         if (!(level() instanceof ServerLevel serverLevel)) {
             return true;
         }
 
-        explorerExpeditionTicks++;
-
         BlockPos claimedBed = getClaimedBedPos();
         if (claimedBed != null) {
-            explorerHomePos = claimedBed.immutable();
-        } else if (explorerHomePos == null) {
-            explorerHomePos = blockPosition().immutable();
+            rangerHomePos = claimedBed.immutable();
+        } else if (rangerHomePos == null) {
+            rangerHomePos = blockPosition().immutable();
         }
 
-        if (explorerDiscoveryScanCooldown > 0) {
-            explorerDiscoveryScanCooldown--;
+        if (rangerVillageCheckCooldown > 0) {
+            rangerVillageCheckCooldown--;
         } else {
-            explorerDiscoveryScanCooldown =
-                    EXPLORER_DISCOVERY_SCAN_INTERVAL;
-            scanExplorerDiscoveries(serverLevel, horse.blockPosition());
+            rangerVillageCheckCooldown = RANGER_VILLAGE_CHECK_INTERVAL;
+            rangerHomeIsVillage = rangerHomePos != null
+                    && serverLevel.isVillage(rangerHomePos);
+
+            // If the Ranger was generated just outside a village, adopt the
+            // first village position it actually reaches as its local anchor.
+            if (!rangerHomeIsVillage
+                    && serverLevel.isVillage(horse.blockPosition())) {
+                rangerHomePos = horse.blockPosition().immutable();
+                rangerHomeIsVillage = true;
+                rangerPatrolTarget = null;
+            }
         }
 
-        BlockPos home = explorerHomePos;
-        long dayTime = serverLevel.getDayTime() % 24000L;
-        boolean evening = dayTime >= 11200L && dayTime <= 23000L;
-
-        if (!explorerReturningHome
-                && home != null
-                && (
-                (explorerUnreportedDiscoveries >= 2
-                        && explorerExpeditionTicks >= EXPLORER_MIN_REPORT_TICKS)
-                        || explorerExpeditionTicks
-                        >= EXPLORER_MAX_EXPEDITION_TICKS
-                        || getHunger() <= 14
-                        || (evening
-                        && horse.blockPosition().distSqr(home) > 900.0D)
-        )) {
-            explorerReturningHome = true;
-            explorerWaypoint = null;
+        if (rangerHomePos == null) {
+            return true;
         }
 
-        if (explorerReturningHome && home != null) {
-            if (horse.blockPosition().distSqr(home)
-                    <= EXPLORER_HOME_REACHED_SQR) {
-                reportExplorerDiscoveries();
-                explorerReturningHome = false;
-                explorerExpeditionTicks = 0;
-                explorerWaypoint = null;
-                explorerHeadingRadians = Double.NaN;
+        if (rangerReturningHomeForSleep) {
+            if (horse.blockPosition().distSqr(rangerHomePos)
+                    <= RANGER_SLEEP_RETURN_DISTANCE_SQR) {
+                rangerReturningHomeForSleep = false;
+                rangerPatrolTarget = null;
                 stopUsingHorse(horse);
                 return false;
             }
 
-            navigateExplorerToward(horse, home, true);
+            navigateRangerToward(horse, rangerHomePos, true);
             return true;
         }
 
-        if (explorerWaypoint == null
-                || horizontalDistanceSqr(
-                horse.blockPosition(),
-                explorerWaypoint
-        ) <= EXPLORER_WAYPOINT_REACHED_SQR) {
-            chooseNextExplorerWaypoint(horse.blockPosition());
+        if (horse.blockPosition().distSqr(rangerHomePos)
+                > RANGER_HOME_RETURN_DISTANCE_SQR) {
+            rangerPatrolTarget = rangerHomePos;
+            navigateRangerToward(horse, rangerHomePos, true);
+            return true;
         }
 
-        if (explorerWaypoint != null) {
-            navigateExplorerToward(horse, explorerWaypoint, true);
-        } else {
+        if (rangerPatrolPauseTicks > 0) {
+            rangerPatrolPauseTicks--;
+            horse.getNavigation().stop();
             horse.setSprinting(false);
+
+            double lookAngle = rangerPatrolAngle
+                    + (rangerPatrolPauseTicks % 40 < 20 ? 0.55D : -0.55D);
+            getLookControl().setLookAt(
+                    horse.getX() + Math.cos(lookAngle) * 10.0D,
+                    horse.getEyeY(),
+                    horse.getZ() + Math.sin(lookAngle) * 10.0D,
+                    14.0F,
+                    10.0F
+            );
+            return true;
+        }
+
+        if (rangerPatrolTarget != null
+                && horizontalDistanceSqr(
+                horse.blockPosition(),
+                rangerPatrolTarget
+        ) <= RANGER_PATROL_REACHED_SQR) {
+            rangerPatrolTarget = null;
+            rangerPatrolPauseTicks = RANGER_PATROL_PAUSE_MIN_TICKS
+                    + getRandom().nextInt(
+                    RANGER_PATROL_PAUSE_RANDOM_TICKS + 1
+            );
+            horse.getNavigation().stop();
+            horse.setSprinting(false);
+            return true;
+        }
+
+        if (rangerPatrolTarget == null) {
+            chooseNextRangerPatrolPoint();
+        }
+
+        if (rangerPatrolTarget != null) {
+            navigateRangerToward(horse, rangerPatrolTarget, false);
         }
 
         return true;
     }
 
-    private void chooseNextExplorerWaypoint(BlockPos from) {
-        if (Double.isNaN(explorerHeadingRadians)
-                || getRandom().nextFloat() < 0.28F) {
-            explorerHeadingRadians =
-                    getRandom().nextDouble() * Math.PI * 2.0D;
-        } else {
-            explorerHeadingRadians +=
-                    (getRandom().nextDouble() - 0.5D) * 0.85D;
+    private void chooseNextRangerPatrolPoint() {
+        if (rangerHomePos == null) {
+            return;
         }
 
-        int distance = EXPLORER_WAYPOINT_MIN_DISTANCE
-                + getRandom().nextInt(
-                EXPLORER_WAYPOINT_RANDOM_DISTANCE + 1
-        );
+        if (Double.isNaN(rangerPatrolAngle)) {
+            rangerPatrolAngle = getRandom().nextDouble()
+                    * Math.PI * 2.0D;
+        } else {
+            // Walk the perimeter in broad arcs instead of choosing random
+            // points all over the village interior.
+            rangerPatrolAngle += 0.85D
+                    + getRandom().nextDouble() * 0.70D;
+        }
 
-        int dx = Mth.floor(Math.cos(explorerHeadingRadians) * distance);
-        int dz = Mth.floor(Math.sin(explorerHeadingRadians) * distance);
+        int baseRadius = rangerHomeIsVillage
+                ? RANGER_PATROL_MIN_RADIUS + 8
+                : RANGER_PATROL_MIN_RADIUS;
+        int radius = baseRadius
+                + getRandom().nextInt(RANGER_PATROL_RANDOM_RADIUS + 1);
 
-        explorerWaypoint = from.offset(dx, 0, dz).immutable();
+        int dx = Mth.floor(Math.cos(rangerPatrolAngle) * radius);
+        int dz = Mth.floor(Math.sin(rangerPatrolAngle) * radius);
+
+        rangerPatrolTarget = rangerHomePos.offset(dx, 0, dz).immutable();
     }
 
-    private void navigateExplorerToward(
+    private void navigateRangerToward(
             AbstractHorse horse,
             BlockPos destination,
             boolean sprint
@@ -2666,7 +2694,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         Vec3 direction = delta.normalize();
         double step = Math.min(
-                EXPLORER_LOCAL_NAV_STEP,
+                RANGER_LOCAL_NAV_STEP,
                 Math.sqrt(delta.lengthSqr())
         );
 
@@ -2686,83 +2714,10 @@ public class CyberNpcEntity extends PathfinderMob {
                         : HORSE_NORMAL_NAV_SPEED
         );
 
-        if (!pathStarted && !explorerReturningHome) {
-            explorerWaypoint = null;
-            explorerHeadingRadians +=
-                    0.9D + getRandom().nextDouble() * 0.8D;
-        }
-    }
-
-    private void scanExplorerDiscoveries(
-            ServerLevel serverLevel,
-            BlockPos pos
-    ) {
-        BlockPos home = explorerHomePos;
-        boolean awayFromHome = home == null
-                || horizontalDistanceSqr(home, pos) > 32.0D * 32.0D;
-
-        String biomeId = serverLevel.getBiome(pos)
-                .unwrapKey()
-                .map(key -> key.location().toString())
-                .orElse("minecraft:unknown");
-
-        if (discoveryMemory.rememberBiome(biomeId, pos)
-                && awayFromHome) {
-            explorerUnreportedDiscoveries++;
-            showReaction(NpcReactionIcon.THINKING, 45);
-        }
-
-        if (serverLevel.isVillage(pos)
-                && discoveryMemory.rememberVillage(pos)
-                && awayFromHome) {
-            explorerUnreportedDiscoveries++;
-            showReaction(NpcReactionIcon.SURPRISED, 55);
-        }
-    }
-
-    private void reportExplorerDiscoveries() {
-        if (explorerUnreportedDiscoveries <= 0) {
-            return;
-        }
-
-        List<CyberNpcEntity> listeners = level().getEntitiesOfClass(
-                        CyberNpcEntity.class,
-                        getBoundingBox().inflate(EXPLORER_REPORT_RADIUS),
-                        other -> other != this
-                                && other.isAlive()
-                                && other.getNpcType() == NpcType.WILD
-                ).stream()
-                .sorted(Comparator.comparingDouble(this::distanceToSqr))
-                .toList();
-
-        CyberNpcEntity conversationPartner = null;
-        int totalLearned = 0;
-
-        for (CyberNpcEntity listener : listeners) {
-            int learned = discoveryMemory.shareTo(
-                    listener.discoveryMemory
-            );
-
-            if (learned > 0) {
-                totalLearned += learned;
-                listener.showReaction(NpcReactionIcon.THINKING, 55);
-
-                if (conversationPartner == null) {
-                    conversationPartner = listener;
-                }
-            }
-        }
-
-        if (totalLearned > 0) {
-            explorerUnreportedDiscoveries = 0;
-            showReaction(NpcReactionIcon.GREETING, 70);
-
-            if (conversationPartner != null) {
-                startSocialConversationHold(
-                        conversationPartner,
-                        100
-                );
-            }
+        if (!pathStarted && !sprint) {
+            rangerPatrolTarget = null;
+            rangerPatrolAngle += 0.9D
+                    + getRandom().nextDouble() * 0.5D;
         }
     }
 
@@ -2775,67 +2730,44 @@ public class CyberNpcEntity extends PathfinderMob {
         return dx * dx + dz * dz;
     }
 
-    private void tickPlayerLikeSwimming() {
-        if (isPassenger() || isSleeping()) {
-            if (isSwimming()) {
-                setSwimming(false);
-            }
-            return;
-        }
+    private void initializeStaggeredAiTimers() {
+        int hash = getUUID().hashCode();
 
-        if (!isInWaterOrBubble()) {
-            if (isSwimming()) {
-                setSwimming(false);
-            }
-            return;
-        }
-
-        Path path = getNavigation().getPath();
-        boolean movingToGoal =
-                path != null && !path.isDone() && path.getTarget() != null;
-
-        boolean underwater = isUnderWater();
-        setSwimming(underwater && movingToGoal);
-
-        Vec3 movement = getDeltaMovement();
-        double upward = underwater ? 0.035D : 0.012D;
-
-        if (underwater
-                && getAirSupply() < getMaxAirSupply() / 2) {
-            upward = 0.085D;
-        }
-
-        if (movingToGoal) {
-            Vec3 target = Vec3.atCenterOf(path.getTarget());
-            Vec3 horizontal = new Vec3(
-                    target.x - getX(),
-                    0.0D,
-                    target.z - getZ()
-            );
-
-            if (horizontal.lengthSqr() > 0.01D) {
-                horizontal = horizontal.normalize();
-                double push = isSprinting() ? 0.045D : 0.030D;
-                movement = movement.add(
-                        horizontal.x * push,
-                        upward,
-                        horizontal.z * push
-                );
-            } else {
-                movement = movement.add(0.0D, upward, 0.0D);
-            }
-        } else {
-            movement = movement.add(0.0D, upward, 0.0D);
-        }
-
-        setDeltaMovement(movement);
+        backgroundClaimScanCooldown = Math.floorMod(
+                hash ^ 0x4A37,
+                BACKGROUND_CLAIM_SCAN_INTERVAL
+        );
+        socialTickCooldown = Math.floorMod(
+                hash ^ 0x1B6D,
+                SOCIAL_SCAN_INTERVAL
+        );
+        horseSearchCooldown = Math.floorMod(
+                hash ^ 0x73C1,
+                HORSE_SEARCH_INTERVAL
+        );
+        huntSearchCooldown = Math.floorMod(
+                hash ^ 0x2F91,
+                HUNT_SEARCH_INTERVAL
+        );
+        groundFoodSearchCooldown = Math.floorMod(
+                hash ^ 0x55A9,
+                Math.max(1, GROUND_FOOD_SEARCH_INTERVAL)
+        );
+        cookingSearchCooldown = Math.floorMod(
+                hash ^ 0x0D4B,
+                Math.max(1, COOK_STATION_SEARCH_INTERVAL)
+        );
+        hungerDecayTimer = Math.floorMod(
+                hash ^ 0x6E23,
+                HUNGER_DECAY_TICKS
+        );
     }
 
     private boolean canUseHorse(
             AbstractHorse horse,
             boolean alreadyClaimedByThisNpc
     ) {
-        if (getWildClass() != WildNpcClass.HORSE_TAMER
+        if (getWildClass() != WildNpcClass.RANGER
                 || horse == null
                 || !horse.isAlive()
                 || horse.isBaby()
@@ -5968,7 +5900,11 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void updateDebugState() {
-        if (level().isClientSide || tickCount % 5 != 0) {
+        if (level().isClientSide
+                || Math.floorMod(
+                tickCount + getUUID().hashCode(),
+                DEBUG_SYNC_INTERVAL
+        ) != 0) {
             return;
         }
 
@@ -6198,10 +6134,12 @@ public class CyberNpcEntity extends PathfinderMob {
             return "Sleeping";
         }
         if (getVehicle() instanceof AbstractHorse horse) {
-            if (getWildClass() == WildNpcClass.HORSE_TAMER) {
-                return explorerReturningHome
-                        ? "Explorer returning home"
-                        : "Exploring on horseback";
+            if (getWildClass() == WildNpcClass.RANGER) {
+                return rangerReturningHomeForSleep
+                        ? "Ranger returning home"
+                        : (rangerPatrolPauseTicks > 0
+                        ? "Ranger watching perimeter"
+                        : "Ranger patrolling perimeter");
             }
 
             return (horse.isSprinting()
@@ -6291,15 +6229,15 @@ public class CyberNpcEntity extends PathfinderMob {
             return "It is night and this NPC is committed to reaching its claimed bed";
         }
         if (getVehicle() instanceof AbstractHorse horse) {
-            if (getWildClass() == WildNpcClass.HORSE_TAMER
-                    && explorerReturningHome) {
-                return explorerUnreportedDiscoveries > 0
-                        ? "The explorer has new places to report and is riding back home to share them"
-                        : "The current exploration trip is ending, so the rider is returning home";
+            if (getWildClass() == WildNpcClass.RANGER
+                    && rangerReturningHomeForSleep) {
+                return "Night is approaching, so the Ranger is riding back from the perimeter before sleeping";
             }
 
-            if (getWildClass() == WildNpcClass.HORSE_TAMER) {
-                return "Horse Tamer is acting as an explorer, travelling beyond the local area to discover biomes and landmarks";
+            if (getWildClass() == WildNpcClass.RANGER) {
+                return rangerPatrolPauseTicks > 0
+                        ? "The Ranger reached a perimeter point and is watching the surrounding area before continuing"
+                        : "The Ranger is checking the local village/home perimeter instead of wandering far away";
             }
 
             if (horse.isSprinting()) {
@@ -6313,9 +6251,9 @@ public class CyberNpcEntity extends PathfinderMob {
                 return "Using the owned horse to catch up with the party";
             }
             if (horseRideTicks > 0) {
-                return "Horse Tamer chose mounted travel and is still committed to that decision";
+                return "Ranger chose mounted travel and is still committed to that decision";
             }
-            return "Horse Tamer prefers to remain mounted while no higher-priority need exists";
+            return "Ranger prefers to remain mounted while no higher-priority need exists";
         }
         if (horseTargetId != null) {
             AbstractHorse horse = findLoadedHorse(horseTargetId);
@@ -6325,7 +6263,7 @@ public class CyberNpcEntity extends PathfinderMob {
             return "Returning to an owned horse for efficient travel";
         }
         if (horseRemountCooldown > 0
-                && getWildClass() == WildNpcClass.HORSE_TAMER) {
+                && getWildClass() == WildNpcClass.RANGER) {
             return "Recently dismounted for another need; delaying remount to avoid indecisive cycling";
         }
         if (!foodToEat.isEmpty()) {
@@ -7089,26 +7027,13 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         socialMemory.saveTo(tag);
-        discoveryMemory.saveTo(tag);
 
-        if (explorerHomePos != null) {
+        if (rangerHomePos != null) {
             tag.putLong(
-                    "CyberNpcExplorerHome",
-                    explorerHomePos.asLong()
+                    "CyberNpcRangerHome",
+                    rangerHomePos.asLong()
             );
         }
-        tag.putBoolean(
-                "CyberNpcExplorerReturning",
-                explorerReturningHome
-        );
-        tag.putInt(
-                "CyberNpcExplorerExpeditionTicks",
-                explorerExpeditionTicks
-        );
-        tag.putInt(
-                "CyberNpcExplorerUnreported",
-                explorerUnreportedDiscoveries
-        );
 
         corralBrain.addSaveData(tag);
         sleepBrain.addSaveData(tag);
@@ -7170,21 +7095,18 @@ public class CyberNpcEntity extends PathfinderMob {
 
         ensureAppearance();
         socialMemory.loadFrom(tag);
-        discoveryMemory.loadFrom(tag);
 
-        explorerHomePos = tag.contains("CyberNpcExplorerHome")
+        rangerHomePos = tag.contains("CyberNpcRangerHome")
+                ? BlockPos.of(tag.getLong("CyberNpcRangerHome"))
+                : (tag.contains("CyberNpcExplorerHome")
                 ? BlockPos.of(tag.getLong("CyberNpcExplorerHome"))
-                : null;
-        explorerReturningHome =
-                tag.getBoolean("CyberNpcExplorerReturning");
-        explorerExpeditionTicks =
-                tag.getInt("CyberNpcExplorerExpeditionTicks");
-        explorerUnreportedDiscoveries = Math.max(
-                0,
-                tag.getInt("CyberNpcExplorerUnreported")
-        );
-        explorerWaypoint = null;
-        explorerHeadingRadians = Double.NaN;
+                : null);
+        rangerPatrolTarget = null;
+        rangerPatrolAngle = Double.NaN;
+        rangerPatrolPauseTicks = 0;
+        rangerVillageCheckCooldown = 0;
+        rangerHomeIsVillage = false;
+        rangerReturningHomeForSleep = false;
 
         if (getNpcType() == NpcType.WILD) {
             String loadedClassName = tag.contains("CyberNpcWildClass")
@@ -7344,9 +7266,13 @@ public class CyberNpcEntity extends PathfinderMob {
         horseRideTicks = 0;
         horseRemountCooldown = 0;
         horseRepathCooldown = 0;
-        explorerDiscoveryScanCooldown = 0;
-        explorerWaypoint = null;
-        explorerHeadingRadians = Double.NaN;
+        rangerPatrolTarget = null;
+        rangerPatrolAngle = Double.NaN;
+        rangerPatrolPauseTicks = 0;
+        rangerVillageCheckCooldown = 0;
+        rangerHomeIsVillage = false;
+        rangerReturningHomeForSleep = false;
+        backgroundClaimScanCooldown = 0;
         chainmailMigrationChecked = false;
         fleeingThreat = null;
         fleeSafeTicks = 0;
@@ -7354,6 +7280,7 @@ public class CyberNpcEntity extends PathfinderMob {
         corralBrain.readSaveData(tag);
         sleepBrain.readSaveData(tag);
         intentions.clear();
+        initializeStaggeredAiTimers();
 
         if (getNpcType() == NpcType.WILD) {
             ensureWildProfile();
