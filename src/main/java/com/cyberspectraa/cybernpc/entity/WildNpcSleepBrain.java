@@ -40,7 +40,7 @@ final class WildNpcSleepBrain {
         }
 
         if (level.isNight()
-                && npc.shouldExplorerReturnBeforeSleeping()) {
+                && npc.shouldRangerReturnBeforeSleeping()) {
             busy = false;
             return false;
         }

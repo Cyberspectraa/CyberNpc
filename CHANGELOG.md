@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.34.0
+
+### Horse Tamer renamed to Ranger
+- Renamed the Horse Tamer Wild NPC class to Ranger.
+- New saves use the serialized class name `ranger`.
+- Existing NPCs saved as `horse_tamer` automatically migrate to Ranger without losing their class, equipment or relationships.
+- Ranger keeps the same uncommon spawn weight and broadly similar combat stats.
+- Rangers still prefer horses and still use Better Horses ownership/upgraded saddles when the optional mod is installed.
+- Ranger itself no longer requires Better Horses to exist. Without the horse mod it remains a valid class and patrols on foot.
+
+### Explorer system removed
+- Removed the long-distance expedition system introduced in 0.33.0.
+- Removed biome discovery, village landmark discovery, discovery sharing and explorer knowledge persistence.
+- Rangers no longer deliberately travel away across the map.
+- Old explorer/discovery NBT is harmlessly ignored; old ExplorerHome is accepted once as a migration fallback for Ranger home position.
+- Removed the obsolete NpcDiscoveryMemory implementation.
+
+### Ranger perimeter patrol
+- Rangers are now local settlement/perimeter NPCs rather than explorers.
+- A claimed bed becomes the Ranger's preferred home anchor; otherwise its local spawn/home position is used.
+- Rangers generated just outside a vanilla village can adopt a village position when they enter it.
+- Village Rangers patrol a broader ring around home; non-village Rangers use a tighter local patrol.
+- Patrol destinations are selected around the perimeter in broad arcs instead of random points throughout the centre.
+- Rangers pause at patrol points to watch the surrounding area before continuing.
+- Mounted Rangers use their horse for perimeter patrols but have a hard bounded return distance, preventing them from drifting away indefinitely.
+- Rangers return toward home if a route ever carries them too far outside their patrol area.
+- At night a mounted Ranger rides back near home before normal bed/sleep behaviour takes over.
+- If no suitable horse is available, a Ranger continues the same bounded patrol role on foot.
+- Existing combat/threat AI remains higher priority, so perimeter Rangers naturally react to danger encountered during patrol.
+
+### Natural-population optimisation groundwork
+- Pen/corral claim discovery is no longer queried every server tick; it now runs on a staggered low-frequency schedule.
+- Expensive debug-data construction/synchronisation was reduced from every 5 ticks to every 20 ticks.
+- Debug updates are offset by NPC UUID so a settlement does not synchronise every resident's debug state on the same tick.
+- Initial social, horse, hunting, ground-food, cooking and hunger timers are staggered per NPC.
+- This spreads recurring AI work across server ticks and avoids naturally spawned populations entering identical expensive scan cycles at once.
+- Combat, fleeing, damage response, hazard avoidance and other urgent reactions are not throttled.
+- Hunger progression is phase-staggered between NPCs, which also makes a settlement's residents less likely to all become hungry and begin searching at exactly the same moment.
+
 ## 0.33.0
 
 ### Developer Glasses — compact rebuild

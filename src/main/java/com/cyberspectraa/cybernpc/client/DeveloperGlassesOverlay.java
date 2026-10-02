@@ -263,12 +263,12 @@ public final class DeveloperGlassesOverlay {
                 RED
         );
 
-        if ("Horse Tamer".equals(npc.getWildClassDisplayName())) {
+        if ("Ranger".equals(npc.getWildClassDisplayName())) {
             row(
                     gui,
                     font,
-                    "Explore",
-                    npc.getDebugExplorerState(),
+                    "Patrol",
+                    npc.getDebugRangerState(),
                     x,
                     y + 36,
                     BLUE
@@ -304,26 +304,16 @@ public final class DeveloperGlassesOverlay {
             int y
     ) {
         row(gui, font, "Party", npc.getDebugParty(), x, y, BLUE);
-        row(
-                gui,
-                font,
-                "Places",
-                npc.getDebugDiscoveries(),
-                x,
-                y + 12,
-                GREEN
-        );
-
         String social = npc.getDebugRelationships();
         if (social == null
                 || social.isBlank()
                 || "none".equalsIgnoreCase(social)) {
-            row(gui, font, "Links", "none yet", x, y + 26, DIM);
+            row(gui, font, "Links", "none yet", x, y + 14, DIM);
             return;
         }
 
         String[] entries = social.split("\\|");
-        int lineY = y + 26;
+        int lineY = y + 14;
         int shown = Math.min(3, entries.length);
 
         for (int i = 0; i < shown; i++) {
