@@ -8,6 +8,7 @@ import com.cyberspectraa.cybernpc.item.DeveloperGlassesItem;
 import com.cyberspectraa.cybernpc.item.LetterPaperItem;
 import com.cyberspectraa.cybernpc.item.OpenedLetterItem;
 import com.cyberspectraa.cybernpc.item.SealedLetterItem;
+import com.cyberspectraa.cybernpc.item.SpecialNpcRemovalStickItem;
 import com.cyberspectraa.cybernpc.item.TownRegisterItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -73,6 +74,18 @@ public final class ModItems {
                             new Item.Properties()
                     ));
 
+    public static final RegistryObject<Item> GUARD_NPC_SPAWN_EGG =
+            ITEMS.register("guard_npc_spawn_egg", () ->
+                    new CyberNpcSpawnEggItem(
+                            ModEntities.CYBER_NPC,
+                            0x34495E,
+                            0xD7D7D7,
+                            NpcType.MAIN,
+                            "Guard",
+                            false,
+                            new Item.Properties()
+                    ));
+
     public static final RegistryObject<Item> COPPER_COIN =
             ITEMS.register("copper_coin", () ->
                     new Item(new Item.Properties().stacksTo(64)));
@@ -126,6 +139,12 @@ public final class ModItems {
     public static final RegistryObject<Item> TOWN_REGISTER =
             ITEMS.register("town_register", () ->
                     new TownRegisterItem(
+                            new Item.Properties().stacksTo(1)
+                    ));
+
+    public static final RegistryObject<Item> SPECIAL_NPC_REMOVAL_STICK =
+            ITEMS.register("special_npc_removal_stick", () ->
+                    new SpecialNpcRemovalStickItem(
                             new Item.Properties().stacksTo(1)
                     ));
 
