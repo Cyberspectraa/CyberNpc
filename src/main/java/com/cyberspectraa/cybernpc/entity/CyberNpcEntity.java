@@ -1075,6 +1075,24 @@ public class CyberNpcEntity extends PathfinderMob {
                 .canStandAt(serverLevel, this, pos);
     }
 
+    private boolean isCurrentWanderPathBuildingAllowed() {
+        Path path = getNavigation().getPath();
+        if (path == null || path.isDone()) {
+            return true;
+        }
+
+        for (int i = path.getNextNodeIndex(); i < path.getNodeCount(); i++) {
+            var node = path.getNode(i);
+            BlockPos nodePos = new BlockPos(node.x, node.y, node.z);
+
+            if (!isBuildingDestinationAllowed(nodePos)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public void setCanWander(boolean canWander) {
         entityData.set(DATA_CAN_WANDER, canWander);
 
@@ -7846,6 +7864,18 @@ public class CyberNpcEntity extends PathfinderMob {
             }
 
             return null;
+        }
+
+        @Override
+        public void start() {
+            super.start();
+
+            // The destination can be outside while Minecraft still picks a
+            // shorter route through somebody's private house. Validate every
+            // path node so an open front/back door never becomes a shortcut.
+            if (!npc.isCurrentWanderPathBuildingAllowed()) {
+                npc.getNavigation().stop();
+            }
         }
     }
 
