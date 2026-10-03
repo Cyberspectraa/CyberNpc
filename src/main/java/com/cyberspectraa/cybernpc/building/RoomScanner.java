@@ -108,11 +108,11 @@ public final class RoomScanner {
         }
 
         List<BlockPos> cells = visited.stream()
-                .map(BlockPos::of)
+                .map(value -> BlockPos.of(value.longValue()))
                 .sorted(Comparator
-                        .comparingInt(BlockPos::getY)
-                        .thenComparingInt(BlockPos::getZ)
-                        .thenComparingInt(BlockPos::getX))
+                        .comparingInt((BlockPos pos) -> pos.getY())
+                        .thenComparingInt(pos -> pos.getZ())
+                        .thenComparingInt(pos -> pos.getX()))
                 .toList();
 
         List<BuildingSavedData.Zone> zones = compress(cells);
