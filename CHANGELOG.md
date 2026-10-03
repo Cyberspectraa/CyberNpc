@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.41.0
+
+### Four-marker building system
+- Replaced the previous normal building setup with four invisible blocks: Building Marker, Room Marker, Bed Marker and Work Marker.
+- Old Building Planner and item-frame marker registrations remain only for compatibility and are removed from the normal CyberNpc creative-tab workflow.
+- All four new marker blocks are invisible, non-colliding and retain a small selectable administration shape.
+- Any marker item can remove a nearby marker with sneak + right-click.
+
+### Building and Room scanning
+- Building Marker performs a one-time interior flood scan from its placement point and stores the reachable interior as the Building perimeter/area.
+- Doors, trapdoors and fence gates connect rooms during the scan instead of making ordinary closed doors require separate setup.
+- Sky-visible exterior cells stop the scan, preventing a normal open doorway from flooding the saved Building across the town.
+- Scan bounds were increased substantially and the scan is now partial-safe: reaching the safety budget saves the detected region instead of rejecting the Building as "too big".
+- Room Marker runs the same scan and merges the detected area into the nearest Building record.
+- Multiple Room Markers can therefore build one logical property from disconnected or difficult sections.
+
+### Bed Marker
+- Bed Marker searches a small local radius for the nearest real Minecraft bed and registers that exact bed with the linked Building.
+- Multiple Bed Markers may belong to one Building.
+- Main residents now choose the nearest currently available registered bed rather than all attempting the same first bed.
+
+### Work Marker
+- Work Marker stores its own exact block-centre position and placement facing as a WORK activity point.
+- Work Marker links to the nearby Building but may be assigned directly to individual NPCs.
+- Work assignments are persistent and independent of residence assignments.
+- A Main NPC can therefore live in one Building while working in another.
+- Normal Main NPCs path to the assigned Work marker during the day, snap to its exact centre and hold the saved facing direction.
+
+### Town Register linking
+- Town Register can now select any CyberNpc NPC, not only service-role NPCs.
+- Using the register on a Building Marker links the selected NPC to that Building/home.
+- Using it on a Work Marker assigns the selected NPC to that exact work point.
+- Special service NPCs continue to update their persistent SpecialNpc Home/Work anchors when marker-linked.
+- Existing old-style special-NPC block anchoring remains as a compatibility fallback.
+- Using the Town Register on an already-configured marker does not rebuild that marker or disturb its linked rooms/points.
+- Unlinked secondary markers can be retried later without replacing the whole setup.
+
+### Building records and persistence
+- Added persistent NPC-to-Work-marker assignments to Building SavedData.
+- Work-marker removal clears only assignments pointing at that marker.
+- Building, Room, Bed and Work marker identities are deterministic from dimension/position/type, making re-linking stable across saves.
+- Pope workplace resolution now follows the Building/Work marker linked through its Town Register assignment instead of requiring a special CHURCH building type.
+
 ## 0.40.1
 
 ### Building Markers are now no-scan and size-proof

@@ -10,6 +10,7 @@ import com.cyberspectraa.cybernpc.item.CyberNpcSpawnEggItem;
 import com.cyberspectraa.cybernpc.item.DeveloperGlassesItem;
 import com.cyberspectraa.cybernpc.item.LetterPaperItem;
 import com.cyberspectraa.cybernpc.item.GuardPostMarkerItem;
+import com.cyberspectraa.cybernpc.item.NpcMarkerItem;
 import com.cyberspectraa.cybernpc.item.OpenedLetterItem;
 import com.cyberspectraa.cybernpc.item.SealedLetterItem;
 import com.cyberspectraa.cybernpc.item.SpecialNpcRemovalStickItem;
@@ -162,6 +163,42 @@ public final class ModItems {
             ITEMS.register("town_register", () ->
                     new TownRegisterItem(
                             new Item.Properties().stacksTo(1)
+                    ));
+
+    public static final RegistryObject<Item> BUILDING_MARKER =
+            ITEMS.register("building_marker", () ->
+                    new NpcMarkerItem(
+                            (com.cyberspectraa.cybernpc.block.NpcMarkerBlock)
+                                    ModBlocks.BUILDING_MARKER.get(),
+                            com.cyberspectraa.cybernpc.building.NpcMarkerKind.BUILDING,
+                            new Item.Properties().stacksTo(64)
+                    ));
+
+    public static final RegistryObject<Item> ROOM_MARKER =
+            ITEMS.register("room_marker", () ->
+                    new NpcMarkerItem(
+                            (com.cyberspectraa.cybernpc.block.NpcMarkerBlock)
+                                    ModBlocks.ROOM_MARKER.get(),
+                            com.cyberspectraa.cybernpc.building.NpcMarkerKind.ROOM,
+                            new Item.Properties().stacksTo(64)
+                    ));
+
+    public static final RegistryObject<Item> BED_MARKER =
+            ITEMS.register("bed_marker", () ->
+                    new NpcMarkerItem(
+                            (com.cyberspectraa.cybernpc.block.NpcMarkerBlock)
+                                    ModBlocks.BED_MARKER.get(),
+                            com.cyberspectraa.cybernpc.building.NpcMarkerKind.BED,
+                            new Item.Properties().stacksTo(64)
+                    ));
+
+    public static final RegistryObject<Item> WORK_MARKER =
+            ITEMS.register("work_marker", () ->
+                    new NpcMarkerItem(
+                            (com.cyberspectraa.cybernpc.block.NpcMarkerBlock)
+                                    ModBlocks.WORK_MARKER.get(),
+                            com.cyberspectraa.cybernpc.building.NpcMarkerKind.WORK,
+                            new Item.Properties().stacksTo(64)
                     ));
 
     // Legacy 0.39.x planner is kept registered so existing worlds/items

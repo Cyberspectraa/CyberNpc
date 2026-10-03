@@ -21,10 +21,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * One-time interior scanner used by Building and Room markers.
+ *
+ * Important design rule: a scan is never rejected for being "too big".
+ * The scanner saves everything it safely found and marks the result as
+ * truncated. A Room marker can then extend the same Building record.
+ */
 public final class RoomScanner {
-    private static final int MAX_CELLS = 16_000;
-    private static final int MAX_HORIZONTAL_DISTANCE = 32;
-    private static final int MAX_VERTICAL_DISTANCE = 16;
+    private static final int MAX_CELLS = 120_000;
+    private static final int MAX_HORIZONTAL_DISTANCE = 96;
+    private static final int MAX_VERTICAL_DISTANCE = 48;
 
     public static ScanResult scan(
             ServerLevel level,
@@ -33,7 +40,7 @@ public final class RoomScanner {
         BlockPos start = findStart(level, preferredStart);
         if (start == null) {
             return ScanResult.failed(
-                    "There is no open room space beside this marker."
+                    "Place the marker in open space inside the building."
             );
         }
 
@@ -45,15 +52,11 @@ public final class RoomScanner {
         queue.add(start);
         visited.add(start.asLong());
 
-        boolean leaked = false;
+        boolean truncated = false;
 
+        scan:
         while (!queue.isEmpty()) {
             BlockPos current = queue.removeFirst();
-
-            if (visited.size() >= MAX_CELLS) {
-                leaked = true;
-                break;
-            }
 
             for (Direction direction : Direction.values()) {
                 BlockPos next = current.relative(direction);
@@ -64,15 +67,14 @@ public final class RoomScanner {
                         > MAX_HORIZONTAL_DISTANCE
                         || Math.abs(next.getY() - start.getY())
                         > MAX_VERTICAL_DISTANCE) {
-                    leaked = true;
+                    truncated = true;
                     continue;
                 }
 
                 BlockState state = level.getBlockState(next);
 
-                if (isEntranceBoundary(state)) {
+                if (isEntrance(state)) {
                     entrances.add(normalizeEntrance(state, next));
-                    continue;
                 }
 
                 if (state.getBlock() instanceof BedBlock) {
@@ -80,51 +82,43 @@ public final class RoomScanner {
                     if (head != null) {
                         beds.add(head);
                     }
-                    continue;
                 }
 
-                if (!isRoomSpace(level, next, state)) {
+                if (!isInteriorSpace(level, next, state, start)) {
                     continue;
                 }
 
                 long packed = next.asLong();
-                if (visited.add(packed)) {
-                    queue.addLast(next.immutable());
+                if (!visited.add(packed)) {
+                    continue;
                 }
+
+                if (visited.size() >= MAX_CELLS) {
+                    truncated = true;
+                    break scan;
+                }
+
+                queue.addLast(next.immutable());
             }
-        }
-
-        if (leaked) {
-            return ScanResult.failed(
-                    "This room looks open to the outside or is too large. "
-                            + "Close open doorways/arches or split it into rooms."
-            );
-        }
-
-        if (visited.size() < 2) {
-            return ScanResult.failed(
-                    "The marker needs to be inside an enclosed walkable room."
-            );
         }
 
         List<BlockPos> cells = visited.stream()
                 .map(value -> BlockPos.of(value.longValue()))
                 .sorted(Comparator
                         .comparingInt((BlockPos pos) -> pos.getY())
-                        .thenComparingInt(pos -> pos.getZ())
-                        .thenComparingInt(pos -> pos.getX()))
+                        .thenComparingInt(BlockPos::getZ)
+                        .thenComparingInt(BlockPos::getX))
                 .toList();
-
-        List<BuildingSavedData.Zone> zones = compress(cells);
 
         return new ScanResult(
                 true,
                 "",
                 start,
-                zones,
+                compress(cells),
                 entrances,
                 beds,
-                cells.size()
+                cells.size(),
+                truncated
         );
     }
 
@@ -143,17 +137,43 @@ public final class RoomScanner {
                 preferred.west()
         };
 
+        BlockPos fallback = null;
+
         for (BlockPos candidate : candidates) {
             BlockState state = level.getBlockState(candidate);
-            if (isRoomSpace(level, candidate, state)) {
+            if (!isPassable(level, candidate, state)) {
+                continue;
+            }
+
+            if (!level.canSeeSky(candidate.above())) {
                 return candidate.immutable();
+            }
+
+            if (fallback == null) {
+                fallback = candidate.immutable();
             }
         }
 
-        return null;
+        return fallback;
     }
 
-    private static boolean isRoomSpace(
+    private static boolean isInteriorSpace(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState state,
+            BlockPos start
+    ) {
+        if (!isPassable(level, pos, state)) {
+            return false;
+        }
+
+        // This is the key leak guard. Exterior air is not allowed to become
+        // part of a Building even if the front door is wide open.
+        return pos.equals(start)
+                || !level.canSeeSky(pos.above());
+    }
+
+    private static boolean isPassable(
             ServerLevel level,
             BlockPos pos,
             BlockState state
@@ -162,15 +182,23 @@ public final class RoomScanner {
             return false;
         }
 
-        if (isEntranceBoundary(state)
-                || state.getBlock() instanceof BedBlock) {
-            return false;
+        // Doors/gates are semantic boundaries but are still connections
+        // between rooms. Treating them as traversable lets one Building
+        // marker discover most normal multi-room buildings automatically.
+        if (isEntrance(state)) {
+            return true;
+        }
+
+        // Beds are furniture, not walls. They can be crossed by the scan even
+        // though NPC pathfinding will still use their real collision.
+        if (state.getBlock() instanceof BedBlock) {
+            return true;
         }
 
         return state.getCollisionShape(level, pos).isEmpty();
     }
 
-    private static boolean isEntranceBoundary(BlockState state) {
+    private static boolean isEntrance(BlockState state) {
         return state.getBlock() instanceof DoorBlock
                 || state.getBlock() instanceof TrapDoorBlock
                 || state.getBlock() instanceof FenceGateBlock;
@@ -249,6 +277,7 @@ public final class RoomScanner {
 
                 int z1 = z0;
                 boolean canGrow = true;
+
                 while (canGrow) {
                     int nextZ = z1 + 1;
                     for (int x = x0; x <= x1; x++) {
@@ -257,6 +286,7 @@ public final class RoomScanner {
                             break;
                         }
                     }
+
                     if (canGrow) {
                         z1 = nextZ;
                     }
@@ -341,7 +371,8 @@ public final class RoomScanner {
             List<BuildingSavedData.Zone> zones,
             Set<BlockPos> entrances,
             Set<BlockPos> beds,
-            int cellCount
+            int cellCount,
+            boolean truncated
     ) {
         private static ScanResult failed(String error) {
             return new ScanResult(
@@ -351,7 +382,8 @@ public final class RoomScanner {
                     List.of(),
                     Set.of(),
                     Set.of(),
-                    0
+                    0,
+                    false
             );
         }
     }

@@ -2,7 +2,6 @@ package com.cyberspectraa.cybernpc.entity;
 
 import com.cyberspectraa.cybernpc.building.BuildingPointType;
 import com.cyberspectraa.cybernpc.building.BuildingSavedData;
-import com.cyberspectraa.cybernpc.building.BuildingType;
 import com.cyberspectraa.cybernpc.mail.MailItemData;
 import com.cyberspectraa.cybernpc.mail.MailRecord;
 import com.cyberspectraa.cybernpc.mail.MailSavedData;
@@ -529,6 +528,14 @@ final class NpcServiceBrain {
             BuildingSavedData buildings,
             SpecialNpcSavedData.SpecialNpcRecord record
     ) {
+        // 0.41 no longer needs a special Church building type. The Pope's
+        // assigned Work marker/building is the authoritative workplace.
+        BuildingSavedData.BuildingRecord linkedWork =
+                buildings.findWorkerBuilding(level, npc);
+        if (linkedWork != null) {
+            return linkedWork;
+        }
+
         SpecialNpcSavedData.Anchor work = record.work();
         if (work != null
                 && work.dimension().equals(level.dimension())) {
@@ -537,21 +544,15 @@ final class NpcServiceBrain {
                             level.dimension(),
                             work.pos()
                     );
-            if (atWork != null
-                    && atWork.type() == BuildingType.CHURCH) {
+            if (atWork != null) {
                 return atWork;
             }
+        }
 
-            BuildingSavedData.BuildingRecord nearWork =
-                    buildings.findNearest(
-                            level.dimension(),
-                            BuildingType.CHURCH,
-                            work.pos(),
-                            POPE_CHURCH_SEARCH_RADIUS_SQR
-                    );
-            if (nearWork != null) {
-                return nearWork;
-            }
+        BuildingSavedData.BuildingRecord linkedHome =
+                buildings.findResidentBuilding(level, npc);
+        if (linkedHome != null) {
+            return linkedHome;
         }
 
         BuildingSavedData.BuildingRecord current =
@@ -559,14 +560,13 @@ final class NpcServiceBrain {
                         level.dimension(),
                         npc.blockPosition()
                 );
-        if (current != null
-                && current.type() == BuildingType.CHURCH) {
+        if (current != null) {
             return current;
         }
 
-        return buildings.findNearest(
+        return buildings.findBuildingForRoom(
                 level.dimension(),
-                BuildingType.CHURCH,
+                java.util.Set.of(),
                 npc.blockPosition(),
                 POPE_CHURCH_SEARCH_RADIUS_SQR
         );

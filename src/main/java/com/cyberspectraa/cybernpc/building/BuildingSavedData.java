@@ -339,6 +339,9 @@ public final class BuildingSavedData extends SavedData {
             changed |= record.points.removeIf(point ->
                     markerId.equals(point.markerId())
             );
+            changed |= record.workAssignments.entrySet().removeIf(entry ->
+                    markerId.equals(entry.getValue())
+            );
         }
 
         if (removeBuildingId != null) {
@@ -351,6 +354,148 @@ public final class BuildingSavedData extends SavedData {
         }
 
         return changed;
+    }
+
+    @Nullable
+    public BuildingRecord findBuildingForMarker(UUID markerId) {
+        if (markerId == null) {
+            return null;
+        }
+
+        for (BuildingRecord record : records.values()) {
+            if (markerId.equals(record.primaryMarkerId)) {
+                return record;
+            }
+
+            boolean roomMatch = record.rooms.stream().anyMatch(
+                    room -> markerId.equals(room.markerId())
+            );
+            if (roomMatch) {
+                return record;
+            }
+
+            boolean pointMatch = record.points.stream().anyMatch(
+                    point -> markerId.equals(point.markerId())
+            );
+            if (pointMatch) {
+                return record;
+            }
+        }
+
+        return null;
+    }
+
+    @Nullable
+    public MarkerPoint findMarkerPoint(UUID markerId) {
+        if (markerId == null) {
+            return null;
+        }
+
+        for (BuildingRecord record : records.values()) {
+            for (ActivityPoint point : record.points) {
+                if (markerId.equals(point.markerId())) {
+                    return new MarkerPoint(record, point);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    @Nullable
+    public BuildingRecord findBuildingByPrimaryMarker(UUID markerId) {
+        if (markerId == null) {
+            return null;
+        }
+
+        for (BuildingRecord record : records.values()) {
+            if (markerId.equals(record.primaryMarkerId)) {
+                return record;
+            }
+        }
+
+        return null;
+    }
+
+    public boolean assignResident(
+            UUID buildingId,
+            UUID npcIdentity
+    ) {
+        BuildingRecord target = records.get(buildingId);
+        if (target == null || npcIdentity == null) {
+            return false;
+        }
+
+        for (BuildingRecord record : records.values()) {
+            record.residents.remove(npcIdentity);
+        }
+
+        target.residents.add(npcIdentity);
+        markChanged();
+        return true;
+    }
+
+    public boolean assignWorkMarker(
+            UUID buildingId,
+            UUID markerId,
+            UUID npcIdentity
+    ) {
+        BuildingRecord target = records.get(buildingId);
+        if (target == null
+                || markerId == null
+                || npcIdentity == null) {
+            return false;
+        }
+
+        boolean validPoint = target.points.stream().anyMatch(point ->
+                point.type() == BuildingPointType.WORK
+                        && markerId.equals(point.markerId())
+        );
+        if (!validPoint) {
+            return false;
+        }
+
+        for (BuildingRecord record : records.values()) {
+            record.workers.remove(npcIdentity);
+            record.workAssignments.remove(npcIdentity);
+        }
+
+        target.workers.add(npcIdentity);
+        target.workAssignments.put(npcIdentity, markerId);
+        markChanged();
+        return true;
+    }
+
+    @Nullable
+    public WorkAssignment findAssignedWork(
+            ServerLevel level,
+            CyberNpcEntity npc
+    ) {
+        if (level == null || npc == null) {
+            return null;
+        }
+
+        UUID identity = npcIdentity(npc);
+
+        for (BuildingRecord record : records.values()) {
+            if (!record.dimension().equals(level.dimension())) {
+                continue;
+            }
+
+            UUID markerId = record.workAssignments.get(identity);
+            if (markerId == null) {
+                continue;
+            }
+
+            for (ActivityPoint point : record.points) {
+                if (point.type() == BuildingPointType.WORK
+                        && markerId.equals(point.markerId())) {
+                    return new WorkAssignment(record, point);
+                }
+            }
+        }
+
+        return null;
     }
 
     @Nullable
@@ -1260,6 +1405,8 @@ public final class BuildingSavedData extends SavedData {
         private final List<ActivityPoint> points = new ArrayList<>();
         private final Set<UUID> residents = new LinkedHashSet<>();
         private final Set<UUID> workers = new LinkedHashSet<>();
+        private final Map<UUID, UUID> workAssignments =
+                new LinkedHashMap<>();
 
         private BuildingRecord(
                 UUID id,
@@ -1388,6 +1535,16 @@ public final class BuildingSavedData extends SavedData {
 
             tag.put("Residents", saveUuidSet(residents));
             tag.put("Workers", saveUuidSet(workers));
+
+            ListTag workAssignmentList = new ListTag();
+            for (Map.Entry<UUID, UUID> entry
+                    : workAssignments.entrySet()) {
+                CompoundTag assignment = new CompoundTag();
+                assignment.putUUID("Npc", entry.getKey());
+                assignment.putUUID("Marker", entry.getValue());
+                workAssignmentList.add(assignment);
+            }
+            tag.put("WorkAssignments", workAssignmentList);
             return tag;
         }
 
@@ -1460,6 +1617,21 @@ public final class BuildingSavedData extends SavedData {
                     "Workers",
                     Tag.TAG_COMPOUND
             ), record.workers);
+
+            ListTag assignments = tag.getList(
+                    "WorkAssignments",
+                    Tag.TAG_COMPOUND
+            );
+            for (int i = 0; i < assignments.size(); i++) {
+                CompoundTag assignment = assignments.getCompound(i);
+                if (assignment.hasUUID("Npc")
+                        && assignment.hasUUID("Marker")) {
+                    record.workAssignments.put(
+                            assignment.getUUID("Npc"),
+                            assignment.getUUID("Marker")
+                    );
+                }
+            }
 
             return record;
         }
@@ -1617,6 +1789,18 @@ public final class BuildingSavedData extends SavedData {
                     zones
             );
         }
+    }
+
+    public record WorkAssignment(
+            BuildingRecord building,
+            ActivityPoint point
+    ) {
+    }
+
+    public record MarkerPoint(
+            BuildingRecord building,
+            ActivityPoint point
+    ) {
     }
 
     public record ActivityPoint(
