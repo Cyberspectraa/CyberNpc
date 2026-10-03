@@ -601,10 +601,15 @@ public final class BuildingSavedData extends SavedData {
             return true;
         }
 
-        if (record.type().isPublicAccess()) {
-            return true;
-        }
+        return record.type().isPublicAccess()
+                || hasPrivateAccess(level, npc, record);
+    }
 
+    private boolean hasPrivateAccess(
+            ServerLevel level,
+            CyberNpcEntity npc,
+            BuildingRecord record
+    ) {
         UUID identity = npcIdentity(npc);
         if (record.residents.contains(identity)
                 || record.workers.contains(identity)) {
@@ -618,26 +623,40 @@ public final class BuildingSavedData extends SavedData {
         }
 
         UUID specialId = npc.getSpecialNpcId();
-        if (specialId != null) {
-            SpecialNpcSavedData.SpecialNpcRecord special =
-                    SpecialNpcSavedData.get(level).getRecord(specialId);
-
-            if (special != null) {
-                if (special.home() != null
-                        && special.home().dimension().equals(record.dimension())
-                        && record.contains(special.home().pos())) {
-                    return true;
-                }
-
-                if (special.work() != null
-                        && special.work().dimension().equals(record.dimension())
-                        && record.contains(special.work().pos())) {
-                    return true;
-                }
-            }
+        if (specialId == null) {
+            return false;
         }
 
-        return false;
+        SpecialNpcSavedData.SpecialNpcRecord special =
+                SpecialNpcSavedData.get(level).getRecord(specialId);
+
+        if (special == null) {
+            return false;
+        }
+
+        if (special.home() != null
+                && special.home().dimension().equals(record.dimension())
+                && record.contains(special.home().pos())) {
+            return true;
+        }
+
+        return special.work() != null
+                && special.work().dimension().equals(record.dimension())
+                && record.contains(special.work().pos());
+    }
+
+    private boolean canAccessPosition(
+            ServerLevel level,
+            CyberNpcEntity npc,
+            BuildingRecord record,
+            BlockPos pos
+    ) {
+        RoomRegion room = record.restrictedRoomAt(pos);
+        if (room != null && room.kind().restricted()) {
+            return hasPrivateAccess(level, npc, record);
+        }
+
+        return canEnter(level, npc, record);
     }
 
     public boolean canUseEntrance(
@@ -652,10 +671,43 @@ public final class BuildingSavedData extends SavedData {
             return true;
         }
 
+        boolean privateAccess =
+                hasPrivateAccess(level, npc, entrance);
+
+        // A door bordering a staff/bedroom region must stay private even
+        // though the parent building itself may be public.
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            BlockPos side = doorPos.relative(direction);
+            RoomRegion restricted =
+                    entrance.restrictedRoomAt(side);
+            if (restricted != null
+                    && restricted.kind().restricted()
+                    && !privateAccess) {
+                BuildingRecord current =
+                        getBuildingAt(
+                                level.dimension(),
+                                npc.blockPosition()
+                        );
+                RoomRegion currentRoom = current != null
+                        && current.id().equals(entrance.id())
+                        ? current.restrictedRoomAt(
+                        npc.blockPosition()
+                )
+                        : null;
+
+                // Let somebody already inside the private room leave it.
+                if (currentRoom == null
+                        || !currentRoom.markerId().equals(
+                        restricted.markerId()
+                )) {
+                    return false;
+                }
+            }
+        }
+
         BuildingRecord current =
                 getBuildingAt(level.dimension(), npc.blockPosition());
 
-        // Always let an NPC leave the building it is already inside.
         if (current != null && current.id().equals(entrance.id())) {
             return true;
         }
@@ -674,14 +726,7 @@ public final class BuildingSavedData extends SavedData {
             return true;
         }
 
-        BuildingRecord current =
-                getBuildingAt(level.dimension(), npc.blockPosition());
-
-        if (current != null && current.id().equals(target.id())) {
-            return true;
-        }
-
-        return canEnter(level, npc, target);
+        return canAccessPosition(level, npc, target, pos);
     }
 
     @Nullable
