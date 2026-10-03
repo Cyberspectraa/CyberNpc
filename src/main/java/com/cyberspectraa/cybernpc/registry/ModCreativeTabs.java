@@ -65,6 +65,7 @@ public final class ModCreativeTabs {
                                 output.accept(ModItems.BANK_MARKER.get());
                                 output.accept(ModItems.POST_OFFICE_MARKER.get());
                                 output.accept(ModItems.INN_MARKER.get());
+                                output.accept(ModItems.PUBLIC_AREA_MARKER.get());
                                 output.accept(ModItems.STAFF_ONLY_MARKER.get());
                                 output.accept(ModItems.BEDROOM_MARKER.get());
                                 output.accept(ModItems.ALTAR_MARKER.get());
