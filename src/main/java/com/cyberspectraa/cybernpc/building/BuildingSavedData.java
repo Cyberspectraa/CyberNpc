@@ -357,6 +357,52 @@ public final class BuildingSavedData extends SavedData {
     }
 
     @Nullable
+    public BuildingRecord findBuildingForMarker(UUID markerId) {
+        if (markerId == null) {
+            return null;
+        }
+
+        for (BuildingRecord record : records.values()) {
+            if (markerId.equals(record.primaryMarkerId)) {
+                return record;
+            }
+
+            boolean roomMatch = record.rooms.stream().anyMatch(
+                    room -> markerId.equals(room.markerId())
+            );
+            if (roomMatch) {
+                return record;
+            }
+
+            boolean pointMatch = record.points.stream().anyMatch(
+                    point -> markerId.equals(point.markerId())
+            );
+            if (pointMatch) {
+                return record;
+            }
+        }
+
+        return null;
+    }
+
+    @Nullable
+    public MarkerPoint findMarkerPoint(UUID markerId) {
+        if (markerId == null) {
+            return null;
+        }
+
+        for (BuildingRecord record : records.values()) {
+            for (ActivityPoint point : record.points) {
+                if (markerId.equals(point.markerId())) {
+                    return new MarkerPoint(record, point);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    @Nullable
     public BuildingRecord findBuildingByPrimaryMarker(UUID markerId) {
         if (markerId == null) {
             return null;
@@ -1746,6 +1792,12 @@ public final class BuildingSavedData extends SavedData {
     }
 
     public record WorkAssignment(
+            BuildingRecord building,
+            ActivityPoint point
+    ) {
+    }
+
+    public record MarkerPoint(
             BuildingRecord building,
             ActivityPoint point
     ) {
