@@ -81,18 +81,10 @@ final class NpcBuildingBrain {
         busy = true;
         npc.setSprinting(false);
 
-        BuildingSavedData.ActivityPoint bedPoint =
-                buildings.nearestPoint(
-                        home,
-                        BuildingPointType.BED,
-                        npc.blockPosition()
-                );
+        BlockPos bedHead =
+                nearestAvailableBed(level, home);
 
-        BlockPos bedHead = bedPoint == null
-                ? null
-                : normalizeBedHead(level, bedPoint.pos());
-
-        if (bedHead != null && !isBedOccupied(level, bedHead)) {
+        if (bedHead != null) {
             Vec3 bedCenter = Vec3.atBottomCenterOf(bedHead);
 
             if (npc.distanceToSqr(bedCenter)
@@ -208,6 +200,39 @@ final class NpcBuildingBrain {
         return npc.level() instanceof ServerLevel level
                 ? level
                 : null;
+    }
+
+    @Nullable
+    private BlockPos nearestAvailableBed(
+            ServerLevel level,
+            BuildingSavedData.BuildingRecord home
+    ) {
+        BlockPos best = null;
+        double bestDistance = Double.MAX_VALUE;
+
+        for (BuildingSavedData.ActivityPoint point
+                : home.points()) {
+            if (point.type() != BuildingPointType.BED) {
+                continue;
+            }
+
+            BlockPos head = normalizeBedHead(
+                    level,
+                    point.pos()
+            );
+            if (head == null || isBedOccupied(level, head)) {
+                continue;
+            }
+
+            double distance =
+                    npc.blockPosition().distSqr(head);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = head;
+            }
+        }
+
+        return best;
     }
 
     private static boolean isBedOccupied(
