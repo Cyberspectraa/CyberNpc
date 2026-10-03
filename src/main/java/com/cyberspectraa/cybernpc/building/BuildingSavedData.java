@@ -142,7 +142,13 @@ public final class BuildingSavedData extends SavedData {
         }
 
         record.type = type;
-        record.name = type.displayName() + " #" + record.numberSuffix();
+
+        int marker = record.name.lastIndexOf(" #");
+        String suffix = marker >= 0
+                ? record.name.substring(marker)
+                : "";
+        record.name = type.displayName() + suffix;
+
         markChanged();
         return true;
     }
@@ -798,11 +804,6 @@ public final class BuildingSavedData extends SavedData {
                 }
             }
             return false;
-        }
-
-        private int numberSuffix() {
-            int hash = Math.abs(id.hashCode());
-            return 1 + Math.floorMod(hash, 9_999);
         }
 
         private CompoundTag save() {
