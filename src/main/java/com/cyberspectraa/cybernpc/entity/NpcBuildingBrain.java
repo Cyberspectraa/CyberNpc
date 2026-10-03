@@ -17,9 +17,8 @@ import javax.annotation.Nullable;
 final class NpcBuildingBrain {
     private static final double BED_USE_DISTANCE_SQR = 4.0D;
     private static final double HOME_ARRIVE_SQR = 1.5D;
+    private static final double WORK_SNAP_SQR = 0.75D * 0.75D;
     private static final int REPATH_INTERVAL = 20;
-    private static final int HOME_CLAIM_INTERVAL = 200;
-    private static final double HOME_CLAIM_RADIUS_SQR = 64.0D * 64.0D;
 
     private final CyberNpcEntity npc;
 
@@ -28,7 +27,6 @@ final class NpcBuildingBrain {
     @Nullable
     private BlockPos activeBed;
     private int repathCooldown;
-    private int homeClaimCooldown;
     private boolean busy;
 
     NpcBuildingBrain(CyberNpcEntity npc) {
@@ -48,19 +46,8 @@ final class NpcBuildingBrain {
         BuildingSavedData buildings = BuildingSavedData.get(level);
         BuildingSavedData.BuildingRecord home =
                 buildings.findResidentBuilding(level, npc);
-
-        if (home == null) {
-            if (homeClaimCooldown > 0) {
-                homeClaimCooldown--;
-            } else {
-                homeClaimCooldown = HOME_CLAIM_INTERVAL;
-                home = buildings.findOrClaimNearestHome(
-                        level,
-                        npc,
-                        HOME_CLAIM_RADIUS_SQR
-                );
-            }
-        }
+        BuildingSavedData.WorkAssignment work =
+                buildings.findAssignedWork(level, npc);
 
         if (npc.isSleeping()) {
             if (level.isNight() && home != null) {
@@ -73,7 +60,19 @@ final class NpcBuildingBrain {
             wakeIfNeeded(level);
         }
 
-        if (!level.isNight() || home == null) {
+        if (!level.isNight()) {
+            homeTarget = null;
+
+            if (work != null) {
+                busy = true;
+                return tickWork(work);
+            }
+
+            busy = false;
+            return false;
+        }
+
+        if (home == null) {
             homeTarget = null;
             busy = false;
             return false;
@@ -145,8 +144,36 @@ final class NpcBuildingBrain {
         homeTarget = null;
         activeBed = null;
         repathCooldown = 0;
-        homeClaimCooldown = 0;
         busy = false;
+    }
+
+    private boolean tickWork(
+            BuildingSavedData.WorkAssignment assignment
+    ) {
+        BuildingSavedData.ActivityPoint point =
+                assignment.point();
+        Vec3 center = Vec3.atBottomCenterOf(point.pos());
+
+        npc.setSprinting(false);
+
+        if (npc.distanceToSqr(center) > WORK_SNAP_SQR) {
+            navigateTo(point.pos(), 0.72D);
+            return true;
+        }
+
+        npc.getNavigation().stop();
+        npc.setDeltaMovement(Vec3.ZERO);
+        npc.moveTo(
+                center.x,
+                center.y,
+                center.z,
+                point.yaw(),
+                npc.getXRot()
+        );
+        npc.setYRot(point.yaw());
+        npc.setYHeadRot(point.yaw());
+        npc.setYBodyRot(point.yaw());
+        return true;
     }
 
     private void navigateTo(BlockPos pos, double speed) {
