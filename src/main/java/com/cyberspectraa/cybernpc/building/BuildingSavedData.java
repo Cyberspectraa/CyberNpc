@@ -15,10 +15,12 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.saveddata.SavedData;
 
@@ -283,6 +285,7 @@ public final class BuildingSavedData extends SavedData {
         }
 
         Set<BlockPos> found = new LinkedHashSet<>();
+        Set<BlockPos> beds = new LinkedHashSet<>();
 
         for (Zone zone : record.zones) {
             BlockPos min = zone.min().offset(-1, -1, -1);
@@ -294,12 +297,39 @@ public final class BuildingSavedData extends SavedData {
                     found.add(normalizeDoor(state, cursor));
                 } else if (state.getBlock() instanceof FenceGateBlock) {
                     found.add(cursor.immutable());
+                } else if (state.getBlock() instanceof BedBlock
+                        && state.hasProperty(BedBlock.PART)
+                        && state.getValue(BedBlock.PART) == BedPart.HEAD) {
+                    beds.add(cursor.immutable());
                 }
             }
         }
 
         record.entrances.clear();
         record.entrances.addAll(found);
+
+        // Beds are a common building feature and should not need a separate
+        // planner mode. Keep any manually placed semantic points, but ensure
+        // every real bed head found inside the building has a BED point.
+        for (BlockPos bed : beds) {
+            boolean alreadyKnown = record.points.stream().anyMatch(
+                    point -> point.type() == BuildingPointType.BED
+                            && point.pos().equals(bed)
+            );
+
+            if (!alreadyKnown) {
+                BlockState state = level.getBlockState(bed);
+                float yaw = state.hasProperty(BedBlock.FACING)
+                        ? state.getValue(BedBlock.FACING).toYRot()
+                        : 0.0F;
+                record.points.add(new ActivityPoint(
+                        BuildingPointType.BED,
+                        bed,
+                        yaw
+                ));
+            }
+        }
+
         markChanged();
         return found.size();
     }
