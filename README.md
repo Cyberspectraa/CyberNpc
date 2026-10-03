@@ -1,56 +1,76 @@
 # CyberNpc
 
-## Current release: 0.39.0
+## Current release: 0.40.0
 
-CyberNpc v0.39.0 adds persistent building/property recognition, private-home access rules, exact Guard Post positioning and the first building-aware special role: the Pope.
+CyberNpc v0.40.0 replaces the manual Building Planner with automatic **item-frame Building Markers**.
 
-### Building Planner quick setup
+### Building setup — the simple rule
 
-The planner is now designed to show you what it is doing while you hold it.
+Put an ordinary Minecraft item frame inside the room, then put the correct CyberNpc marker item into it. CyberNpc scans the enclosed walkable room once and stores the result.
 
-**What you see while holding it**
-- The action bar always shows the selected building and the current planner tool.
-- White particle outlines show every registered area belonging to the selected building.
-- Green particles mark registered doors/gates.
-- Hearts mark beds.
-- Enchantment particles mark a Church altar.
-- Crit particles mark service counters.
-- A vertical flame marker shows corner 1 while you are waiting to click corner 2.
+The wooden frame becomes invisible after a successful setup, while the marker icon stays visible so the building remains easy to understand.
 
-**Create a building**
-1. Hold the **Building Planner**.
-2. Sneak + right-click the air until the wanted building type is shown.
-3. Make sure the tool says **Build / Select**. Normal right-clicking the air cycles tools.
-4. Right-click one corner of the building interior.
-5. Right-click the opposite corner.
-6. The building is created immediately and selected. Doors/gates and real beds are detected automatically.
+### Main building markers
 
-**Select an existing building**
-- In **Build / Select**, right-click anywhere inside one of its outlined areas or on one of its registered entrances.
+Use **one main marker first**:
 
-**Buildings that are not simple boxes**
-- Switch to **Add Area**.
-- Click two opposite corners around another room, floor, wing or section.
-- Repeat as needed. All of those areas remain one logical building.
+- **Home Marker** — private NPC home.
+- **Shop Marker** — public shop.
+- **Church Marker** — public church.
+- **Bank Marker** — public bank.
+- **Post Office Marker** — public post office.
+- **Inn Marker** — public inn.
 
-**Special Spot**
-- Church: click the floor position where the Pope should stand at the altar.
-- Shop / Bank / Post Office / Workshop: click the service-counter standing position.
-- Clicking a door/gate in this tool manually adds/removes that entrance if auto-detection needs correcting.
-- Clicking a bed can manually add it, although normal beds are detected automatically.
+Example: place an item frame on an inside wall of the church nave, then put a **Church Marker** into it. That room becomes the main Church automatically.
 
-**Residents / Workers**
-- Switch to **Residents** and right-click an NPC who lives in the selected building.
-- Switch to **Workers** and right-click an NPC who works there.
-- Right-clicking the same NPC again removes that assignment.
+Doors, trapdoors and fence gates count as room boundaries even while open.
 
-**Delete**
-- Switch to **Delete**, then sneak + right-click inside the selected building.
-- The extra sneak requirement prevents accidental deletion.
+### Extra room markers
 
-### Church example
+Rooms behind doors can then be attached to the main building:
 
-Create one Church record covering all of the church's interior zones, mark its entrances, add an Altar and a real Bed, then spawn a Pope and set the Pope's Work/Home with the Town Register. The Pope can roam the registered Church, visit its altar each morning, acknowledge NPC visitors and sleep in the marked bed at night.
+- **Public Area Marker** — another public room belonging to the building.
+- **Staff Only Marker** — only residents/workers and the building's special NPCs may enter.
+- **Bedroom Marker** — private bedroom; real beds inside it are detected automatically.
+
+CyberNpc first links an extra room through a shared registered door. If that is not possible it uses the nearest main building as a fallback.
+
+A Staff/Bedroom marker intentionally refuses to split one completely open room. Add a real wall/door/gate boundary when an area needs different access rules.
+
+### Activity markers
+
+These do not scan another room:
+
+- **Altar Marker** — exact Church altar standing point.
+- **Counter Marker** — exact service-counter point for shops, banks, post offices and similar workplaces.
+
+You can mount these frames at normal wall height. CyberNpc automatically finds the valid floor position below the frame and stores the NPC standing position and facing direction.
+
+### Example Church
+
+A useful Church can be set up with only a few frames:
+
+1. Put a **Church Marker** in the public nave.
+2. Put a **Staff Only Marker** in a back room that only the Pope should normally use.
+3. Put a **Bedroom Marker** in the Pope's bedroom. The bed is detected automatically.
+4. Put an **Altar Marker** on/near the altar.
+
+The Pope can use the public Church, staff room, altar and bedroom. Ordinary NPC visitors may use the public Church/Public Area rooms but are blocked from Staff Only and Bedroom rooms.
+
+### Homes need almost no administration
+
+For an ordinary house, a **Home Marker is normally enough**.
+
+Main NPCs automatically claim nearby marked Homes. Capacity is based on detected beds; a Home with no detected bed temporarily has one resident slot. A Bedroom Marker can be used when the bed is in a separate room behind a door.
+
+### Marker controls
+
+- Right-click a registered marker frame to see what building it belongs to.
+- Sneak-right-click a registered marker with an empty hand to unregister it and return the marker item.
+- Breaking a marker frame also removes its saved marker registration.
+- If a room changes substantially later, remove and replace that room's marker to scan it again.
+
+The old **Building Planner** item is kept registered only so old 0.39.x worlds do not lose the item. It is retired and no longer appears in the CyberNpc creative tab.
 
 ### Guard Posts
 

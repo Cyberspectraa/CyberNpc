@@ -1,8 +1,10 @@
 package com.cyberspectraa.cybernpc.registry;
 
 import com.cyberspectraa.cybernpc.CyberNpc;
+import com.cyberspectraa.cybernpc.building.BuildingMarkerType;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.item.AddressedLetterItem;
+import com.cyberspectraa.cybernpc.item.BuildingMarkerItem;
 import com.cyberspectraa.cybernpc.item.BuildingPlannerItem;
 import com.cyberspectraa.cybernpc.item.CyberNpcSpawnEggItem;
 import com.cyberspectraa.cybernpc.item.DeveloperGlassesItem;
@@ -162,11 +164,37 @@ public final class ModItems {
                             new Item.Properties().stacksTo(1)
                     ));
 
+    // Legacy 0.39.x planner is kept registered so existing worlds/items
+    // load safely, but normal building setup now uses item-frame markers.
     public static final RegistryObject<Item> BUILDING_PLANNER =
             ITEMS.register("building_planner", () ->
                     new BuildingPlannerItem(
                             new Item.Properties().stacksTo(1)
                     ));
+
+    public static final RegistryObject<Item> HOME_MARKER =
+            marker("home_marker", BuildingMarkerType.HOME);
+    public static final RegistryObject<Item> SHOP_MARKER =
+            marker("shop_marker", BuildingMarkerType.SHOP);
+    public static final RegistryObject<Item> CHURCH_MARKER =
+            marker("church_marker", BuildingMarkerType.CHURCH);
+    public static final RegistryObject<Item> BANK_MARKER =
+            marker("bank_marker", BuildingMarkerType.BANK);
+    public static final RegistryObject<Item> POST_OFFICE_MARKER =
+            marker("post_office_marker", BuildingMarkerType.POST_OFFICE);
+    public static final RegistryObject<Item> INN_MARKER =
+            marker("inn_marker", BuildingMarkerType.INN);
+
+    public static final RegistryObject<Item> PUBLIC_AREA_MARKER =
+            marker("public_area_marker", BuildingMarkerType.PUBLIC_AREA);
+    public static final RegistryObject<Item> STAFF_ONLY_MARKER =
+            marker("staff_only_marker", BuildingMarkerType.STAFF_ONLY);
+    public static final RegistryObject<Item> BEDROOM_MARKER =
+            marker("bedroom_marker", BuildingMarkerType.BEDROOM);
+    public static final RegistryObject<Item> ALTAR_MARKER =
+            marker("altar_marker", BuildingMarkerType.ALTAR);
+    public static final RegistryObject<Item> COUNTER_MARKER =
+            marker("counter_marker", BuildingMarkerType.COUNTER);
 
     public static final RegistryObject<Item> SPECIAL_NPC_REMOVAL_STICK =
             ITEMS.register("special_npc_removal_stick", () ->
@@ -177,6 +205,19 @@ public final class ModItems {
     public static final RegistryObject<Item> DEVELOPER_GLASSES =
             ITEMS.register("developer_glasses", () ->
                     new DeveloperGlassesItem(new Item.Properties()));
+
+    private static RegistryObject<Item> marker(
+            String name,
+            BuildingMarkerType type
+    ) {
+        return ITEMS.register(
+                name,
+                () -> new BuildingMarkerItem(
+                        type,
+                        new Item.Properties().stacksTo(16)
+                )
+        );
+    }
 
     private ModItems() {
     }

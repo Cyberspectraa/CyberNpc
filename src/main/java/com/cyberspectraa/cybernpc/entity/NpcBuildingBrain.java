@@ -18,6 +18,8 @@ final class NpcBuildingBrain {
     private static final double BED_USE_DISTANCE_SQR = 4.0D;
     private static final double HOME_ARRIVE_SQR = 1.5D;
     private static final int REPATH_INTERVAL = 20;
+    private static final int HOME_CLAIM_INTERVAL = 200;
+    private static final double HOME_CLAIM_RADIUS_SQR = 64.0D * 64.0D;
 
     private final CyberNpcEntity npc;
 
@@ -26,6 +28,7 @@ final class NpcBuildingBrain {
     @Nullable
     private BlockPos activeBed;
     private int repathCooldown;
+    private int homeClaimCooldown;
     private boolean busy;
 
     NpcBuildingBrain(CyberNpcEntity npc) {
@@ -45,6 +48,19 @@ final class NpcBuildingBrain {
         BuildingSavedData buildings = BuildingSavedData.get(level);
         BuildingSavedData.BuildingRecord home =
                 buildings.findResidentBuilding(level, npc);
+
+        if (home == null) {
+            if (homeClaimCooldown > 0) {
+                homeClaimCooldown--;
+            } else {
+                homeClaimCooldown = HOME_CLAIM_INTERVAL;
+                home = buildings.findOrClaimNearestHome(
+                        level,
+                        npc,
+                        HOME_CLAIM_RADIUS_SQR
+                );
+            }
+        }
 
         if (npc.isSleeping()) {
             if (level.isNight() && home != null) {
@@ -129,6 +145,7 @@ final class NpcBuildingBrain {
         homeTarget = null;
         activeBed = null;
         repathCooldown = 0;
+        homeClaimCooldown = 0;
         busy = false;
     }
 

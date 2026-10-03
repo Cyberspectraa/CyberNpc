@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.40.0
+
+### Item-frame Building Markers replace the Building Planner
+- Retired the 0.39.x manual Building Planner workflow from normal use.
+- The legacy Building Planner item remains registered only so old worlds and inventories load safely; it no longer appears in the CyberNpc creative tab and now directs players to Building Markers.
+- Added Home, Shop, Church, Bank, Post Office and Inn main-building markers.
+- Added Public Area, Staff Only and Bedroom secondary-room markers.
+- Added Altar and Counter activity-point markers.
+- Building markers are placed into ordinary Minecraft item frames; after successful registration the wooden frame becomes invisible while the marker icon remains visible.
+
+### Automatic enclosed-room detection
+- A main or room marker performs one bounded flood-fill of the actual enclosed walkable room when installed.
+- The detected room is compressed into persistent cuboid slices so irregular interiors are represented much more accurately than one giant manual box.
+- Walls and ordinary solid blocks stop the scan.
+- Doors, trapdoors and fence gates are always treated as room boundaries even while open.
+- Real bed blocks are detected from the scanned room.
+- Scans are bounded by cell count and distance. A room that leaks into the outside world or is unreasonably large is rejected with an explanation instead of creating an enormous building record.
+- Runtime NPC AI uses the saved result; it does not continuously rescan buildings.
+
+### Linked building rooms and access
+- Main markers create the authoritative building.
+- Secondary room markers first link through a shared registered entrance; nearest-building fallback is used when no shared entrance can be resolved.
+- Public Area rooms extend the public part of a building.
+- Staff Only rooms remain part of the same building but require resident/worker/special-NPC private access.
+- Bedroom rooms are private and automatically register the real beds found inside.
+- Staff/Bedroom markers reject a room that is still the same fully open space as the main room, preventing one marker from accidentally making the entire public building private.
+- Building chunk indexes include all marker rooms so pathing/access checks remain cheap.
+
+### Marker interaction and cleanup
+- Right-clicking an existing marker reports the marker type and linked building.
+- Sneak-right-clicking a marker with an empty hand unregisters it and returns the marker item.
+- Breaking a marker item frame removes its persistent marker registration.
+- Removing a main marker removes the building record and its linked room/activity data.
+- Installing a new main marker inside a legacy 0.39.x planner-defined area automatically replaces that old planner record.
+
+### Automatic homes
+- Ordinary Main NPCs no longer need manual resident assignment for normal marked Homes.
+- Main NPCs periodically claim the nearest available Home within a bounded local radius.
+- Home capacity uses the number of detected beds; a Home without a detected bed has one temporary resident slot.
+- A bed in a separately marked Bedroom still contributes to the parent Home's capacity and is used for sleeping.
+
+### Church / Pope marker integration
+- Church remains public while Staff Only and Bedroom rooms inside it remain private.
+- Pope access is inherited from the existing persistent Home/Work special-NPC record, so a Pope attached to the Church can cross into its staff and bedroom rooms.
+- Ordinary visitors can use the main Church and Public Area rooms but cannot path into Staff Only or Bedroom rooms.
+- Pope daytime roaming can use public Church rooms and Staff Only rooms, while bedrooms remain destination-driven for sleeping.
+- Altar Marker frames store an exact floor-aware standing point and facing direction; frames may be mounted at normal wall height.
+
+### Performance
+- Room scanning only occurs when a marker is installed.
+- Detected rooms are compressed before persistence.
+- Existing cached chunk and entrance indexes are reused for runtime membership/access tests.
+- Home claiming is cooldown-driven rather than an every-tick settlement search.
+
 ## 0.39.1
 
 ### Building Planner usability overhaul

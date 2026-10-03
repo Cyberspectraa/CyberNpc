@@ -54,7 +54,23 @@ public final class ModCreativeTabs {
                                 // Town defence / special-NPC utilities.
                                 output.accept(ModItems.GUARD_POST.get());
                                 output.accept(ModItems.TOWN_REGISTER.get());
-                                output.accept(ModItems.BUILDING_PLANNER.get());
+
+                                // Building setup: put these into ordinary item
+                                // frames. Main markers define buildings; the
+                                // remaining markers define private rooms or
+                                // exact activity points inside them.
+                                output.accept(ModItems.HOME_MARKER.get());
+                                output.accept(ModItems.SHOP_MARKER.get());
+                                output.accept(ModItems.CHURCH_MARKER.get());
+                                output.accept(ModItems.BANK_MARKER.get());
+                                output.accept(ModItems.POST_OFFICE_MARKER.get());
+                                output.accept(ModItems.INN_MARKER.get());
+                                output.accept(ModItems.PUBLIC_AREA_MARKER.get());
+                                output.accept(ModItems.STAFF_ONLY_MARKER.get());
+                                output.accept(ModItems.BEDROOM_MARKER.get());
+                                output.accept(ModItems.ALTAR_MARKER.get());
+                                output.accept(ModItems.COUNTER_MARKER.get());
+
                                 output.accept(ModItems.SPECIAL_NPC_REMOVAL_STICK.get());
                                 output.accept(ModItems.DEVELOPER_GLASSES.get());
                             })

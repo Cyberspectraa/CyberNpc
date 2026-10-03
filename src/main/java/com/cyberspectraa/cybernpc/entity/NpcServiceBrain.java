@@ -756,7 +756,7 @@ final class NpcServiceBrain {
             ).pos();
         }
 
-        return buildings.randomInteriorTarget(
+        return buildings.randomAuthorizedInteriorTarget(
                 level,
                 church,
                 npc.getRandom()

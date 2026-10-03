@@ -128,6 +128,194 @@ public final class BuildingSavedData extends SavedData {
         return id;
     }
 
+    public UUID createMarkerBuilding(
+            ResourceKey<Level> dimension,
+            UUID markerId,
+            BlockPos core,
+            BuildingType type,
+            RoomScanner.ScanResult scan,
+            ServerLevel level
+    ) {
+        UUID id = createBuilding(dimension, core, type);
+        BuildingRecord record = records.get(id);
+
+        if (record == null) {
+            return id;
+        }
+
+        record.primaryMarkerId = markerId;
+        record.zones.clear();
+        record.zones.addAll(scan.zones());
+        record.entrances.clear();
+        record.entrances.addAll(scan.entrances());
+
+        if (type == BuildingType.HOME || type == BuildingType.INN) {
+            addDetectedBeds(record, scan.beds(), level, markerId);
+        }
+
+        markChanged();
+        return id;
+    }
+
+    public boolean addMarkerRoom(
+            UUID buildingId,
+            UUID markerId,
+            BuildingMarkerType.RoomKind kind,
+            RoomScanner.ScanResult scan,
+            ServerLevel level
+    ) {
+        BuildingRecord record = records.get(buildingId);
+        if (record == null
+                || markerId == null
+                || kind == null
+                || kind == BuildingMarkerType.RoomKind.MAIN) {
+            return false;
+        }
+
+        record.rooms.removeIf(room ->
+                room.markerId().equals(markerId)
+        );
+
+        record.rooms.add(new RoomRegion(
+                markerId,
+                kind,
+                scan.start(),
+                List.copyOf(scan.zones())
+        ));
+        record.entrances.addAll(scan.entrances());
+
+        if (kind == BuildingMarkerType.RoomKind.BEDROOM) {
+            addDetectedBeds(record, scan.beds(), level, markerId);
+        }
+
+        markChanged();
+        return true;
+    }
+
+    public boolean addMarkerPoint(
+            UUID buildingId,
+            UUID markerId,
+            BuildingPointType type,
+            BlockPos pos,
+            float yaw
+    ) {
+        BuildingRecord record = records.get(buildingId);
+        if (record == null
+                || markerId == null
+                || type == null
+                || pos == null) {
+            return false;
+        }
+
+        record.points.removeIf(point ->
+                markerId.equals(point.markerId())
+        );
+        record.points.add(new ActivityPoint(
+                type,
+                pos.immutable(),
+                yaw,
+                markerId
+        ));
+        markChanged();
+        return true;
+    }
+
+    public boolean removeMarker(UUID markerId) {
+        if (markerId == null) {
+            return false;
+        }
+
+        UUID removeBuildingId = null;
+        boolean changed = false;
+
+        for (BuildingRecord record : records.values()) {
+            if (markerId.equals(record.primaryMarkerId)) {
+                removeBuildingId = record.id();
+                break;
+            }
+
+            changed |= record.rooms.removeIf(room ->
+                    markerId.equals(room.markerId())
+            );
+            changed |= record.points.removeIf(point ->
+                    markerId.equals(point.markerId())
+            );
+        }
+
+        if (removeBuildingId != null) {
+            records.remove(removeBuildingId);
+            changed = true;
+        }
+
+        if (changed) {
+            markChanged();
+        }
+
+        return changed;
+    }
+
+    @Nullable
+    public BuildingRecord findBuildingForRoom(
+            ResourceKey<Level> dimension,
+            Set<BlockPos> roomEntrances,
+            BlockPos origin,
+            double fallbackRadiusSqr
+    ) {
+        ensureIndexes();
+
+        for (BlockPos entrance : roomEntrances) {
+            BuildingRecord linked =
+                    getEntranceBuilding(dimension, entrance);
+            if (linked != null) {
+                return linked;
+            }
+        }
+
+        BuildingRecord best = null;
+        double bestDistance = Double.MAX_VALUE;
+
+        for (BuildingRecord record : records.values()) {
+            if (!record.dimension().equals(dimension)) {
+                continue;
+            }
+
+            double distance = origin.distSqr(record.core());
+            if (distance <= fallbackRadiusSqr
+                    && distance < bestDistance) {
+                best = record;
+                bestDistance = distance;
+            }
+        }
+
+        return best;
+    }
+
+    private void addDetectedBeds(
+            BuildingRecord record,
+            Set<BlockPos> beds,
+            ServerLevel level,
+            @Nullable UUID markerId
+    ) {
+        for (BlockPos bed : beds) {
+            record.points.removeIf(existing ->
+                    existing.type() == BuildingPointType.BED
+                            && existing.pos().equals(bed)
+            );
+
+            BlockState state = level.getBlockState(bed);
+            float yaw = state.hasProperty(BedBlock.FACING)
+                    ? state.getValue(BedBlock.FACING).toYRot()
+                    : 0.0F;
+
+            record.points.add(new ActivityPoint(
+                    BuildingPointType.BED,
+                    bed,
+                    yaw,
+                    markerId
+            ));
+        }
+    }
+
     public boolean removeBuilding(UUID id) {
         if (id == null || records.remove(id) == null) {
             return false;
@@ -211,7 +399,8 @@ public final class BuildingSavedData extends SavedData {
         ActivityPoint point = new ActivityPoint(
                 type,
                 pos.immutable(),
-                yaw
+                yaw,
+                null
         );
 
         record.points.removeIf(existing ->
@@ -325,7 +514,8 @@ public final class BuildingSavedData extends SavedData {
                 record.points.add(new ActivityPoint(
                         BuildingPointType.BED,
                         bed,
-                        yaw
+                        yaw,
+                        null
                 ));
             }
         }
@@ -411,10 +601,15 @@ public final class BuildingSavedData extends SavedData {
             return true;
         }
 
-        if (record.type().isPublicAccess()) {
-            return true;
-        }
+        return record.type().isPublicAccess()
+                || hasPrivateAccess(level, npc, record);
+    }
 
+    private boolean hasPrivateAccess(
+            ServerLevel level,
+            CyberNpcEntity npc,
+            BuildingRecord record
+    ) {
         UUID identity = npcIdentity(npc);
         if (record.residents.contains(identity)
                 || record.workers.contains(identity)) {
@@ -428,26 +623,40 @@ public final class BuildingSavedData extends SavedData {
         }
 
         UUID specialId = npc.getSpecialNpcId();
-        if (specialId != null) {
-            SpecialNpcSavedData.SpecialNpcRecord special =
-                    SpecialNpcSavedData.get(level).getRecord(specialId);
-
-            if (special != null) {
-                if (special.home() != null
-                        && special.home().dimension().equals(record.dimension())
-                        && record.contains(special.home().pos())) {
-                    return true;
-                }
-
-                if (special.work() != null
-                        && special.work().dimension().equals(record.dimension())
-                        && record.contains(special.work().pos())) {
-                    return true;
-                }
-            }
+        if (specialId == null) {
+            return false;
         }
 
-        return false;
+        SpecialNpcSavedData.SpecialNpcRecord special =
+                SpecialNpcSavedData.get(level).getRecord(specialId);
+
+        if (special == null) {
+            return false;
+        }
+
+        if (special.home() != null
+                && special.home().dimension().equals(record.dimension())
+                && record.contains(special.home().pos())) {
+            return true;
+        }
+
+        return special.work() != null
+                && special.work().dimension().equals(record.dimension())
+                && record.contains(special.work().pos());
+    }
+
+    private boolean canAccessPosition(
+            ServerLevel level,
+            CyberNpcEntity npc,
+            BuildingRecord record,
+            BlockPos pos
+    ) {
+        RoomRegion room = record.restrictedRoomAt(pos);
+        if (room != null && room.kind().restricted()) {
+            return hasPrivateAccess(level, npc, record);
+        }
+
+        return canEnter(level, npc, record);
     }
 
     public boolean canUseEntrance(
@@ -462,10 +671,43 @@ public final class BuildingSavedData extends SavedData {
             return true;
         }
 
+        boolean privateAccess =
+                hasPrivateAccess(level, npc, entrance);
+
+        // A door bordering a staff/bedroom region must stay private even
+        // though the parent building itself may be public.
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            BlockPos side = doorPos.relative(direction);
+            RoomRegion restricted =
+                    entrance.restrictedRoomAt(side);
+            if (restricted != null
+                    && restricted.kind().restricted()
+                    && !privateAccess) {
+                BuildingRecord current =
+                        getBuildingAt(
+                                level.dimension(),
+                                npc.blockPosition()
+                        );
+                RoomRegion currentRoom = current != null
+                        && current.id().equals(entrance.id())
+                        ? current.restrictedRoomAt(
+                        npc.blockPosition()
+                )
+                        : null;
+
+                // Let somebody already inside the private room leave it.
+                if (currentRoom == null
+                        || !currentRoom.markerId().equals(
+                        restricted.markerId()
+                )) {
+                    return false;
+                }
+            }
+        }
+
         BuildingRecord current =
                 getBuildingAt(level.dimension(), npc.blockPosition());
 
-        // Always let an NPC leave the building it is already inside.
         if (current != null && current.id().equals(entrance.id())) {
             return true;
         }
@@ -484,14 +726,7 @@ public final class BuildingSavedData extends SavedData {
             return true;
         }
 
-        BuildingRecord current =
-                getBuildingAt(level.dimension(), npc.blockPosition());
-
-        if (current != null && current.id().equals(target.id())) {
-            return true;
-        }
-
-        return canEnter(level, npc, target);
+        return canAccessPosition(level, npc, target, pos);
     }
 
     @Nullable
@@ -512,6 +747,53 @@ public final class BuildingSavedData extends SavedData {
         }
 
         return null;
+    }
+
+    @Nullable
+    public BuildingRecord findOrClaimNearestHome(
+            ServerLevel level,
+            CyberNpcEntity npc,
+            double radiusSqr
+    ) {
+        BuildingRecord existing = findResidentBuilding(level, npc);
+        if (existing != null) {
+            return existing;
+        }
+
+        UUID identity = npcIdentity(npc);
+        BuildingRecord best = null;
+        double bestDistance = Double.MAX_VALUE;
+
+        for (BuildingRecord record : records.values()) {
+            if (!record.dimension().equals(level.dimension())
+                    || record.type() != BuildingType.HOME) {
+                continue;
+            }
+
+            long beds = record.points.stream()
+                    .filter(point ->
+                            point.type() == BuildingPointType.BED)
+                    .count();
+            int capacity = Math.max(1, (int) beds);
+
+            if (record.residents.size() >= capacity) {
+                continue;
+            }
+
+            double distance =
+                    npc.blockPosition().distSqr(record.core());
+            if (distance <= radiusSqr && distance < bestDistance) {
+                best = record;
+                bestDistance = distance;
+            }
+        }
+
+        if (best != null) {
+            best.residents.add(identity);
+            markChanged();
+        }
+
+        return best;
     }
 
     @Nullable
@@ -594,17 +876,60 @@ public final class BuildingSavedData extends SavedData {
             BuildingRecord record,
             RandomSource random
     ) {
+        return randomInteriorTarget(
+                level,
+                record,
+                random,
+                false
+        );
+    }
+
+    @Nullable
+    public BlockPos randomAuthorizedInteriorTarget(
+            ServerLevel level,
+            BuildingRecord record,
+            RandomSource random
+    ) {
+        return randomInteriorTarget(
+                level,
+                record,
+                random,
+                true
+        );
+    }
+
+    @Nullable
+    private BlockPos randomInteriorTarget(
+            ServerLevel level,
+            BuildingRecord record,
+            RandomSource random,
+            boolean includeStaffAreas
+    ) {
         if (level == null
                 || record == null
                 || random == null
-                || record.zones.isEmpty()
                 || !record.dimension().equals(level.dimension())) {
             return null;
         }
 
+        List<Zone> choices = new ArrayList<>(record.zones);
+
+        for (RoomRegion room : record.rooms) {
+            if (room.kind() == BuildingMarkerType.RoomKind.PUBLIC_AREA
+                    || (includeStaffAreas
+                    && room.kind()
+                    == BuildingMarkerType.RoomKind.STAFF_ONLY)) {
+                choices.addAll(room.zones());
+            }
+        }
+
+        if (choices.isEmpty()) {
+            return null;
+        }
+
         for (int attempt = 0; attempt < 24; attempt++) {
-            Zone zone = record.zones.get(
-                    random.nextInt(record.zones.size())
+            Zone zone = choices.get(
+                    random.nextInt(choices.size())
             );
 
             int x = randomBetween(random, zone.min().getX(), zone.max().getX());
@@ -710,7 +1035,12 @@ public final class BuildingSavedData extends SavedData {
                             ignored -> new HashMap<>()
                     );
 
-            for (Zone zone : record.zones) {
+            List<Zone> indexedZones = new ArrayList<>(record.zones);
+            for (RoomRegion room : record.rooms) {
+                indexedZones.addAll(room.zones());
+            }
+
+            for (Zone zone : indexedZones) {
                 int minChunkX = zone.min().getX() >> 4;
                 int maxChunkX = zone.max().getX() >> 4;
                 int minChunkZ = zone.min().getZ() >> 4;
@@ -766,8 +1096,11 @@ public final class BuildingSavedData extends SavedData {
         private final BlockPos core;
         private BuildingType type;
         private String name;
+        @Nullable
+        private UUID primaryMarkerId;
 
         private final List<Zone> zones = new ArrayList<>();
+        private final List<RoomRegion> rooms = new ArrayList<>();
         private final Set<BlockPos> entrances = new LinkedHashSet<>();
         private final List<ActivityPoint> points = new ArrayList<>();
         private final Set<UUID> residents = new LinkedHashSet<>();
@@ -811,6 +1144,15 @@ public final class BuildingSavedData extends SavedData {
             return List.copyOf(zones);
         }
 
+        public List<RoomRegion> rooms() {
+            return List.copyOf(rooms);
+        }
+
+        @Nullable
+        public UUID primaryMarkerId() {
+            return primaryMarkerId;
+        }
+
         public Set<BlockPos> entrances() {
             return Set.copyOf(entrances);
         }
@@ -828,12 +1170,29 @@ public final class BuildingSavedData extends SavedData {
         }
 
         public boolean contains(BlockPos pos) {
+            for (RoomRegion room : rooms) {
+                if (room.contains(pos)) {
+                    return true;
+                }
+            }
+
             for (Zone zone : zones) {
                 if (zone.contains(pos)) {
                     return true;
                 }
             }
             return false;
+        }
+
+        @Nullable
+        public RoomRegion restrictedRoomAt(BlockPos pos) {
+            for (RoomRegion room : rooms) {
+                if (room.kind().restricted()
+                        && room.contains(pos)) {
+                    return room;
+                }
+            }
+            return null;
         }
 
         private CompoundTag save() {
@@ -843,12 +1202,21 @@ public final class BuildingSavedData extends SavedData {
             tag.putLong("Core", core.asLong());
             tag.putString("Type", type.serializedName());
             tag.putString("Name", name);
+            if (primaryMarkerId != null) {
+                tag.putUUID("PrimaryMarker", primaryMarkerId);
+            }
 
             ListTag zoneList = new ListTag();
             for (Zone zone : zones) {
                 zoneList.add(zone.save());
             }
             tag.put("Zones", zoneList);
+
+            ListTag roomList = new ListTag();
+            for (RoomRegion room : rooms) {
+                roomList.add(room.save());
+            }
+            tag.put("Rooms", roomList);
 
             long[] entranceArray = new long[entrances.size()];
             int entranceIndex = 0;
@@ -894,11 +1262,25 @@ public final class BuildingSavedData extends SavedData {
                     name.isBlank() ? type.displayName() : name
             );
 
+            if (tag.hasUUID("PrimaryMarker")) {
+                record.primaryMarkerId =
+                        tag.getUUID("PrimaryMarker");
+            }
+
             ListTag zones = tag.getList("Zones", Tag.TAG_COMPOUND);
             for (int i = 0; i < zones.size(); i++) {
                 Zone zone = Zone.load(zones.getCompound(i));
                 if (zone != null) {
                     record.zones.add(zone);
+                }
+            }
+
+            ListTag rooms = tag.getList("Rooms", Tag.TAG_COMPOUND);
+            for (int i = 0; i < rooms.size(); i++) {
+                RoomRegion room =
+                        RoomRegion.load(rooms.getCompound(i));
+                if (room != null) {
+                    record.rooms.add(room);
                 }
             }
 
@@ -999,10 +1381,80 @@ public final class BuildingSavedData extends SavedData {
         }
     }
 
+    public record RoomRegion(
+            UUID markerId,
+            BuildingMarkerType.RoomKind kind,
+            BlockPos markerPos,
+            List<Zone> zones
+    ) {
+        public RoomRegion {
+            markerPos = markerPos.immutable();
+            zones = List.copyOf(zones);
+        }
+
+        public boolean contains(BlockPos pos) {
+            for (Zone zone : zones) {
+                if (zone.contains(pos)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private CompoundTag save() {
+            CompoundTag tag = new CompoundTag();
+            tag.putUUID("Marker", markerId);
+            tag.putString("Kind", kind.name());
+            tag.putLong("MarkerPos", markerPos.asLong());
+
+            ListTag zoneList = new ListTag();
+            for (Zone zone : zones) {
+                zoneList.add(zone.save());
+            }
+            tag.put("Zones", zoneList);
+            return tag;
+        }
+
+        @Nullable
+        private static RoomRegion load(CompoundTag tag) {
+            if (!tag.hasUUID("Marker")
+                    || !tag.contains("MarkerPos")) {
+                return null;
+            }
+
+            BuildingMarkerType.RoomKind kind;
+            try {
+                kind = BuildingMarkerType.RoomKind.valueOf(
+                        tag.getString("Kind")
+                );
+            } catch (IllegalArgumentException ignored) {
+                return null;
+            }
+
+            List<Zone> zones = new ArrayList<>();
+            ListTag zoneList =
+                    tag.getList("Zones", Tag.TAG_COMPOUND);
+            for (int i = 0; i < zoneList.size(); i++) {
+                Zone zone = Zone.load(zoneList.getCompound(i));
+                if (zone != null) {
+                    zones.add(zone);
+                }
+            }
+
+            return new RoomRegion(
+                    tag.getUUID("Marker"),
+                    kind,
+                    BlockPos.of(tag.getLong("MarkerPos")),
+                    zones
+            );
+        }
+    }
+
     public record ActivityPoint(
             BuildingPointType type,
             BlockPos pos,
-            float yaw
+            float yaw,
+            @Nullable UUID markerId
     ) {
         public ActivityPoint {
             pos = pos.immutable();
@@ -1013,6 +1465,9 @@ public final class BuildingSavedData extends SavedData {
             tag.putString("Type", type.serializedName());
             tag.putLong("Pos", pos.asLong());
             tag.putFloat("Yaw", yaw);
+            if (markerId != null) {
+                tag.putUUID("Marker", markerId);
+            }
             return tag;
         }
 
@@ -1027,7 +1482,10 @@ public final class BuildingSavedData extends SavedData {
                             tag.getString("Type")
                     ),
                     BlockPos.of(tag.getLong("Pos")),
-                    tag.getFloat("Yaw")
+                    tag.getFloat("Yaw"),
+                    tag.hasUUID("Marker")
+                            ? tag.getUUID("Marker")
+                            : null
             );
         }
     }
