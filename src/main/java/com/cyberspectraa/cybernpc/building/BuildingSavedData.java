@@ -945,7 +945,12 @@ public final class BuildingSavedData extends SavedData {
                             ignored -> new HashMap<>()
                     );
 
-            for (Zone zone : record.zones) {
+            List<Zone> indexedZones = new ArrayList<>(record.zones);
+            for (RoomRegion room : record.rooms) {
+                indexedZones.addAll(room.zones());
+            }
+
+            for (Zone zone : indexedZones) {
                 int minChunkX = zone.min().getX() >> 4;
                 int maxChunkX = zone.max().getX() >> 4;
                 int minChunkZ = zone.min().getZ() >> 4;
@@ -1001,8 +1006,11 @@ public final class BuildingSavedData extends SavedData {
         private final BlockPos core;
         private BuildingType type;
         private String name;
+        @Nullable
+        private UUID primaryMarkerId;
 
         private final List<Zone> zones = new ArrayList<>();
+        private final List<RoomRegion> rooms = new ArrayList<>();
         private final Set<BlockPos> entrances = new LinkedHashSet<>();
         private final List<ActivityPoint> points = new ArrayList<>();
         private final Set<UUID> residents = new LinkedHashSet<>();
@@ -1046,6 +1054,15 @@ public final class BuildingSavedData extends SavedData {
             return List.copyOf(zones);
         }
 
+        public List<RoomRegion> rooms() {
+            return List.copyOf(rooms);
+        }
+
+        @Nullable
+        public UUID primaryMarkerId() {
+            return primaryMarkerId;
+        }
+
         public Set<BlockPos> entrances() {
             return Set.copyOf(entrances);
         }
@@ -1063,12 +1080,29 @@ public final class BuildingSavedData extends SavedData {
         }
 
         public boolean contains(BlockPos pos) {
+            for (RoomRegion room : rooms) {
+                if (room.contains(pos)) {
+                    return true;
+                }
+            }
+
             for (Zone zone : zones) {
                 if (zone.contains(pos)) {
                     return true;
                 }
             }
             return false;
+        }
+
+        @Nullable
+        public RoomRegion restrictedRoomAt(BlockPos pos) {
+            for (RoomRegion room : rooms) {
+                if (room.kind().restricted()
+                        && room.contains(pos)) {
+                    return room;
+                }
+            }
+            return null;
         }
 
         private CompoundTag save() {
@@ -1078,12 +1112,21 @@ public final class BuildingSavedData extends SavedData {
             tag.putLong("Core", core.asLong());
             tag.putString("Type", type.serializedName());
             tag.putString("Name", name);
+            if (primaryMarkerId != null) {
+                tag.putUUID("PrimaryMarker", primaryMarkerId);
+            }
 
             ListTag zoneList = new ListTag();
             for (Zone zone : zones) {
                 zoneList.add(zone.save());
             }
             tag.put("Zones", zoneList);
+
+            ListTag roomList = new ListTag();
+            for (RoomRegion room : rooms) {
+                roomList.add(room.save());
+            }
+            tag.put("Rooms", roomList);
 
             long[] entranceArray = new long[entrances.size()];
             int entranceIndex = 0;
@@ -1129,11 +1172,25 @@ public final class BuildingSavedData extends SavedData {
                     name.isBlank() ? type.displayName() : name
             );
 
+            if (tag.hasUUID("PrimaryMarker")) {
+                record.primaryMarkerId =
+                        tag.getUUID("PrimaryMarker");
+            }
+
             ListTag zones = tag.getList("Zones", Tag.TAG_COMPOUND);
             for (int i = 0; i < zones.size(); i++) {
                 Zone zone = Zone.load(zones.getCompound(i));
                 if (zone != null) {
                     record.zones.add(zone);
+                }
+            }
+
+            ListTag rooms = tag.getList("Rooms", Tag.TAG_COMPOUND);
+            for (int i = 0; i < rooms.size(); i++) {
+                RoomRegion room =
+                        RoomRegion.load(rooms.getCompound(i));
+                if (room != null) {
+                    record.rooms.add(room);
                 }
             }
 
