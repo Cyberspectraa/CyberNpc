@@ -647,15 +647,35 @@ public final class BuildingPlannerItem extends Item {
         String features = record.zones().size() + " area"
                 + (record.zones().size() == 1 ? "" : "s")
                 + " • " + record.entrances().size() + " door"
-                + (record.entrances().size() == 1 ? "" : "s")
-                + " • " + record.residentCount() + " resident"
-                + (record.residentCount() == 1 ? "" : "s");
+                + (record.entrances().size() == 1 ? "" : "s");
 
         if (hasBed) {
             features += " • Bed ✓";
         }
         if (record.type() == BuildingType.CHURCH) {
             features += hasAltar ? " • Altar ✓" : " • Altar MISSING";
+        }
+
+        String nextAction;
+        if (corner != null) {
+            nextAction = "Corner 1: "
+                    + formatPos(corner)
+                    + " • click opposite corner";
+        } else {
+            nextAction = switch (mode) {
+                case BUILD -> features;
+                case ADD_AREA ->
+                        "Click corner 1 of the extra area";
+                case SPECIAL -> mode.shortHelp(record.type());
+                case RESIDENT ->
+                        "Right-click NPC who lives here • "
+                                + record.residentCount() + " assigned";
+                case WORKER ->
+                        "Right-click NPC who works here • "
+                                + record.workerCount() + " assigned";
+                case DELETE ->
+                        "Sneak + right-click inside this building";
+            };
         }
 
         message = message.copy()
@@ -670,15 +690,10 @@ public final class BuildingPlannerItem extends Item {
                 )
                 .append(Component.literal(" | "))
                 .append(
-                        Component.literal(
-                                corner != null
-                                        ? "Corner 1: "
-                                        + formatPos(corner)
-                                        + " • click opposite corner"
-                                        : features
-                        ).withStyle(
+                        Component.literal(nextAction).withStyle(
                                 record.type() == BuildingType.CHURCH
                                         && !hasAltar
+                                        && mode == EditorMode.BUILD
                                         ? ChatFormatting.YELLOW
                                         : ChatFormatting.GRAY
                         )
