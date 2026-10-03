@@ -10,6 +10,7 @@ public enum BuildingMarkerType {
     POST_OFFICE("Post Office", BuildingType.POST_OFFICE, RoomKind.MAIN, null),
     INN("Inn", BuildingType.INN, RoomKind.MAIN, null),
 
+    PUBLIC_AREA("Public Area", null, RoomKind.PUBLIC_AREA, null),
     STAFF_ONLY("Staff Only", null, RoomKind.STAFF_ONLY, null),
     BEDROOM("Bedroom", null, RoomKind.BEDROOM, null),
 
@@ -69,6 +70,7 @@ public enum BuildingMarkerType {
 
     public enum RoomKind {
         MAIN(false),
+        PUBLIC_AREA(false),
         STAFF_ONLY(true),
         BEDROOM(true);
 
