@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.39.1
+
+### Building Planner usability overhaul
+- Replaced the old eleven-mode planner cycle with six clear tools: Build / Select, Add Area, Special Spot, Residents, Workers and Delete.
+- Build / Select now creates a new building directly from two corner clicks instead of creating an empty Building Record and then forcing the player into a separate Zone mode.
+- Clicking inside an existing registered building selects it immediately.
+- Add Area uses the same simple two-corner flow for extensions, extra floors or irregular building wings.
+- Doors and real beds are automatically scanned whenever a building area is created or extended.
+- Special Spot is context-sensitive: Churches place an Altar spot; Shops, Banks, Post Offices and Workshops place a Counter spot. Clicking a door/gate manually corrects entrance detection, and clicking a bed can manually correct bed detection.
+- Existing 0.39.0 Building Planner items automatically map their old modes to the new simplified tools.
+
+### Always-visible planner feedback
+- Holding the Building Planner now keeps a live action-bar summary visible with the selected building, current tool, area count, detected doors, residents, Bed status and Church Altar status.
+- The selected building's registered areas are drawn in-world with visible particle box outlines while the planner is held.
+- Registered entrances receive their own visible particle markers.
+- Bed, Altar, Counter, Social and Seating points use distinct particle markers.
+- The first selected corner is shown as a vertical flame marker until the second corner is clicked.
+- Visuals are only sent to the player holding the planner, are range-limited and update on a low cadence to keep the editor lightweight.
+
 ## 0.39.0
 
 ### Building and property recognition
