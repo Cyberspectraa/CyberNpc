@@ -651,7 +651,17 @@ public final class BuildingSavedData extends SavedData {
                     RoomRegion restricted =
                             record.restrictedRoomAt(pos);
 
-                    double score;
+                    double score = pos.distSqr(record.core());
+
+                    for (RoomRegion room : record.rooms) {
+                        if (room.contains(pos)) {
+                            score = Math.min(
+                                    score,
+                                    pos.distSqr(room.markerPos())
+                            );
+                        }
+                    }
+
                     if (restricted != null) {
                         // A deliberately placed private marker wins over a
                         // broad nearby building influence area.
@@ -659,8 +669,6 @@ public final class BuildingSavedData extends SavedData {
                                 + pos.distSqr(
                                 restricted.markerPos()
                         );
-                    } else {
-                        score = pos.distSqr(record.core());
                     }
 
                     if (score < bestScore) {
