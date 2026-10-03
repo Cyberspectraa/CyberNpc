@@ -128,6 +128,194 @@ public final class BuildingSavedData extends SavedData {
         return id;
     }
 
+    public UUID createMarkerBuilding(
+            ResourceKey<Level> dimension,
+            UUID markerId,
+            BlockPos core,
+            BuildingType type,
+            RoomScanner.ScanResult scan,
+            ServerLevel level
+    ) {
+        UUID id = createBuilding(dimension, core, type);
+        BuildingRecord record = records.get(id);
+
+        if (record == null) {
+            return id;
+        }
+
+        record.primaryMarkerId = markerId;
+        record.zones.clear();
+        record.zones.addAll(scan.zones());
+        record.entrances.clear();
+        record.entrances.addAll(scan.entrances());
+
+        if (type == BuildingType.HOME || type == BuildingType.INN) {
+            addDetectedBeds(record, scan.beds(), level, markerId);
+        }
+
+        markChanged();
+        return id;
+    }
+
+    public boolean addMarkerRoom(
+            UUID buildingId,
+            UUID markerId,
+            BuildingMarkerType.RoomKind kind,
+            RoomScanner.ScanResult scan,
+            ServerLevel level
+    ) {
+        BuildingRecord record = records.get(buildingId);
+        if (record == null
+                || markerId == null
+                || kind == null
+                || kind == BuildingMarkerType.RoomKind.MAIN) {
+            return false;
+        }
+
+        record.rooms.removeIf(room ->
+                room.markerId().equals(markerId)
+        );
+
+        record.rooms.add(new RoomRegion(
+                markerId,
+                kind,
+                scan.start(),
+                List.copyOf(scan.zones())
+        ));
+        record.entrances.addAll(scan.entrances());
+
+        if (kind == BuildingMarkerType.RoomKind.BEDROOM) {
+            addDetectedBeds(record, scan.beds(), level, markerId);
+        }
+
+        markChanged();
+        return true;
+    }
+
+    public boolean addMarkerPoint(
+            UUID buildingId,
+            UUID markerId,
+            BuildingPointType type,
+            BlockPos pos,
+            float yaw
+    ) {
+        BuildingRecord record = records.get(buildingId);
+        if (record == null
+                || markerId == null
+                || type == null
+                || pos == null) {
+            return false;
+        }
+
+        record.points.removeIf(point ->
+                markerId.equals(point.markerId())
+        );
+        record.points.add(new ActivityPoint(
+                type,
+                pos.immutable(),
+                yaw,
+                markerId
+        ));
+        markChanged();
+        return true;
+    }
+
+    public boolean removeMarker(UUID markerId) {
+        if (markerId == null) {
+            return false;
+        }
+
+        UUID removeBuildingId = null;
+        boolean changed = false;
+
+        for (BuildingRecord record : records.values()) {
+            if (markerId.equals(record.primaryMarkerId)) {
+                removeBuildingId = record.id();
+                break;
+            }
+
+            changed |= record.rooms.removeIf(room ->
+                    markerId.equals(room.markerId())
+            );
+            changed |= record.points.removeIf(point ->
+                    markerId.equals(point.markerId())
+            );
+        }
+
+        if (removeBuildingId != null) {
+            records.remove(removeBuildingId);
+            changed = true;
+        }
+
+        if (changed) {
+            markChanged();
+        }
+
+        return changed;
+    }
+
+    @Nullable
+    public BuildingRecord findBuildingForRoom(
+            ResourceKey<Level> dimension,
+            Set<BlockPos> roomEntrances,
+            BlockPos origin,
+            double fallbackRadiusSqr
+    ) {
+        ensureIndexes();
+
+        for (BlockPos entrance : roomEntrances) {
+            BuildingRecord linked =
+                    getEntranceBuilding(dimension, entrance);
+            if (linked != null) {
+                return linked;
+            }
+        }
+
+        BuildingRecord best = null;
+        double bestDistance = Double.MAX_VALUE;
+
+        for (BuildingRecord record : records.values()) {
+            if (!record.dimension().equals(dimension)) {
+                continue;
+            }
+
+            double distance = origin.distSqr(record.core());
+            if (distance <= fallbackRadiusSqr
+                    && distance < bestDistance) {
+                best = record;
+                bestDistance = distance;
+            }
+        }
+
+        return best;
+    }
+
+    private void addDetectedBeds(
+            BuildingRecord record,
+            Set<BlockPos> beds,
+            ServerLevel level,
+            @Nullable UUID markerId
+    ) {
+        for (BlockPos bed : beds) {
+            record.points.removeIf(existing ->
+                    existing.type() == BuildingPointType.BED
+                            && existing.pos().equals(bed)
+            );
+
+            BlockState state = level.getBlockState(bed);
+            float yaw = state.hasProperty(BedBlock.FACING)
+                    ? state.getValue(BedBlock.FACING).toYRot()
+                    : 0.0F;
+
+            record.points.add(new ActivityPoint(
+                    BuildingPointType.BED,
+                    bed,
+                    yaw,
+                    markerId
+            ));
+        }
+    }
+
     public boolean removeBuilding(UUID id) {
         if (id == null || records.remove(id) == null) {
             return false;
@@ -211,7 +399,8 @@ public final class BuildingSavedData extends SavedData {
         ActivityPoint point = new ActivityPoint(
                 type,
                 pos.immutable(),
-                yaw
+                yaw,
+                null
         );
 
         record.points.removeIf(existing ->
@@ -325,7 +514,8 @@ public final class BuildingSavedData extends SavedData {
                 record.points.add(new ActivityPoint(
                         BuildingPointType.BED,
                         bed,
-                        yaw
+                        yaw,
+                        null
                 ));
             }
         }
