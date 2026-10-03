@@ -4,6 +4,7 @@ import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.item.BuildingMarkerItem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -12,6 +13,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
+import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -366,11 +368,14 @@ public final class BuildingMarkerEvents {
                 .getOpposite()
                 .toYRot();
 
+        BlockPos standingPos =
+                findStandingPoint(level, frame.blockPosition());
+
         if (!data.addMarkerPoint(
                 building.id(),
                 frame.getUUID(),
                 type.pointType(),
-                frame.blockPosition(),
+                standingPos,
                 yaw
         )) {
             return false;
@@ -384,6 +389,25 @@ public final class BuildingMarkerEvents {
                 ChatFormatting.GREEN
         );
         return true;
+    }
+
+    @SubscribeEvent
+    public static void onAttackEntity(
+            AttackEntityEvent event
+    ) {
+        if (!(event.getTarget() instanceof ItemFrame frame)
+                || !(event.getEntity() instanceof ServerPlayer)
+                || !(event.getEntity().level()
+                instanceof ServerLevel level)
+                || !(frame.getItem().getItem()
+                instanceof BuildingMarkerItem)) {
+            return;
+        }
+
+        // Clean SavedData before vanilla breaks the frame and potentially
+        // clears its displayed stack.
+        BuildingSavedData.get(level)
+                .removeMarker(frame.getUUID());
     }
 
     @SubscribeEvent
@@ -405,6 +429,33 @@ public final class BuildingMarkerEvents {
             BuildingSavedData.get(level)
                     .removeMarker(frame.getUUID());
         }
+    }
+
+    private static BlockPos findStandingPoint(
+            ServerLevel level,
+            BlockPos markerPos
+    ) {
+        for (int offset = 0; offset <= 5; offset++) {
+            BlockPos candidate = markerPos.below(offset);
+            BlockPos supportPos = candidate.below();
+
+            if (level.getBlockState(candidate)
+                    .getCollisionShape(level, candidate)
+                    .isEmpty()
+                    && level.getBlockState(candidate.above())
+                    .getCollisionShape(level, candidate.above())
+                    .isEmpty()
+                    && level.getBlockState(supportPos)
+                    .isFaceSturdy(
+                            level,
+                            supportPos,
+                            Direction.UP
+                    )) {
+                return candidate.immutable();
+            }
+        }
+
+        return markerPos.immutable();
     }
 
     private static void tell(
