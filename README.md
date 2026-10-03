@@ -1,77 +1,72 @@
 # CyberNpc
 
-## Current release: 0.40.1
+## Current release: 0.41.0
 
-CyberNpc v0.40.1 makes building setup deliberately simple: **Building Markers no longer scan the structure at all.**
+CyberNpc v0.41.0 replaces the previous building setup with **four invisible marker blocks**.
 
-### The whole setup rule
+### The four markers
 
-Put an ordinary item frame somewhere inside the build and put the matching CyberNpc marker into it.
+**Building Marker**
+- Place one inside the main part of a building.
+- CyberNpc performs one bounded interior scan, using solid walls as the perimeter.
+- Normal doors, trapdoors and gates connect rooms instead of stopping the scan.
+- Exterior sky-visible space is rejected so an open front door does not make the scan spread through the town.
+- If the safe scan budget is ever reached, CyberNpc keeps everything it already found instead of failing with a "too big" error.
+- Any missed section can simply be added with a Room Marker.
 
-That is enough.
+**Room Marker**
+- Place it inside a room/section the Building Marker did not detect.
+- It runs the same interior scan.
+- It automatically links to the nearby Building Marker and stores its scanned area as part of that **same Building record**.
+- More than one Room Marker may extend the same building.
 
-There are no room scans, no corner selection, no wall detection and no maximum building-size error.
+**Bed Marker**
+- Place it near a real Minecraft bed.
+- It finds the nearest bed within 8 blocks and links that bed to the nearby Building.
+- Multiple Bed Markers are supported.
+- Multiple linked residents choose different currently available beds at night when possible.
 
-### Main markers
+**Work Marker**
+- Place it on the exact block where an NPC should stand while working.
+- Face the direction the NPC should face before placing it.
+- It links to the nearby Building.
+- The Work Marker itself is the exact standing/facing position; it is not a loose area.
 
-- **Home Marker** — private NPC home.
-- **Shop Marker** — public shop.
-- **Church Marker** — public church.
-- **Bank Marker** — public bank.
-- **Post Office Marker** — public post office.
-- **Inn Marker** — public inn.
+All four blocks render invisibly and have no collision in normal play. They keep a small selectable outline so they can still be administered when you know where they are. Sneak + right-click nearby with any marker item removes a marker.
 
-Each main marker creates a sensible fixed area around itself. Large building types get larger areas automatically; Churches intentionally cover a much larger area than Homes.
+### Linking NPCs with the Town Register
 
-If a very large or oddly shaped build needs more coverage, place a **Public Area Marker** in the extra section. It links to the nearest main building automatically.
+The Town Register now works with **any CyberNpc NPC**, not only special service NPCs.
 
-### Private/back areas
+1. Right-click the NPC with the **Town Register** to select them.
+2. Right-click a **Building Marker** with the Town Register to link that NPC to the building as their building/home.
+3. If the NPC works somewhere, right-click the wanted **Work Marker** with the Town Register.
 
-- **Staff Only Marker** — makes the nearby back area private to residents/workers/special NPCs.
-- **Bedroom Marker** — makes the nearby area a private bedroom and detects real beds inside that small area.
-- **Public Area Marker** — extends the public part of a building.
+This means an NPC can live in one linked Building but have a Work Marker in a completely different Building.
 
-These are local override areas. You do not need to outline the room or close every archway perfectly.
+Normal Main NPCs:
+- go to their linked Work Marker during the day,
+- stand directly on its centre and face its stored direction,
+- return to their linked Building at night,
+- and use an available linked Bed Marker when one exists.
 
-### Activity markers
+Special NPCs such as Banker, Courier, Guard and Pope continue using their persistent special-NPC records. Linking them through the Town Register also updates the relevant Home/Work anchors so their existing service behaviour continues to work.
 
-- **Altar Marker** — exact Church altar position.
-- **Counter Marker** — exact service position for Bank/Shop/Post Office-style NPCs.
+### Marker order and fixing links
 
-CyberNpc automatically finds the floor below the item frame for the NPC standing point.
+The easiest order is:
 
-### Simple Church example
+1. **Building Marker**
+2. optional **Room Marker(s)**
+3. **Bed Marker(s)**
+4. **Work Marker(s)**
+5. link NPCs with the **Town Register**
 
-For most Churches:
+If a Room, Bed or Work marker was placed before its Building existed, right-click that invisible marker later. CyberNpc retries its automatic link instead of making you replace the whole setup.
 
-1. Put one **Church Marker** somewhere in the main Church.
-2. Put one **Staff Only Marker** in the Pope's back area.
-3. Put one **Bedroom Marker** near the Pope's bed.
-4. Put one **Altar Marker** at the altar.
+Removing the main Building Marker removes its saved Building record. Existing secondary marker blocks can then be right-clicked after a new Building Marker is placed to link them again.
 
-That is the whole setup.
-
-The Church marker already covers a large area. If one distant wing is outside it, add a **Public Area Marker** there.
-
-The Pope may use the public Church, Staff Only areas, Bedroom and Altar. Ordinary visitors may use the public areas but not Staff Only/Bedroom areas.
-
-### Homes
-
-A normal house normally needs only:
-
-**Item frame + Home Marker = done.**
-
-Nearby Main NPCs automatically claim available Homes. Beds near the Home marker are detected automatically. If the bedroom is farther away, put a Bedroom Marker there.
-
-### Marker controls
-
-- Right-click an existing marker to refresh it using the current simple-area rules.
-- This also converts a 0.40.0 scan-based marker to the new 0.40.1 system with one click.
-- Sneak-right-click with an empty hand to remove the marker and get the item back.
-- Breaking the item frame unregisters the marker.
-- The wooden frame becomes invisible after successful registration while the marker icon stays visible.
-
-The old **Building Planner** remains registered only for compatibility with older worlds and is not used for normal building setup.
+The older Building Planner and item-frame marker items remain registered only for world compatibility and are no longer shown as the normal setup system.
 
 ### Guard Posts
 
