@@ -423,6 +423,7 @@ public class CyberNpcEntity extends PathfinderMob {
     private final NpcVocalizationController vocalizations;
     private final NpcServiceBrain serviceBrain;
     private final NpcBuildingBrain buildingBrain;
+    private final NpcFenceAvoidanceBrain fenceAvoidanceBrain;
 
     @Nullable
     private UUID specialNpcId;
@@ -438,6 +439,7 @@ public class CyberNpcEntity extends PathfinderMob {
         vocalizations = new NpcVocalizationController(this);
         serviceBrain = new NpcServiceBrain(this);
         buildingBrain = new NpcBuildingBrain(this);
+        fenceAvoidanceBrain = new NpcFenceAvoidanceBrain(this);
 
         getNavigation().setCanFloat(true);
         if (getNavigation() instanceof GroundPathNavigation groundNavigation) {
@@ -445,6 +447,9 @@ public class CyberNpcEntity extends PathfinderMob {
             groundNavigation.setCanPassDoors(true);
         }
 
+        // Explicitly make fences non-traversable for CyberNpc even when
+        // another movement behaviour is trying to reach something beyond one.
+        setPathfindingMalus(BlockPathTypes.FENCE, -1.0F);
         setPathfindingMalus(BlockPathTypes.LAVA, -1.0F);
         setPathfindingMalus(BlockPathTypes.WATER, 1.0F);
         setPathfindingMalus(BlockPathTypes.WATER_BORDER, 0.5F);
@@ -2318,6 +2323,17 @@ public class CyberNpcEntity extends PathfinderMob {
         super.tick();
 
         if (level().isClientSide) {
+            return;
+        }
+
+        // Applies to Main, Quest, Wild and service NPCs. If navigation has
+        // wedged against a fence, this temporarily owns movement so the
+        // behaviour that selected the unreachable target cannot immediately
+        // push the NPC straight back into the same fence.
+        if (isAlive() && fenceAvoidanceBrain.tick()) {
+            if (getNpcType() == NpcType.WILD) {
+                finishAiTick();
+            }
             return;
         }
 
@@ -7856,9 +7872,12 @@ public class CyberNpcEntity extends PathfinderMob {
                     return null;
                 }
 
-                if (npc.isBuildingDestinationAllowed(
-                        BlockPos.containing(candidate)
-                )) {
+                BlockPos candidatePos =
+                        BlockPos.containing(candidate);
+
+                if (npc.isBuildingDestinationAllowed(candidatePos)
+                        && npc.fenceAvoidanceBrain
+                        .isDestinationFenceSafe(candidatePos)) {
                     return candidate;
                 }
             }
