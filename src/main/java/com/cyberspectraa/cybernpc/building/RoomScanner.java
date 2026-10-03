@@ -136,6 +136,7 @@ public final class RoomScanner {
         BlockPos[] candidates = new BlockPos[]{
                 preferred,
                 preferred.above(),
+                preferred.below(),
                 preferred.north(),
                 preferred.south(),
                 preferred.east(),
