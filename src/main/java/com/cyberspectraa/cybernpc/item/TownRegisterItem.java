@@ -96,7 +96,7 @@ public final class TownRegisterItem extends Item {
         if (specialId == null) {
             player.displayClientMessage(
                     Component.literal(
-                            "Select a Banker or Courier with the Town Register first."
+                            "Select a special service NPC with the Town Register first."
                     ),
                     true
             );

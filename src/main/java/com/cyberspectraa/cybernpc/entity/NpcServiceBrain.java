@@ -1,5 +1,8 @@
 package com.cyberspectraa.cybernpc.entity;
 
+import com.cyberspectraa.cybernpc.building.BuildingPointType;
+import com.cyberspectraa.cybernpc.building.BuildingSavedData;
+import com.cyberspectraa.cybernpc.building.BuildingType;
 import com.cyberspectraa.cybernpc.mail.MailItemData;
 import com.cyberspectraa.cybernpc.mail.MailRecord;
 import com.cyberspectraa.cybernpc.mail.MailSavedData;
@@ -10,6 +13,7 @@ import com.cyberspectraa.cybernpc.service.NpcServiceRole;
 import com.cyberspectraa.cybernpc.service.GuardPostSavedData;
 import com.cyberspectraa.cybernpc.service.SpecialNpcSavedData;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -27,7 +31,11 @@ import net.minecraft.world.entity.monster.Spider;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -79,6 +87,17 @@ final class NpcServiceBrain {
     private static final int GUARD_POST_DUTY_EXTRA_TICKS = 600;
     private static final int GUARD_POST_REST_MIN_TICKS = 160;
     private static final int GUARD_POST_REST_EXTRA_TICKS = 200;
+    private static final double GUARD_POST_SNAP_SQR = 0.75D * 0.75D;
+
+    private static final double POPE_CHURCH_SEARCH_RADIUS_SQR =
+            96.0D * 96.0D;
+    private static final double POPE_POINT_ARRIVE_SQR = 1.75D * 1.75D;
+    private static final double POPE_VISITOR_RADIUS = 8.0D;
+    private static final int POPE_ALTAR_HOLD_TICKS = 300;
+    private static final int POPE_ROAM_PAUSE_MIN = 80;
+    private static final int POPE_ROAM_PAUSE_EXTRA = 160;
+    private static final int POPE_VISITOR_SCAN_INTERVAL = 40;
+    private static final int POPE_VISITOR_HOLD_TICKS = 70;
 
     private final CyberNpcEntity npc;
     private final List<Long> satchelIds = new ArrayList<>();
@@ -121,6 +140,17 @@ final class NpcServiceBrain {
     private BlockPos guardRespondBellPos;
     private int guardBellHoldTicks;
 
+    @Nullable
+    private BlockPos popeTarget;
+    @Nullable
+    private BlockPos popeActiveBed;
+    @Nullable
+    private UUID popeVisitorId;
+    private int popePauseTicks;
+    private int popeVisitorScanCooldown;
+    private int popeVisitorHoldTicks;
+    private long popeLastAltarDay = Long.MIN_VALUE;
+
     NpcServiceBrain(CyberNpcEntity npc) {
         this.npc = npc;
     }
@@ -151,6 +181,9 @@ final class NpcServiceBrain {
 
         if (role != NpcServiceRole.GUARD
                 && tickSpecialNpcDanger(level)) {
+            if (role == NpcServiceRole.POPE) {
+                wakePope(level);
+            }
             return;
         }
 
@@ -167,6 +200,11 @@ final class NpcServiceBrain {
 
         if (role == NpcServiceRole.GUARD) {
             tickGuard(level, data, record);
+            return;
+        }
+
+        if (role == NpcServiceRole.POPE) {
+            tickPope(level, data, record);
         }
     }
 
@@ -339,6 +377,488 @@ final class NpcServiceBrain {
             LivingEntity threat
     ) {
         GuardAlarmSystem.alertGuards(level, source, threat);
+    }
+
+    private void tickPope(
+            ServerLevel level,
+            SpecialNpcSavedData data,
+            SpecialNpcSavedData.SpecialNpcRecord record
+    ) {
+        clearVisualLetter();
+
+        BuildingSavedData buildings = BuildingSavedData.get(level);
+        BuildingSavedData.BuildingRecord church =
+                resolvePopeChurch(level, buildings, record);
+
+        if (church == null) {
+            wakePope(level);
+            popeTarget = null;
+            popeVisitorId = null;
+            popeVisitorHoldTicks = 0;
+
+            SpecialNpcSavedData.Anchor desired = level.isNight()
+                    ? firstNonNull(record.home(), record.work())
+                    : firstNonNull(record.work(), record.home());
+
+            if (desired != null
+                    && moveToAnchor(level, desired, 0.72D)
+                    && record.returningToWork()
+                    && desired == record.work()) {
+                data.markReachedWork(record.specialId());
+            }
+            return;
+        }
+
+        if (level.isNight()) {
+            tickPopeNight(level, buildings, church);
+            return;
+        }
+
+        wakePope(level);
+
+        if (record.returningToWork()) {
+            BlockPos arrival = chooseChurchArrival(
+                    buildings,
+                    church,
+                    record.work()
+            );
+            if (arrival != null
+                    && npc.blockPosition().distSqr(arrival)
+                    > POPE_POINT_ARRIVE_SQR) {
+                navigateTo(arrival, 0.76D);
+                return;
+            }
+            data.markReachedWork(record.specialId());
+        }
+
+        long minecraftDay = Math.floorDiv(
+                level.getDayTime(),
+                24_000L
+        );
+        long timeOfDay = Math.floorMod(
+                level.getDayTime(),
+                24_000L
+        );
+
+        // Each morning the Pope deliberately visits the altar before
+        // returning to normal church roaming.
+        if (timeOfDay < 3_000L
+                && popeLastAltarDay != minecraftDay) {
+            BuildingSavedData.ActivityPoint altar =
+                    buildings.nearestPoint(
+                            church,
+                            BuildingPointType.ALTAR,
+                            npc.blockPosition()
+                    );
+
+            if (altar != null) {
+                if (!altar.pos().equals(popeTarget)) {
+                    popeTarget = altar.pos();
+                    popePauseTicks = 0;
+                }
+
+                if (npc.blockPosition().distSqr(altar.pos())
+                        > POPE_POINT_ARRIVE_SQR) {
+                    navigateTo(altar.pos(), 0.72D);
+                    return;
+                }
+
+                npc.getNavigation().stop();
+                npc.setSprinting(false);
+                faceYaw(altar.yaw());
+
+                if (popePauseTicks <= 0) {
+                    popePauseTicks = POPE_ALTAR_HOLD_TICKS;
+                }
+
+                popePauseTicks--;
+                if (popePauseTicks <= 0) {
+                    popeLastAltarDay = minecraftDay;
+                    popeTarget = null;
+                }
+                return;
+            }
+
+            // No altar point was configured, so do not retry every tick.
+            popeLastAltarDay = minecraftDay;
+        }
+
+        if (tickPopeVisitorInteraction(level, church)) {
+            return;
+        }
+
+        if (popePauseTicks > 0) {
+            popePauseTicks--;
+            npc.getNavigation().stop();
+            npc.setSprinting(false);
+            return;
+        }
+
+        if (popeTarget == null
+                || !church.contains(popeTarget)
+                || npc.blockPosition().distSqr(popeTarget)
+                <= POPE_POINT_ARRIVE_SQR) {
+            popeTarget = choosePopeRoamTarget(
+                    level,
+                    buildings,
+                    church
+            );
+
+            if (popeTarget == null) {
+                npc.getNavigation().stop();
+                return;
+            }
+
+            if (npc.blockPosition().distSqr(popeTarget)
+                    <= POPE_POINT_ARRIVE_SQR) {
+                popePauseTicks = POPE_ROAM_PAUSE_MIN
+                        + npc.getRandom().nextInt(
+                        POPE_ROAM_PAUSE_EXTRA + 1
+                );
+                npc.getNavigation().stop();
+                return;
+            }
+        }
+
+        navigateTo(popeTarget, 0.68D);
+    }
+
+    @Nullable
+    private BuildingSavedData.BuildingRecord resolvePopeChurch(
+            ServerLevel level,
+            BuildingSavedData buildings,
+            SpecialNpcSavedData.SpecialNpcRecord record
+    ) {
+        SpecialNpcSavedData.Anchor work = record.work();
+        if (work != null
+                && work.dimension().equals(level.dimension())) {
+            BuildingSavedData.BuildingRecord atWork =
+                    buildings.getBuildingAt(
+                            level.dimension(),
+                            work.pos()
+                    );
+            if (atWork != null
+                    && atWork.type() == BuildingType.CHURCH) {
+                return atWork;
+            }
+
+            BuildingSavedData.BuildingRecord nearWork =
+                    buildings.findNearest(
+                            level.dimension(),
+                            BuildingType.CHURCH,
+                            work.pos(),
+                            POPE_CHURCH_SEARCH_RADIUS_SQR
+                    );
+            if (nearWork != null) {
+                return nearWork;
+            }
+        }
+
+        BuildingSavedData.BuildingRecord current =
+                buildings.getBuildingAt(
+                        level.dimension(),
+                        npc.blockPosition()
+                );
+        if (current != null
+                && current.type() == BuildingType.CHURCH) {
+            return current;
+        }
+
+        return buildings.findNearest(
+                level.dimension(),
+                BuildingType.CHURCH,
+                npc.blockPosition(),
+                POPE_CHURCH_SEARCH_RADIUS_SQR
+        );
+    }
+
+    @Nullable
+    private BlockPos chooseChurchArrival(
+            BuildingSavedData buildings,
+            BuildingSavedData.BuildingRecord church,
+            @Nullable SpecialNpcSavedData.Anchor work
+    ) {
+        if (work != null && church.contains(work.pos())) {
+            return work.pos();
+        }
+
+        BuildingSavedData.ActivityPoint altar =
+                buildings.nearestPoint(
+                        church,
+                        BuildingPointType.ALTAR,
+                        npc.blockPosition()
+                );
+        if (altar != null) {
+            return altar.pos();
+        }
+
+        return church.core();
+    }
+
+    private void tickPopeNight(
+            ServerLevel level,
+            BuildingSavedData buildings,
+            BuildingSavedData.BuildingRecord church
+    ) {
+        popeVisitorId = null;
+        popeVisitorHoldTicks = 0;
+        popePauseTicks = 0;
+
+        if (npc.isSleeping()) {
+            npc.getNavigation().stop();
+            npc.setSprinting(false);
+            return;
+        }
+
+        BuildingSavedData.ActivityPoint bedPoint =
+                buildings.nearestPoint(
+                        church,
+                        BuildingPointType.BED,
+                        npc.blockPosition()
+                );
+
+        BlockPos bedHead = bedPoint == null
+                ? null
+                : normalizePopeBedHead(level, bedPoint.pos());
+
+        if (bedHead != null && !isPopeBedOccupied(level, bedHead)) {
+            popeTarget = bedHead;
+            Vec3 bedCenter = Vec3.atBottomCenterOf(bedHead);
+
+            if (npc.distanceToSqr(bedCenter)
+                    > POPE_POINT_ARRIVE_SQR) {
+                navigateTo(bedHead, 0.72D);
+                return;
+            }
+
+            npc.getNavigation().stop();
+            npc.setSprinting(false);
+            setPopeBedOccupied(level, bedHead, true);
+            popeActiveBed = bedHead;
+            npc.startSleeping(bedHead);
+            popeTarget = null;
+            return;
+        }
+
+        if (popeTarget == null
+                || !church.contains(popeTarget)
+                || npc.blockPosition().distSqr(popeTarget)
+                <= POPE_POINT_ARRIVE_SQR) {
+            popeTarget = buildings.randomInteriorTarget(
+                    level,
+                    church,
+                    npc.getRandom()
+            );
+        }
+
+        if (popeTarget == null) {
+            npc.getNavigation().stop();
+            return;
+        }
+
+        if (npc.blockPosition().distSqr(popeTarget)
+                <= POPE_POINT_ARRIVE_SQR) {
+            npc.getNavigation().stop();
+            return;
+        }
+
+        navigateTo(popeTarget, 0.68D);
+    }
+
+    private boolean tickPopeVisitorInteraction(
+            ServerLevel level,
+            BuildingSavedData.BuildingRecord church
+    ) {
+        if (popeVisitorHoldTicks > 0 && popeVisitorId != null) {
+            var entity = level.getEntity(popeVisitorId);
+            if (entity instanceof CyberNpcEntity visitor
+                    && visitor.isAlive()
+                    && church.contains(visitor.blockPosition())
+                    && npc.distanceToSqr(visitor)
+                    <= POPE_VISITOR_RADIUS * POPE_VISITOR_RADIUS) {
+                popeVisitorHoldTicks--;
+                npc.getNavigation().stop();
+                npc.setSprinting(false);
+                npc.getLookControl().setLookAt(
+                        visitor,
+                        30.0F,
+                        30.0F
+                );
+                visitor.getLookControl().setLookAt(
+                        npc,
+                        30.0F,
+                        30.0F
+                );
+                return true;
+            }
+
+            popeVisitorHoldTicks = 0;
+            popeVisitorId = null;
+        }
+
+        if (popeVisitorScanCooldown > 0) {
+            popeVisitorScanCooldown--;
+            return false;
+        }
+        popeVisitorScanCooldown = POPE_VISITOR_SCAN_INTERVAL;
+
+        CyberNpcEntity visitor = level.getEntitiesOfClass(
+                        CyberNpcEntity.class,
+                        npc.getBoundingBox().inflate(
+                                POPE_VISITOR_RADIUS,
+                                4.0D,
+                                POPE_VISITOR_RADIUS
+                        ),
+                        other -> other != npc
+                                && other.isAlive()
+                                && church.contains(
+                                other.blockPosition()
+                        )
+                )
+                .stream()
+                .min(Comparator.comparingDouble(npc::distanceToSqr))
+                .orElse(null);
+
+        if (visitor == null) {
+            return false;
+        }
+
+        popeVisitorId = visitor.getUUID();
+        popeVisitorHoldTicks = POPE_VISITOR_HOLD_TICKS;
+        popeTarget = null;
+        npc.getNavigation().stop();
+        npc.setSprinting(false);
+        npc.getLookControl().setLookAt(visitor, 30.0F, 30.0F);
+        visitor.getLookControl().setLookAt(npc, 30.0F, 30.0F);
+        npc.swing(InteractionHand.MAIN_HAND, true);
+        return true;
+    }
+
+    @Nullable
+    private BlockPos choosePopeRoamTarget(
+            ServerLevel level,
+            BuildingSavedData buildings,
+            BuildingSavedData.BuildingRecord church
+    ) {
+        List<BuildingSavedData.ActivityPoint> socialPoints =
+                church.points().stream()
+                        .filter(point ->
+                                point.type() == BuildingPointType.SOCIAL
+                                        || point.type()
+                                        == BuildingPointType.SEATING
+                        )
+                        .toList();
+
+        if (!socialPoints.isEmpty()
+                && npc.getRandom().nextFloat() < 0.35F) {
+            return socialPoints.get(
+                    npc.getRandom().nextInt(socialPoints.size())
+            ).pos();
+        }
+
+        return buildings.randomInteriorTarget(
+                level,
+                church,
+                npc.getRandom()
+        );
+    }
+
+    private void wakePope(ServerLevel level) {
+        if (npc.isSleeping()) {
+            npc.stopSleeping();
+        }
+
+        if (popeActiveBed != null) {
+            setPopeBedOccupied(level, popeActiveBed, false);
+            popeActiveBed = null;
+        }
+    }
+
+    private void faceYaw(float yaw) {
+        npc.setYRot(yaw);
+        npc.setYHeadRot(yaw);
+        npc.setYBodyRot(yaw);
+    }
+
+    private static boolean isPopeBedOccupied(
+            ServerLevel level,
+            BlockPos head
+    ) {
+        BlockState state = level.getBlockState(head);
+        return state.getBlock() instanceof BedBlock
+                && state.hasProperty(BedBlock.OCCUPIED)
+                && state.getValue(BedBlock.OCCUPIED);
+    }
+
+    private static void setPopeBedOccupied(
+            ServerLevel level,
+            BlockPos head,
+            boolean occupied
+    ) {
+        BlockPos normalized = normalizePopeBedHead(level, head);
+        if (normalized == null) {
+            return;
+        }
+
+        BlockState headState = level.getBlockState(normalized);
+        if (!(headState.getBlock() instanceof BedBlock)
+                || !headState.hasProperty(BedBlock.OCCUPIED)
+                || !headState.hasProperty(BedBlock.FACING)) {
+            return;
+        }
+
+        if (headState.getValue(BedBlock.OCCUPIED) != occupied) {
+            level.setBlock(
+                    normalized,
+                    headState.setValue(BedBlock.OCCUPIED, occupied),
+                    Block.UPDATE_CLIENTS
+            );
+        }
+
+        Direction facing = headState.getValue(BedBlock.FACING);
+        BlockPos foot = normalized.relative(facing.getOpposite());
+        BlockState footState = level.getBlockState(foot);
+
+        if (footState.getBlock() instanceof BedBlock
+                && footState.hasProperty(BedBlock.OCCUPIED)
+                && footState.getValue(BedBlock.OCCUPIED)
+                != occupied) {
+            level.setBlock(
+                    foot,
+                    footState.setValue(BedBlock.OCCUPIED, occupied),
+                    Block.UPDATE_CLIENTS
+            );
+        }
+    }
+
+    @Nullable
+    private static BlockPos normalizePopeBedHead(
+            ServerLevel level,
+            BlockPos pos
+    ) {
+        BlockState state = level.getBlockState(pos);
+        if (!(state.getBlock() instanceof BedBlock)
+                || !state.hasProperty(BedBlock.PART)
+                || !state.hasProperty(BedBlock.FACING)) {
+            return null;
+        }
+
+        if (state.getValue(BedBlock.PART) == BedPart.HEAD) {
+            return pos.immutable();
+        }
+
+        Direction facing = state.getValue(BedBlock.FACING);
+        BlockPos head = pos.relative(facing);
+        BlockState headState = level.getBlockState(head);
+
+        if (headState.getBlock() instanceof BedBlock
+                && headState.hasProperty(BedBlock.PART)
+                && headState.getValue(BedBlock.PART)
+                == BedPart.HEAD) {
+            return head.immutable();
+        }
+
+        return null;
     }
 
     private void tickGuard(
@@ -635,14 +1155,28 @@ final class NpcServiceBrain {
             guardPatrolPauseTicks = 0;
         }
 
-        if (npc.blockPosition().distSqr(guardPostTarget.pos())
-                > GUARD_PATROL_REACHED_SQR) {
+        Vec3 postCenter = Vec3.atBottomCenterOf(
+                guardPostTarget.pos()
+        );
+
+        if (npc.distanceToSqr(postCenter) > GUARD_POST_SNAP_SQR) {
             navigateTo(guardPostTarget.pos(), 0.86D);
             return true;
         }
 
+        // A guard post is an exact standing marker, not a loose patrol target.
+        // Once pathfinding gets the guard close enough, center their feet on
+        // the marker and keep them locked there for the duty interval.
         npc.getNavigation().stop();
         npc.setSprinting(false);
+        npc.setDeltaMovement(Vec3.ZERO);
+        npc.moveTo(
+                postCenter.x,
+                postCenter.y,
+                postCenter.z,
+                guardPostTarget.yaw(),
+                npc.getXRot()
+        );
         npc.setYRot(guardPostTarget.yaw());
         npc.setYHeadRot(guardPostTarget.yaw());
         npc.setYBodyRot(guardPostTarget.yaw());
@@ -1294,6 +1828,7 @@ final class NpcServiceBrain {
         if (npc.level() instanceof ServerLevel level) {
             MailSavedData.get(level).releaseCourier(npc.getUUID());
             releaseGuardPost(level);
+            wakePope(level);
         }
 
         satchelIds.clear();
@@ -1311,6 +1846,13 @@ final class NpcServiceBrain {
         guardPostRestTicks = 0;
         guardRespondBellPos = null;
         guardBellHoldTicks = 0;
+        popeTarget = null;
+        popeActiveBed = null;
+        popeVisitorId = null;
+        popePauseTicks = 0;
+        popeVisitorScanCooldown = 0;
+        popeVisitorHoldTicks = 0;
+        popeLastAltarDay = Long.MIN_VALUE;
         clearVisualLetter();
     }
 
@@ -1337,6 +1879,19 @@ final class NpcServiceBrain {
                 return "standing guard";
             }
             return "patrolling the town";
+        }
+
+        if (role == NpcServiceRole.POPE) {
+            if (npc.isSleeping()) {
+                return "sleeping in the church";
+            }
+            if (popeVisitorHoldTicks > 0) {
+                return "speaking with a church visitor";
+            }
+            if (popeTarget != null) {
+                return "moving through the church";
+            }
+            return "serving the church";
         }
 
         if (role != NpcServiceRole.COURIER) {
@@ -1399,6 +1954,16 @@ final class NpcServiceBrain {
         guardPostRestTicks = 0;
         guardRespondBellPos = null;
         guardBellHoldTicks = 0;
+        popeTarget = null;
+        popeActiveBed = null;
+        popeVisitorId = null;
+        popePauseTicks = 0;
+        popeVisitorScanCooldown = 0;
+        popeVisitorHoldTicks = 0;
+        popeLastAltarDay = Long.MIN_VALUE;
+        if (npc.isSleeping()) {
+            npc.stopSleeping();
+        }
         clearVisualLetter();
     }
 

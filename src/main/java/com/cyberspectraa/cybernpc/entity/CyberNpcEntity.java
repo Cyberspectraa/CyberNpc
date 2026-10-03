@@ -1,5 +1,6 @@
 package com.cyberspectraa.cybernpc.entity;
 
+import com.cyberspectraa.cybernpc.building.BuildingSavedData;
 import com.cyberspectraa.cybernpc.compat.BetterHorsesCompat;
 import com.cyberspectraa.cybernpc.compat.IronSpellsCompat;
 import com.cyberspectraa.cybernpc.effect.ZombificationEffect;
@@ -421,6 +422,7 @@ public class CyberNpcEntity extends PathfinderMob {
     private final NpcEnvironmentalReactionBrain environmentBrain;
     private final NpcVocalizationController vocalizations;
     private final NpcServiceBrain serviceBrain;
+    private final NpcBuildingBrain buildingBrain;
 
     @Nullable
     private UUID specialNpcId;
@@ -435,6 +437,7 @@ public class CyberNpcEntity extends PathfinderMob {
         environmentBrain = new NpcEnvironmentalReactionBrain(this, intentions);
         vocalizations = new NpcVocalizationController(this);
         serviceBrain = new NpcServiceBrain(this);
+        buildingBrain = new NpcBuildingBrain(this);
 
         getNavigation().setCanFloat(true);
         if (getNavigation() instanceof GroundPathNavigation groundNavigation) {
@@ -511,7 +514,7 @@ public class CyberNpcEntity extends PathfinderMob {
     @Override
     protected void registerGoals() {
         goalSelector.addGoal(0, new FloatGoal(this));
-        goalSelector.addGoal(1, new OpenDoorGoal(this, true));
+        goalSelector.addGoal(1, new BuildingAwareOpenDoorGoal(this, true));
         goalSelector.addGoal(2, new WildNpcCombatGoal(this));
         goalSelector.addGoal(5, new ConditionalRandomStrollGoal(this, 1.0D, 120));
         goalSelector.addGoal(6, new ConditionalLookAtPlayerGoal(this, 8.0F));
@@ -1052,6 +1055,42 @@ public class CyberNpcEntity extends PathfinderMob {
 
     public boolean canWander() {
         return entityData.get(DATA_CAN_WANDER);
+    }
+
+    private boolean canUseBuildingDoor(BlockPos pos) {
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
+            return true;
+        }
+
+        return BuildingSavedData.get(serverLevel)
+                .canUseEntrance(serverLevel, this, pos);
+    }
+
+    private boolean isBuildingDestinationAllowed(BlockPos pos) {
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
+            return true;
+        }
+
+        return BuildingSavedData.get(serverLevel)
+                .canStandAt(serverLevel, this, pos);
+    }
+
+    private boolean isCurrentWanderPathBuildingAllowed() {
+        Path path = getNavigation().getPath();
+        if (path == null || path.isDone()) {
+            return true;
+        }
+
+        for (int i = path.getNextNodeIndex(); i < path.getNodeCount(); i++) {
+            var node = path.getNode(i);
+            BlockPos nodePos = new BlockPos(node.x, node.y, node.z);
+
+            if (!isBuildingDestinationAllowed(nodePos)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public void setCanWander(boolean canWander) {
@@ -2289,7 +2328,10 @@ public class CyberNpcEntity extends PathfinderMob {
                     SpecialNpcSavedData.get(serverLevel)
                             .ensureRegistered(this);
                 }
+                buildingBrain.tick();
                 serviceBrain.tick();
+            } else {
+                buildingBrain.release();
             }
             return;
         }
@@ -7791,6 +7833,7 @@ public class CyberNpcEntity extends PathfinderMob {
         public boolean canUse() {
             return !npc.isCombatActive()
                     && !npc.isBusyWithNeeds()
+                    && !npc.buildingBrain.isBusy()
                     && npc.canWander()
                     && super.canUse();
         }
@@ -7799,7 +7842,63 @@ public class CyberNpcEntity extends PathfinderMob {
         public boolean canContinueToUse() {
             return !npc.isCombatActive()
                     && !npc.isBusyWithNeeds()
+                    && !npc.buildingBrain.isBusy()
                     && npc.canWander()
+                    && super.canContinueToUse();
+        }
+
+        @Nullable
+        @Override
+        protected Vec3 getPosition() {
+            for (int attempt = 0; attempt < 8; attempt++) {
+                Vec3 candidate = super.getPosition();
+                if (candidate == null) {
+                    return null;
+                }
+
+                if (npc.isBuildingDestinationAllowed(
+                        BlockPos.containing(candidate)
+                )) {
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
+        @Override
+        public void start() {
+            super.start();
+
+            // The destination can be outside while Minecraft still picks a
+            // shorter route through somebody's private house. Validate every
+            // path node so an open front/back door never becomes a shortcut.
+            if (!npc.isCurrentWanderPathBuildingAllowed()) {
+                npc.getNavigation().stop();
+            }
+        }
+    }
+
+    private static final class BuildingAwareOpenDoorGoal extends OpenDoorGoal {
+        private final CyberNpcEntity npc;
+
+        private BuildingAwareOpenDoorGoal(
+                CyberNpcEntity npc,
+                boolean closeDoor
+        ) {
+            super(npc, closeDoor);
+            this.npc = npc;
+        }
+
+        @Override
+        public boolean canUse() {
+            return super.canUse()
+                    && npc.canUseBuildingDoor(doorPos);
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            return npc.canUseBuildingDoor(doorPos)
                     && super.canContinueToUse();
         }
     }

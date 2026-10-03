@@ -3,6 +3,7 @@ package com.cyberspectraa.cybernpc.registry;
 import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.item.AddressedLetterItem;
+import com.cyberspectraa.cybernpc.item.BuildingPlannerItem;
 import com.cyberspectraa.cybernpc.item.CyberNpcSpawnEggItem;
 import com.cyberspectraa.cybernpc.item.DeveloperGlassesItem;
 import com.cyberspectraa.cybernpc.item.LetterPaperItem;
@@ -87,6 +88,18 @@ public final class ModItems {
                             new Item.Properties()
                     ));
 
+    public static final RegistryObject<Item> POPE_NPC_SPAWN_EGG =
+            ITEMS.register("pope_npc_spawn_egg", () ->
+                    new CyberNpcSpawnEggItem(
+                            ModEntities.CYBER_NPC,
+                            0xF3F3F3,
+                            0xD4AF37,
+                            NpcType.MAIN,
+                            "Pope",
+                            false,
+                            new Item.Properties()
+                    ));
+
     public static final RegistryObject<Item> COPPER_COIN =
             ITEMS.register("copper_coin", () ->
                     new Item(new Item.Properties().stacksTo(64)));
@@ -146,6 +159,12 @@ public final class ModItems {
     public static final RegistryObject<Item> TOWN_REGISTER =
             ITEMS.register("town_register", () ->
                     new TownRegisterItem(
+                            new Item.Properties().stacksTo(1)
+                    ));
+
+    public static final RegistryObject<Item> BUILDING_PLANNER =
+            ITEMS.register("building_planner", () ->
+                    new BuildingPlannerItem(
                             new Item.Properties().stacksTo(1)
                     ));
 
