@@ -40,5 +40,13 @@
   "item.cybernpc.staff_only_marker": "Staff Only Marker",
   "item.cybernpc.bedroom_marker": "Bedroom Marker",
   "item.cybernpc.altar_marker": "Altar Marker",
-  "item.cybernpc.counter_marker": "Counter Marker"
+  "item.cybernpc.counter_marker": "Counter Marker",
+  "block.cybernpc.building_marker": "Building Marker",
+  "block.cybernpc.room_marker": "Room Marker",
+  "block.cybernpc.bed_marker": "Bed Marker",
+  "block.cybernpc.work_marker": "Work Marker",
+  "item.cybernpc.building_marker": "Building Marker",
+  "item.cybernpc.room_marker": "Room Marker",
+  "item.cybernpc.bed_marker": "Bed Marker",
+  "item.cybernpc.work_marker": "Work Marker"
 }
