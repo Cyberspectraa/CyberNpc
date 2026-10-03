@@ -128,6 +128,105 @@ public final class BuildingSavedData extends SavedData {
         return id;
     }
 
+    public UUID createSimpleMarkerBuilding(
+            ResourceKey<Level> dimension,
+            UUID markerId,
+            BlockPos core,
+            BuildingType type,
+            Zone zone,
+            ServerLevel level
+    ) {
+        UUID id = createBuilding(dimension, core, type);
+        BuildingRecord record = records.get(id);
+
+        if (record == null) {
+            return id;
+        }
+
+        record.primaryMarkerId = markerId;
+        record.zones.clear();
+        record.zones.add(zone);
+        record.entrances.clear();
+
+        if (type == BuildingType.HOME || type == BuildingType.INN) {
+            addDetectedBeds(
+                    record,
+                    findBedsInZone(level, zone),
+                    level,
+                    markerId
+            );
+        }
+
+        markChanged();
+        return id;
+    }
+
+    public boolean addSimpleMarkerRoom(
+            UUID buildingId,
+            UUID markerId,
+            BuildingMarkerType.RoomKind kind,
+            BlockPos markerPos,
+            Zone zone,
+            ServerLevel level
+    ) {
+        BuildingRecord record = records.get(buildingId);
+        if (record == null
+                || markerId == null
+                || kind == null
+                || kind == BuildingMarkerType.RoomKind.MAIN) {
+            return false;
+        }
+
+        record.rooms.removeIf(room ->
+                room.markerId().equals(markerId)
+        );
+        record.points.removeIf(point ->
+                markerId.equals(point.markerId())
+        );
+
+        record.rooms.add(new RoomRegion(
+                markerId,
+                kind,
+                markerPos.immutable(),
+                List.of(zone)
+        ));
+
+        if (kind == BuildingMarkerType.RoomKind.BEDROOM) {
+            addDetectedBeds(
+                    record,
+                    findBedsInZone(level, zone),
+                    level,
+                    markerId
+            );
+        }
+
+        markChanged();
+        return true;
+    }
+
+    private static Set<BlockPos> findBedsInZone(
+            ServerLevel level,
+            Zone zone
+    ) {
+        Set<BlockPos> beds = new LinkedHashSet<>();
+
+        for (BlockPos cursor : BlockPos.betweenClosed(
+                zone.min(),
+                zone.max()
+        )) {
+            BlockState state = level.getBlockState(cursor);
+
+            if (state.getBlock() instanceof BedBlock
+                    && state.hasProperty(BedBlock.PART)
+                    && state.getValue(BedBlock.PART)
+                    == BedPart.HEAD) {
+                beds.add(cursor.immutable());
+            }
+        }
+
+        return beds;
+    }
+
     public UUID createMarkerBuilding(
             ResourceKey<Level> dimension,
             UUID markerId,
@@ -726,6 +825,19 @@ public final class BuildingSavedData extends SavedData {
             return true;
         }
 
+        RoomRegion restricted = target.restrictedRoomAt(pos);
+        if (restricted != null && restricted.kind().restricted()) {
+            return hasPrivateAccess(level, npc, target);
+        }
+
+        // Fixed marker areas intentionally extend a little beyond the walls.
+        // Outdoor blocks are never treated as private property, preventing a
+        // Home marker from accidentally blocking the road beside the house.
+        if (!target.type().isPublicAccess()
+                && level.canSeeSky(pos.above())) {
+            return true;
+        }
+
         return canAccessPosition(level, npc, target, pos);
     }
 
@@ -927,7 +1039,7 @@ public final class BuildingSavedData extends SavedData {
             return null;
         }
 
-        for (int attempt = 0; attempt < 24; attempt++) {
+        for (int attempt = 0; attempt < 48; attempt++) {
             Zone zone = choices.get(
                     random.nextInt(choices.size())
             );
@@ -949,13 +1061,21 @@ public final class BuildingSavedData extends SavedData {
                 );
 
                 BlockPos candidate = new BlockPos(x, y, z);
-                if (isStandable(level, candidate)) {
+                if (isIndoorStandable(level, candidate)) {
                     return candidate;
                 }
             }
         }
 
         return null;
+    }
+
+    private static boolean isIndoorStandable(
+            ServerLevel level,
+            BlockPos pos
+    ) {
+        return !level.canSeeSky(pos.above())
+                && isStandable(level, pos);
     }
 
     private static boolean isStandable(
@@ -1328,6 +1448,20 @@ public final class BuildingSavedData extends SavedData {
                             Math.max(first.getY(), second.getY()),
                             Math.max(first.getZ(), second.getZ())
                     )
+            );
+        }
+
+        public static Zone around(
+                BlockPos center,
+                int horizontalRadius,
+                int verticalRadius
+        ) {
+            int h = Math.max(1, horizontalRadius);
+            int v = Math.max(1, verticalRadius);
+
+            return between(
+                    center.offset(-h, -v, -h),
+                    center.offset(h, v, h)
             );
         }
 
