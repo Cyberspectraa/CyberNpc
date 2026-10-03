@@ -640,10 +640,37 @@ public final class BuildingSavedData extends SavedData {
             long chunkKey = chunkKey(pos);
             List<BuildingRecord> candidates = byChunk.get(chunkKey);
             if (candidates != null) {
+                BuildingRecord best = null;
+                double bestScore = Double.MAX_VALUE;
+
                 for (BuildingRecord record : candidates) {
-                    if (record.contains(pos)) {
-                        return record;
+                    if (!record.contains(pos)) {
+                        continue;
                     }
+
+                    RoomRegion restricted =
+                            record.restrictedRoomAt(pos);
+
+                    double score;
+                    if (restricted != null) {
+                        // A deliberately placed private marker wins over a
+                        // broad nearby building influence area.
+                        score = -1_000_000.0D
+                                + pos.distSqr(
+                                restricted.markerPos()
+                        );
+                    } else {
+                        score = pos.distSqr(record.core());
+                    }
+
+                    if (score < bestScore) {
+                        best = record;
+                        bestScore = score;
+                    }
+                }
+
+                if (best != null) {
+                    return best;
                 }
             }
         }
