@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.40.1
+
+### Building Markers are now no-scan and size-proof
+- Removed enclosed-room flood-fill scanning from normal Building Marker setup.
+- Main markers now create lightweight fixed influence areas immediately, so a building can never fail because it is open-plan, irregular, highly decorated or "too big".
+- Different building types use sensible default sizes: Homes remain local while Churches intentionally cover a much larger area.
+- Public Area markers extend unusually large or irregular buildings without corner selection or structure scanning.
+- Staff Only and Bedroom markers create small local override areas inside the nearest main building.
+- Altar and Counter markers remain exact activity points.
+
+### Easier migration and overlap handling
+- Right-clicking an existing 0.40.0 marker refreshes it into the new no-scan 0.40.1 rules automatically.
+- Fixed areas may safely overlap; CyberNpc resolves the closest relevant main/secondary marker rather than allowing one large Church to swallow nearby shops or houses.
+- Staff Only/Bedroom marker areas receive priority where they overlap a public building area.
+- Outdoor blocks inside the broad radius of a private Home are not treated as private property, preventing house markers from blocking nearby roads.
+
+### Beds and NPC movement
+- Home and Inn markers perform only a small bounded bed search inside their fixed local area.
+- Bedroom markers perform the same small bed search around the bedroom marker.
+- Runtime building roaming prefers covered/indoor standable blocks so broad marker areas do not make NPCs randomly choose the street outside as an interior destination.
+- No building geometry is continuously scanned during NPC AI.
+
 ## 0.40.0
 
 ### Item-frame Building Markers replace the Building Planner
