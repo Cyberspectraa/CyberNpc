@@ -185,6 +185,8 @@ public final class ModItems {
     public static final RegistryObject<Item> INN_MARKER =
             marker("inn_marker", BuildingMarkerType.INN);
 
+    public static final RegistryObject<Item> PUBLIC_AREA_MARKER =
+            marker("public_area_marker", BuildingMarkerType.PUBLIC_AREA);
     public static final RegistryObject<Item> STAFF_ONLY_MARKER =
             marker("staff_only_marker", BuildingMarkerType.STAFF_ONLY);
     public static final RegistryObject<Item> BEDROOM_MARKER =
