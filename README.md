@@ -6,15 +6,47 @@ CyberNpc v0.39.0 adds persistent building/property recognition, private-home acc
 
 ### Building Planner quick setup
 
-1. Take a **Building Planner** from the CyberNpc creative tab.
-2. Sneak-right-click air until the intended building type is selected (Home, Shop, Church, Bank, Post Office, etc.).
-3. In **Select/Create** mode, right-click a block belonging to the structure to create/select its Building Record.
-4. Switch to **Zone** mode and click two opposite corners of the interior. Repeat for extra wings/floors/irregular sections.
-5. Doors and fence gates near those zones are auto-detected; use **Entrance** mode to correct or add any manually.
-6. Add **Bed, Altar, Counter, Social or Seating** points where the building needs them.
-7. Use **Assign Resident** or **Assign Worker** mode and right-click NPCs that belong to the property.
+The planner is now designed to show you what it is doing while you hold it.
 
-Private Homes block unrelated casual NPC wandering and shortcut paths. Public structures such as Shops and Churches remain visitable.
+**What you see while holding it**
+- The action bar always shows the selected building and the current planner tool.
+- White particle outlines show every registered area belonging to the selected building.
+- Green particles mark registered doors/gates.
+- Hearts mark beds.
+- Enchantment particles mark a Church altar.
+- Crit particles mark service counters.
+- A vertical flame marker shows corner 1 while you are waiting to click corner 2.
+
+**Create a building**
+1. Hold the **Building Planner**.
+2. Sneak + right-click the air until the wanted building type is shown.
+3. Make sure the tool says **Build / Select**. Normal right-clicking the air cycles tools.
+4. Right-click one corner of the building interior.
+5. Right-click the opposite corner.
+6. The building is created immediately and selected. Doors/gates and real beds are detected automatically.
+
+**Select an existing building**
+- In **Build / Select**, right-click anywhere inside one of its outlined areas or on one of its registered entrances.
+
+**Buildings that are not simple boxes**
+- Switch to **Add Area**.
+- Click two opposite corners around another room, floor, wing or section.
+- Repeat as needed. All of those areas remain one logical building.
+
+**Special Spot**
+- Church: click the floor position where the Pope should stand at the altar.
+- Shop / Bank / Post Office / Workshop: click the service-counter standing position.
+- Clicking a door/gate in this tool manually adds/removes that entrance if auto-detection needs correcting.
+- Clicking a bed can manually add it, although normal beds are detected automatically.
+
+**Residents / Workers**
+- Switch to **Residents** and right-click an NPC who lives in the selected building.
+- Switch to **Workers** and right-click an NPC who works there.
+- Right-clicking the same NPC again removes that assignment.
+
+**Delete**
+- Switch to **Delete**, then sneak + right-click inside the selected building.
+- The extra sneak requirement prevents accidental deletion.
 
 ### Church example
 
