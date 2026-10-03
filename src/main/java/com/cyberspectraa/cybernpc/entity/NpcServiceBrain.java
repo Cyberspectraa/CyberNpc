@@ -1,5 +1,8 @@
 package com.cyberspectraa.cybernpc.entity;
 
+import com.cyberspectraa.cybernpc.building.BuildingPointType;
+import com.cyberspectraa.cybernpc.building.BuildingSavedData;
+import com.cyberspectraa.cybernpc.building.BuildingType;
 import com.cyberspectraa.cybernpc.mail.MailItemData;
 import com.cyberspectraa.cybernpc.mail.MailRecord;
 import com.cyberspectraa.cybernpc.mail.MailSavedData;
@@ -10,6 +13,7 @@ import com.cyberspectraa.cybernpc.service.NpcServiceRole;
 import com.cyberspectraa.cybernpc.service.GuardPostSavedData;
 import com.cyberspectraa.cybernpc.service.SpecialNpcSavedData;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -27,7 +31,11 @@ import net.minecraft.world.entity.monster.Spider;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -79,6 +87,17 @@ final class NpcServiceBrain {
     private static final int GUARD_POST_DUTY_EXTRA_TICKS = 600;
     private static final int GUARD_POST_REST_MIN_TICKS = 160;
     private static final int GUARD_POST_REST_EXTRA_TICKS = 200;
+    private static final double GUARD_POST_SNAP_SQR = 0.75D * 0.75D;
+
+    private static final double POPE_CHURCH_SEARCH_RADIUS_SQR =
+            96.0D * 96.0D;
+    private static final double POPE_POINT_ARRIVE_SQR = 1.75D * 1.75D;
+    private static final double POPE_VISITOR_RADIUS = 8.0D;
+    private static final int POPE_ALTAR_HOLD_TICKS = 300;
+    private static final int POPE_ROAM_PAUSE_MIN = 80;
+    private static final int POPE_ROAM_PAUSE_EXTRA = 160;
+    private static final int POPE_VISITOR_SCAN_INTERVAL = 40;
+    private static final int POPE_VISITOR_HOLD_TICKS = 70;
 
     private final CyberNpcEntity npc;
     private final List<Long> satchelIds = new ArrayList<>();
@@ -120,6 +139,17 @@ final class NpcServiceBrain {
     @Nullable
     private BlockPos guardRespondBellPos;
     private int guardBellHoldTicks;
+
+    @Nullable
+    private BlockPos popeTarget;
+    @Nullable
+    private BlockPos popeActiveBed;
+    @Nullable
+    private UUID popeVisitorId;
+    private int popePauseTicks;
+    private int popeVisitorScanCooldown;
+    private int popeVisitorHoldTicks;
+    private long popeLastAltarDay = Long.MIN_VALUE;
 
     NpcServiceBrain(CyberNpcEntity npc) {
         this.npc = npc;
@@ -167,6 +197,11 @@ final class NpcServiceBrain {
 
         if (role == NpcServiceRole.GUARD) {
             tickGuard(level, data, record);
+            return;
+        }
+
+        if (role == NpcServiceRole.POPE) {
+            tickPope(level, data, record);
         }
     }
 
@@ -635,14 +670,28 @@ final class NpcServiceBrain {
             guardPatrolPauseTicks = 0;
         }
 
-        if (npc.blockPosition().distSqr(guardPostTarget.pos())
-                > GUARD_PATROL_REACHED_SQR) {
+        Vec3 postCenter = Vec3.atBottomCenterOf(
+                guardPostTarget.pos()
+        );
+
+        if (npc.distanceToSqr(postCenter) > GUARD_POST_SNAP_SQR) {
             navigateTo(guardPostTarget.pos(), 0.86D);
             return true;
         }
 
+        // A guard post is an exact standing marker, not a loose patrol target.
+        // Once pathfinding gets the guard close enough, center their feet on
+        // the marker and keep them locked there for the duty interval.
         npc.getNavigation().stop();
         npc.setSprinting(false);
+        npc.setDeltaMovement(Vec3.ZERO);
+        npc.moveTo(
+                postCenter.x,
+                postCenter.y,
+                postCenter.z,
+                guardPostTarget.yaw(),
+                npc.getXRot()
+        );
         npc.setYRot(guardPostTarget.yaw());
         npc.setYHeadRot(guardPostTarget.yaw());
         npc.setYBodyRot(guardPostTarget.yaw());
