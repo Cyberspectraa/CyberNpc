@@ -876,17 +876,60 @@ public final class BuildingSavedData extends SavedData {
             BuildingRecord record,
             RandomSource random
     ) {
+        return randomInteriorTarget(
+                level,
+                record,
+                random,
+                false
+        );
+    }
+
+    @Nullable
+    public BlockPos randomAuthorizedInteriorTarget(
+            ServerLevel level,
+            BuildingRecord record,
+            RandomSource random
+    ) {
+        return randomInteriorTarget(
+                level,
+                record,
+                random,
+                true
+        );
+    }
+
+    @Nullable
+    private BlockPos randomInteriorTarget(
+            ServerLevel level,
+            BuildingRecord record,
+            RandomSource random,
+            boolean includeStaffAreas
+    ) {
         if (level == null
                 || record == null
                 || random == null
-                || record.zones.isEmpty()
                 || !record.dimension().equals(level.dimension())) {
             return null;
         }
 
+        List<Zone> choices = new ArrayList<>(record.zones);
+
+        for (RoomRegion room : record.rooms) {
+            if (room.kind() == BuildingMarkerType.RoomKind.PUBLIC_AREA
+                    || (includeStaffAreas
+                    && room.kind()
+                    == BuildingMarkerType.RoomKind.STAFF_ONLY)) {
+                choices.addAll(room.zones());
+            }
+        }
+
+        if (choices.isEmpty()) {
+            return null;
+        }
+
         for (int attempt = 0; attempt < 24; attempt++) {
-            Zone zone = record.zones.get(
-                    random.nextInt(record.zones.size())
+            Zone zone = choices.get(
+                    random.nextInt(choices.size())
             );
 
             int x = randomBetween(random, zone.min().getX(), zone.max().getX());
