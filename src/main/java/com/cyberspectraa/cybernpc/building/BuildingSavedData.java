@@ -750,6 +750,53 @@ public final class BuildingSavedData extends SavedData {
     }
 
     @Nullable
+    public BuildingRecord findOrClaimNearestHome(
+            ServerLevel level,
+            CyberNpcEntity npc,
+            double radiusSqr
+    ) {
+        BuildingRecord existing = findResidentBuilding(level, npc);
+        if (existing != null) {
+            return existing;
+        }
+
+        UUID identity = npcIdentity(npc);
+        BuildingRecord best = null;
+        double bestDistance = Double.MAX_VALUE;
+
+        for (BuildingRecord record : records.values()) {
+            if (!record.dimension().equals(level.dimension())
+                    || record.type() != BuildingType.HOME) {
+                continue;
+            }
+
+            long beds = record.points.stream()
+                    .filter(point ->
+                            point.type() == BuildingPointType.BED)
+                    .count();
+            int capacity = Math.max(1, (int) beds);
+
+            if (record.residents.size() >= capacity) {
+                continue;
+            }
+
+            double distance =
+                    npc.blockPosition().distSqr(record.core());
+            if (distance <= radiusSqr && distance < bestDistance) {
+                best = record;
+                bestDistance = distance;
+            }
+        }
+
+        if (best != null) {
+            best.residents.add(identity);
+            markChanged();
+        }
+
+        return best;
+    }
+
+    @Nullable
     public BuildingRecord findWorkerBuilding(
             ServerLevel level,
             CyberNpcEntity npc
