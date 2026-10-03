@@ -5,6 +5,7 @@ import java.util.Locale;
 public enum BuildingPointType {
     ALTAR("altar", "Altar"),
     BED("bed", "Bed"),
+    WORK("work", "Work"),
     COUNTER("counter", "Counter"),
     SOCIAL("social", "Social"),
     SEATING("seating", "Seating");
