@@ -26,7 +26,7 @@ import java.util.UUID;
         bus = Mod.EventBusSubscriber.Bus.FORGE
 )
 public final class BuildingMarkerEvents {
-    private static final double LINK_RADIUS_SQR = 48.0D * 48.0D;
+    private static final double LINK_RADIUS_SQR = 64.0D * 64.0D;
 
     @SubscribeEvent
     public static void onEntityInteract(
@@ -79,12 +79,7 @@ public final class BuildingMarkerEvents {
         BuildingMarkerItem marker =
                 (BuildingMarkerItem) held.getItem();
 
-        if (!registerMarker(
-                level,
-                player,
-                frame,
-                marker
-        )) {
+        if (!registerMarker(level, player, frame, marker)) {
             return;
         }
 
@@ -131,40 +126,13 @@ public final class BuildingMarkerEvents {
             return;
         }
 
-        BuildingSavedData data = BuildingSavedData.get(level);
-        BuildingSavedData.BuildingRecord building =
-                data.getBuildingAt(
-                        level.dimension(),
-                        frame.blockPosition()
-                );
-
-        if (building == null) {
-            building = data.findBuildingForRoom(
-                    level.dimension(),
-                    Set.of(),
-                    frame.blockPosition(),
-                    LINK_RADIUS_SQR
-            );
+        // Right-clicking an existing marker also refreshes it. This converts
+        // 0.40.0 room-scan markers to the new no-scan fixed-area system with
+        // one click instead of forcing the player to rebuild the setup.
+        if (registerMarker(level, player, frame, marker)) {
+            frame.setInvisible(true);
+            frame.setRotation(0);
         }
-
-        if (building == null) {
-            tell(
-                    player,
-                    marker.markerType().displayName()
-                            + " marker is currently orphaned. "
-                            + "Sneak-right-click it with an empty hand, then place it again.",
-                    ChatFormatting.RED
-            );
-            return;
-        }
-
-        tell(
-                player,
-                marker.markerType().displayName()
-                        + " → " + building.name()
-                        + " [" + building.type().displayName() + "]",
-                ChatFormatting.AQUA
-        );
     }
 
     private static boolean registerMarker(
@@ -176,10 +144,15 @@ public final class BuildingMarkerEvents {
         BuildingMarkerType type = marker.markerType();
         BuildingSavedData data = BuildingSavedData.get(level);
         UUID markerId = frame.getUUID();
-        BlockPos markerPos = frame.blockPosition();
 
-        // Reusing the same frame after an interrupted setup should never
-        // leave duplicate registrations behind.
+        // Marker position is shifted one block in front of the frame where
+        // possible, which normally means into the room rather than the wall.
+        BlockPos areaCenter = findStandingPoint(
+                level,
+                frame.blockPosition().relative(frame.getDirection())
+        );
+
+        // Re-registering the same frame is always safe.
         data.removeMarker(markerId);
 
         if (type.isPointMarker()) {
@@ -192,52 +165,37 @@ public final class BuildingMarkerEvents {
             );
         }
 
-        RoomScanner.ScanResult scan =
-                RoomScanner.scan(level, markerPos);
-
-        if (!scan.success()) {
-            tell(
-                    player,
-                    type.displayName() + " marker failed: "
-                            + scan.error(),
-                    ChatFormatting.RED
-            );
-            return false;
-        }
+        BuildingSavedData.Zone zone =
+                BuildingSavedData.Zone.around(
+                        areaCenter,
+                        type.horizontalRadius(),
+                        type.verticalRadius()
+                );
 
         if (type.isPrimary()) {
-            BuildingSavedData.BuildingRecord existing =
+            // Remove only old pre-marker planner data at this exact place.
+            // Never delete another real marker building just because two
+            // simple influence areas overlap.
+            BuildingSavedData.BuildingRecord legacy =
                     data.getBuildingAt(
                             level.dimension(),
-                            scan.start()
+                            areaCenter
                     );
 
-            if (existing != null
-                    && existing.primaryMarkerId() != null) {
-                tell(
-                        player,
-                        "This room already belongs to "
-                                + existing.name()
-                                + ". Remove its main marker first.",
-                        ChatFormatting.RED
-                );
-                return false;
+            if (legacy != null
+                    && legacy.primaryMarkerId() == null) {
+                data.removeBuilding(legacy.id());
             }
 
-            // 0.39.x planner records are replaced automatically the first
-            // time a real room marker is installed in that old area.
-            if (existing != null) {
-                data.removeBuilding(existing.id());
-            }
-
-            UUID buildingId = data.createMarkerBuilding(
-                    level.dimension(),
-                    markerId,
-                    scan.start(),
-                    type.buildingType(),
-                    scan,
-                    level
-            );
+            UUID buildingId =
+                    data.createSimpleMarkerBuilding(
+                            level.dimension(),
+                            markerId,
+                            areaCenter,
+                            type.buildingType(),
+                            zone,
+                            level
+                    );
 
             BuildingSavedData.BuildingRecord created =
                     data.getRecord(buildingId);
@@ -247,12 +205,7 @@ public final class BuildingMarkerEvents {
                     (created == null
                             ? type.displayName()
                             : created.name())
-                            + " registered automatically: "
-                            + scan.cellCount() + " room blocks, "
-                            + scan.entrances().size()
-                            + " entrance"
-                            + (scan.entrances().size() == 1 ? "" : "s")
-                            + ".",
+                            + " is ready. Done.",
                     ChatFormatting.GREEN
             );
             return true;
@@ -261,8 +214,8 @@ public final class BuildingMarkerEvents {
         BuildingSavedData.BuildingRecord linked =
                 data.findBuildingForRoom(
                         level.dimension(),
-                        scan.entrances(),
-                        scan.start(),
+                        Set.of(),
+                        areaCenter,
                         LINK_RADIUS_SQR
                 );
 
@@ -276,31 +229,17 @@ public final class BuildingMarkerEvents {
             return false;
         }
 
-        boolean overlapsMain = linked.zones().stream()
-                .anyMatch(zone -> zone.contains(scan.start()));
-
-        if (overlapsMain) {
-            tell(
-                    player,
-                    "This is still the same open room as "
-                            + linked.name()
-                            + ". A Staff/Bedroom room needs a wall, "
-                            + "door, trapdoor or gate separating it.",
-                    ChatFormatting.RED
-            );
-            return false;
-        }
-
-        if (!data.addMarkerRoom(
+        if (!data.addSimpleMarkerRoom(
                 linked.id(),
                 markerId,
                 type.roomKind(),
-                scan,
+                areaCenter,
+                zone,
                 level
         )) {
             tell(
                     player,
-                    "That room could not be linked to "
+                    "That marker could not be linked to "
                             + linked.name() + ".",
                     ChatFormatting.RED
             );
@@ -309,15 +248,9 @@ public final class BuildingMarkerEvents {
 
         tell(
                 player,
-                type.displayName() + " linked to "
-                        + linked.name() + ": "
-                        + scan.cellCount() + " room blocks"
-                        + (scan.beds().isEmpty()
-                        ? "."
-                        : ", " + scan.beds().size()
-                        + " bed"
-                        + (scan.beds().size() == 1 ? "" : "s")
-                        + " detected."),
+                type.displayName()
+                        + " added to " + linked.name()
+                        + ". Done.",
                 ChatFormatting.GREEN
         );
         return true;
@@ -330,20 +263,20 @@ public final class BuildingMarkerEvents {
             BuildingMarkerType type,
             BuildingSavedData data
     ) {
-        BuildingSavedData.BuildingRecord building =
-                data.getBuildingAt(
-                        level.dimension(),
+        BlockPos standingPos =
+                findStandingPoint(
+                        level,
                         frame.blockPosition()
+                                .relative(frame.getDirection())
                 );
 
-        if (building == null) {
-            building = data.findBuildingForRoom(
-                    level.dimension(),
-                    Set.of(),
-                    frame.blockPosition(),
-                    LINK_RADIUS_SQR
-            );
-        }
+        BuildingSavedData.BuildingRecord building =
+                data.findBuildingForRoom(
+                        level.dimension(),
+                        Set.of(),
+                        standingPos,
+                        LINK_RADIUS_SQR
+                );
 
         if (building == null) {
             tell(
@@ -358,7 +291,7 @@ public final class BuildingMarkerEvents {
                 && building.type() != BuildingType.CHURCH) {
             tell(
                     player,
-                    "An Altar marker must belong to a Church.",
+                    "Put the Altar marker near a Church marker.",
                     ChatFormatting.RED
             );
             return false;
@@ -367,9 +300,6 @@ public final class BuildingMarkerEvents {
         float yaw = frame.getDirection()
                 .getOpposite()
                 .toYRot();
-
-        BlockPos standingPos =
-                findStandingPoint(level, frame.blockPosition());
 
         if (!data.addMarkerPoint(
                 building.id(),
@@ -384,8 +314,8 @@ public final class BuildingMarkerEvents {
         tell(
                 player,
                 type.displayName()
-                        + " linked to "
-                        + building.name() + ".",
+                        + " added to "
+                        + building.name() + ". Done.",
                 ChatFormatting.GREEN
         );
         return true;
@@ -404,8 +334,6 @@ public final class BuildingMarkerEvents {
             return;
         }
 
-        // Clean SavedData before vanilla breaks the frame and potentially
-        // clears its displayed stack.
         BuildingSavedData.get(level)
                 .removeMarker(frame.getUUID());
     }
@@ -435,7 +363,7 @@ public final class BuildingMarkerEvents {
             ServerLevel level,
             BlockPos markerPos
     ) {
-        for (int offset = 0; offset <= 5; offset++) {
+        for (int offset = 0; offset <= 6; offset++) {
             BlockPos candidate = markerPos.below(offset);
             BlockPos supportPos = candidate.below();
 

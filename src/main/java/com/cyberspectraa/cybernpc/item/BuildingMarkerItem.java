@@ -46,7 +46,7 @@ public final class BuildingMarkerItem extends Item {
             );
             tooltip.add(
                     Component.literal(
-                            "CyberNpc detects the enclosed room automatically."
+                            "No scanning: the marker creates its area instantly."
                     ).withStyle(ChatFormatting.GRAY)
             );
         } else if (markerType.isRoomMarker()) {
@@ -57,7 +57,7 @@ public final class BuildingMarkerItem extends Item {
             );
             tooltip.add(
                     Component.literal(
-                            "It links to the main building automatically."
+                            "It links to the nearest main building automatically."
                     ).withStyle(ChatFormatting.GRAY)
             );
         } else {
