@@ -1,8 +1,32 @@
 # CyberNpc
 
-## Current release: 0.14.0
+## Current release: 0.39.0
 
-CyberNpc v0.14.0 expands the Wild NPC class system into persistent equipment/loadout classes.
+CyberNpc v0.39.0 adds persistent building/property recognition, private-home access rules, exact Guard Post positioning and the first building-aware special role: the Pope.
+
+### Building Planner quick setup
+
+1. Take a **Building Planner** from the CyberNpc creative tab.
+2. Sneak-right-click air until the intended building type is selected (Home, Shop, Church, Bank, Post Office, etc.).
+3. In **Select/Create** mode, right-click a block belonging to the structure to create/select its Building Record.
+4. Switch to **Zone** mode and click two opposite corners of the interior. Repeat for extra wings/floors/irregular sections.
+5. Doors and fence gates near those zones are auto-detected; use **Entrance** mode to correct or add any manually.
+6. Add **Bed, Altar, Counter, Social or Seating** points where the building needs them.
+7. Use **Assign Resident** or **Assign Worker** mode and right-click NPCs that belong to the property.
+
+Private Homes block unrelated casual NPC wandering and shortcut paths. Public structures such as Shops and Churches remain visitable.
+
+### Church example
+
+Create one Church record covering all of the church's interior zones, mark its entrances, add an Altar and a real Bed, then spawn a Pope and set the Pope's Work/Home with the Town Register. The Pope can roam the registered Church, visit its altar each morning, acknowledge NPC visitors and sleep in the marked bed at night.
+
+### Guard Posts
+
+Guards now stand with their feet on the exact centre of a claimed Guard Post marker rather than stopping anywhere inside the old patrol-arrival radius. Shift rotation and bell responses still temporarily pull them away before they return to normal post/patrol duty.
+
+## Earlier Wild NPC class documentation
+
+CyberNpc v0.14.0 expanded the Wild NPC class system into persistent equipment/loadout classes.
 
 ## Gear quality
 
