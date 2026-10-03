@@ -58,7 +58,7 @@ public final class NpcMarkerBlock extends HorizontalDirectionalBlock {
     public BlockState getStateForPlacement(BlockPlaceContext context) {
         return defaultBlockState().setValue(
                 FACING,
-                context.getHorizontalDirection().getOpposite()
+                context.getHorizontalDirection()
         );
     }
 
