@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.39.0
+
+### Building and property recognition
+- Added persistent Building Records stored in world SavedData.
+- A building can contain multiple cuboid interior zones, allowing irregular churches, houses, shops and larger multi-room structures to remain one logical property.
+- Added building types for Home, Shop, Church, Bank, Post Office, Inn, Workshop, Guard House, Public and Private buildings.
+- Buildings store registered entrances, activity points, residents and workers.
+- Runtime lookups use cached chunk/entrance indexes; expensive block scans only happen when the player edits a building.
+
+### Building Planner
+- Added the Building Planner utility item to the CyberNpc creative tab.
+- Right-click air cycles editor modes; sneak-right-click air cycles the selected/new building type.
+- Select/Create mode creates a Building Record or selects the building under the clicked block.
+- Zone mode uses two corners and supports multiple zones per building.
+- Adding a zone automatically detects nearby doors and fence gates when the edited area is reasonably sized.
+- Entrance mode can manually add/remove doors or gates.
+- Altar, Bed, Counter, Social and Seating modes add semantic activity points.
+- Resident and Worker modes assign NPC permissions directly to the selected building.
+- Delete mode requires sneak-right-click to reduce accidental property deletion.
+
+### Private-home access
+- Public buildings such as Shops and Churches remain valid NPC destinations.
+- Homes and other private buildings only permit registered residents/workers or special NPCs whose saved Home/Work anchor belongs to that property.
+- Random NPC wandering rejects unauthorized private-building destinations.
+- Casual wander paths also reject routes that cut through a private building, even when its doors are already open.
+- Registered entrances are checked before an NPC opens a door.
+- NPCs already inside a building are always allowed to leave it.
+
+### Main NPC homes
+- Ordinary Main NPCs assigned as residents return to their registered building at night.
+- A marked Bed activity point is used as the resident's real Minecraft bed when available.
+- Without a usable marked bed, the NPC remains within valid interior space instead of selecting unrelated buildings.
+- Assigning an NPC as a resident of a new property removes its previous resident-home assignment.
+
+### Church / Pope
+- Added a Pope service role and Pope NPC Spawn Egg.
+- Pope is a persistent special NPC compatible with the existing Town Register Home/Work system and CyberServer respawning.
+- Pope resolves the Church attached to its Work area and roams only inside that registered Church.
+- Each Minecraft morning the Pope visits a marked Altar point and remains there for a service interval.
+- During the day the Pope alternates between valid interior space and configured Social/Seating points.
+- The Pope can notice another Cyber NPC that enters the Church, stop, face them and perform a short interaction.
+- At night the Pope uses a marked real Bed inside the Church and sleeps there.
+
+### Guard Post precision
+- Guard Post arrival no longer uses the broad patrol-arrival radius.
+- Guards path close to their claimed post and then snap their feet to the exact centre of the invisible marker.
+- While on post they remain centred and face the marker's saved direction.
+- Existing shift rotation, claims, alarms and patrol behaviour remain intact.
+
 ## 0.38.1
 
 ### Validated town-defence follow-up
