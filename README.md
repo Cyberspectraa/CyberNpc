@@ -1,18 +1,18 @@
 # CyberNpc
 
-## Current release: 0.40.0
+## Current release: 0.40.1
 
-CyberNpc v0.40.0 replaces the manual Building Planner with automatic **item-frame Building Markers**.
+CyberNpc v0.40.1 makes building setup deliberately simple: **Building Markers no longer scan the structure at all.**
 
-### Building setup — the simple rule
+### The whole setup rule
 
-Put an ordinary Minecraft item frame inside the room, then put the correct CyberNpc marker item into it. CyberNpc scans the enclosed walkable room once and stores the result.
+Put an ordinary item frame somewhere inside the build and put the matching CyberNpc marker into it.
 
-The wooden frame becomes invisible after a successful setup, while the marker icon stays visible so the building remains easy to understand.
+That is enough.
 
-### Main building markers
+There are no room scans, no corner selection, no wall detection and no maximum building-size error.
 
-Use **one main marker first**:
+### Main markers
 
 - **Home Marker** — private NPC home.
 - **Shop Marker** — public shop.
@@ -21,56 +21,57 @@ Use **one main marker first**:
 - **Post Office Marker** — public post office.
 - **Inn Marker** — public inn.
 
-Example: place an item frame on an inside wall of the church nave, then put a **Church Marker** into it. That room becomes the main Church automatically.
+Each main marker creates a sensible fixed area around itself. Large building types get larger areas automatically; Churches intentionally cover a much larger area than Homes.
 
-Doors, trapdoors and fence gates count as room boundaries even while open.
+If a very large or oddly shaped build needs more coverage, place a **Public Area Marker** in the extra section. It links to the nearest main building automatically.
 
-### Extra room markers
+### Private/back areas
 
-Rooms behind doors can then be attached to the main building:
+- **Staff Only Marker** — makes the nearby back area private to residents/workers/special NPCs.
+- **Bedroom Marker** — makes the nearby area a private bedroom and detects real beds inside that small area.
+- **Public Area Marker** — extends the public part of a building.
 
-- **Public Area Marker** — another public room belonging to the building.
-- **Staff Only Marker** — only residents/workers and the building's special NPCs may enter.
-- **Bedroom Marker** — private bedroom; real beds inside it are detected automatically.
-
-CyberNpc first links an extra room through a shared registered door. If that is not possible it uses the nearest main building as a fallback.
-
-A Staff/Bedroom marker intentionally refuses to split one completely open room. Add a real wall/door/gate boundary when an area needs different access rules.
+These are local override areas. You do not need to outline the room or close every archway perfectly.
 
 ### Activity markers
 
-These do not scan another room:
+- **Altar Marker** — exact Church altar position.
+- **Counter Marker** — exact service position for Bank/Shop/Post Office-style NPCs.
 
-- **Altar Marker** — exact Church altar standing point.
-- **Counter Marker** — exact service-counter point for shops, banks, post offices and similar workplaces.
+CyberNpc automatically finds the floor below the item frame for the NPC standing point.
 
-You can mount these frames at normal wall height. CyberNpc automatically finds the valid floor position below the frame and stores the NPC standing position and facing direction.
+### Simple Church example
 
-### Example Church
+For most Churches:
 
-A useful Church can be set up with only a few frames:
+1. Put one **Church Marker** somewhere in the main Church.
+2. Put one **Staff Only Marker** in the Pope's back area.
+3. Put one **Bedroom Marker** near the Pope's bed.
+4. Put one **Altar Marker** at the altar.
 
-1. Put a **Church Marker** in the public nave.
-2. Put a **Staff Only Marker** in a back room that only the Pope should normally use.
-3. Put a **Bedroom Marker** in the Pope's bedroom. The bed is detected automatically.
-4. Put an **Altar Marker** on/near the altar.
+That is the whole setup.
 
-The Pope can use the public Church, staff room, altar and bedroom. Ordinary NPC visitors may use the public Church/Public Area rooms but are blocked from Staff Only and Bedroom rooms.
+The Church marker already covers a large area. If one distant wing is outside it, add a **Public Area Marker** there.
 
-### Homes need almost no administration
+The Pope may use the public Church, Staff Only areas, Bedroom and Altar. Ordinary visitors may use the public areas but not Staff Only/Bedroom areas.
 
-For an ordinary house, a **Home Marker is normally enough**.
+### Homes
 
-Main NPCs automatically claim nearby marked Homes. Capacity is based on detected beds; a Home with no detected bed temporarily has one resident slot. A Bedroom Marker can be used when the bed is in a separate room behind a door.
+A normal house normally needs only:
+
+**Item frame + Home Marker = done.**
+
+Nearby Main NPCs automatically claim available Homes. Beds near the Home marker are detected automatically. If the bedroom is farther away, put a Bedroom Marker there.
 
 ### Marker controls
 
-- Right-click a registered marker frame to see what building it belongs to.
-- Sneak-right-click a registered marker with an empty hand to unregister it and return the marker item.
-- Breaking a marker frame also removes its saved marker registration.
-- If a room changes substantially later, remove and replace that room's marker to scan it again.
+- Right-click an existing marker to refresh it using the current simple-area rules.
+- This also converts a 0.40.0 scan-based marker to the new 0.40.1 system with one click.
+- Sneak-right-click with an empty hand to remove the marker and get the item back.
+- Breaking the item frame unregisters the marker.
+- The wooden frame becomes invisible after successful registration while the marker icon stays visible.
 
-The old **Building Planner** item is kept registered only so old 0.39.x worlds do not lose the item. It is retired and no longer appears in the CyberNpc creative tab.
+The old **Building Planner** remains registered only for compatibility with older worlds and is not used for normal building setup.
 
 ### Guard Posts
 
