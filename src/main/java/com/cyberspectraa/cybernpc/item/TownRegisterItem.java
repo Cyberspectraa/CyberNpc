@@ -164,33 +164,38 @@ public final class TownRegisterItem extends Item {
             NpcMarkerBlock markerBlock
     ) {
         NpcMarkerKind kind = markerBlock.kind();
-
-        // Refresh first. This lets a marker that was placed before its
-        // Building marker be linked later without breaking/replacing it.
-        NpcMarkerManager.RegistrationResult refreshed =
-                NpcMarkerManager.register(
-                        level,
-                        markerPos,
-                        kind,
-                        state.getValue(
-                                HorizontalDirectionalBlock.FACING
-                        )
-                );
-
-        if (!refreshed.success()) {
-            player.displayClientMessage(
-                    Component.literal(refreshed.message()),
-                    true
-            );
-            return InteractionResult.CONSUME;
-        }
-
         UUID markerId = NpcMarkerIds.id(
                 level.dimension(),
                 markerPos,
                 kind
         );
         BuildingSavedData buildings = BuildingSavedData.get(level);
+
+        NpcMarkerManager.RegistrationResult refreshed;
+        if (buildings.findBuildingForMarker(markerId) == null) {
+            refreshed = NpcMarkerManager.register(
+                    level,
+                    markerPos,
+                    kind,
+                    state.getValue(
+                            HorizontalDirectionalBlock.FACING
+                    )
+            );
+
+            if (!refreshed.success()) {
+                player.displayClientMessage(
+                        Component.literal(refreshed.message()),
+                        true
+                );
+                return InteractionResult.CONSUME;
+            }
+        } else {
+            refreshed = NpcMarkerManager.status(
+                    level,
+                    markerPos,
+                    kind
+            );
+        }
 
         if (kind == NpcMarkerKind.BUILDING) {
             BuildingSavedData.BuildingRecord building =
