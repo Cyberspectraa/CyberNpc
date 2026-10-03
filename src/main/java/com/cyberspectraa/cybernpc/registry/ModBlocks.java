@@ -4,6 +4,8 @@ import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.block.DropBoxBlock;
 import com.cyberspectraa.cybernpc.block.LetterBoxBlock;
 import com.cyberspectraa.cybernpc.block.GuardPostBlock;
+import com.cyberspectraa.cybernpc.block.NpcMarkerBlock;
+import com.cyberspectraa.cybernpc.building.NpcMarkerKind;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -45,6 +47,32 @@ public final class ModBlocks {
                                     .noCollission()
                                     .noOcclusion()
                     ));
+
+    public static final RegistryObject<Block> BUILDING_MARKER =
+            marker("building_marker", NpcMarkerKind.BUILDING);
+    public static final RegistryObject<Block> ROOM_MARKER =
+            marker("room_marker", NpcMarkerKind.ROOM);
+    public static final RegistryObject<Block> BED_MARKER =
+            marker("bed_marker", NpcMarkerKind.BED);
+    public static final RegistryObject<Block> WORK_MARKER =
+            marker("work_marker", NpcMarkerKind.WORK);
+
+    private static RegistryObject<Block> marker(
+            String name,
+            NpcMarkerKind kind
+    ) {
+        return BLOCKS.register(
+                name,
+                () -> new NpcMarkerBlock(
+                        kind,
+                        BlockBehaviour.Properties.of()
+                                .mapColor(MapColor.NONE)
+                                .strength(0.2F)
+                                .noCollission()
+                                .noOcclusion()
+                )
+        );
+    }
 
     private ModBlocks() {
     }
