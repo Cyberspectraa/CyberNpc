@@ -1291,10 +1291,80 @@ public final class BuildingSavedData extends SavedData {
         }
     }
 
+    public record RoomRegion(
+            UUID markerId,
+            BuildingMarkerType.RoomKind kind,
+            BlockPos markerPos,
+            List<Zone> zones
+    ) {
+        public RoomRegion {
+            markerPos = markerPos.immutable();
+            zones = List.copyOf(zones);
+        }
+
+        public boolean contains(BlockPos pos) {
+            for (Zone zone : zones) {
+                if (zone.contains(pos)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private CompoundTag save() {
+            CompoundTag tag = new CompoundTag();
+            tag.putUUID("Marker", markerId);
+            tag.putString("Kind", kind.name());
+            tag.putLong("MarkerPos", markerPos.asLong());
+
+            ListTag zoneList = new ListTag();
+            for (Zone zone : zones) {
+                zoneList.add(zone.save());
+            }
+            tag.put("Zones", zoneList);
+            return tag;
+        }
+
+        @Nullable
+        private static RoomRegion load(CompoundTag tag) {
+            if (!tag.hasUUID("Marker")
+                    || !tag.contains("MarkerPos")) {
+                return null;
+            }
+
+            BuildingMarkerType.RoomKind kind;
+            try {
+                kind = BuildingMarkerType.RoomKind.valueOf(
+                        tag.getString("Kind")
+                );
+            } catch (IllegalArgumentException ignored) {
+                return null;
+            }
+
+            List<Zone> zones = new ArrayList<>();
+            ListTag zoneList =
+                    tag.getList("Zones", Tag.TAG_COMPOUND);
+            for (int i = 0; i < zoneList.size(); i++) {
+                Zone zone = Zone.load(zoneList.getCompound(i));
+                if (zone != null) {
+                    zones.add(zone);
+                }
+            }
+
+            return new RoomRegion(
+                    tag.getUUID("Marker"),
+                    kind,
+                    BlockPos.of(tag.getLong("MarkerPos")),
+                    zones
+            );
+        }
+    }
+
     public record ActivityPoint(
             BuildingPointType type,
             BlockPos pos,
-            float yaw
+            float yaw,
+            @Nullable UUID markerId
     ) {
         public ActivityPoint {
             pos = pos.immutable();
@@ -1305,6 +1375,9 @@ public final class BuildingSavedData extends SavedData {
             tag.putString("Type", type.serializedName());
             tag.putLong("Pos", pos.asLong());
             tag.putFloat("Yaw", yaw);
+            if (markerId != null) {
+                tag.putUUID("Marker", markerId);
+            }
             return tag;
         }
 
@@ -1319,7 +1392,10 @@ public final class BuildingSavedData extends SavedData {
                             tag.getString("Type")
                     ),
                     BlockPos.of(tag.getLong("Pos")),
-                    tag.getFloat("Yaw")
+                    tag.getFloat("Yaw"),
+                    tag.hasUUID("Marker")
+                            ? tag.getUUID("Marker")
+                            : null
             );
         }
     }
