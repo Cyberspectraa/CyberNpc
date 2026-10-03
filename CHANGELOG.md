@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.38.1
+
+### Validated town-defence follow-up
+- Packages the completed 0.38 Guard Post, real-bell alarm and improved letter-writing systems into a fresh tested release artifact.
+- Letter recipient selection now uses the visible online-player list with Prev / Next paging instead of the unreliable small arrow controls from 0.37.
+- NPC alarm behavior calls Minecraft's real BellBlock.attemptToRing(...) and only alerts Guards when the bell actually rings.
+- Player right-clicks on bells use the same GuardAlarmSystem and summon nearby Guards to the bell even when there is no known hostile target.
+- Player-rung alarms make Guards hold and scan around the bell briefly before returning to their post/patrol.
+- Invisible Guard Post Markers remain persistent world positions while individual Guard claims remain temporary, allowing Guards to rotate shifts automatically.
+- Guard Post shifts remain roughly 30–60 seconds with short patrol/rest gaps between assignments.
+
 ## 0.38.0
 
 ### Letter-writing UI overhaul
