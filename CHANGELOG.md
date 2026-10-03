@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.41.1
+
+### Fence avoidance and stuck recovery
+- CyberNpc now explicitly treats vanilla/modded FenceBlock paths as non-traversable.
+- Added one lightweight global fence-recovery brain shared by Main, Quest, Wild and special service NPCs.
+- Recovery only activates when an NPC has an active route, is physically beside a fence/wall/closed fence gate, and is no longer making useful progress or is following an incomplete path that terminates at the barrier.
+- Open fence gates are deliberately ignored so existing pen/gate workflows can still route NPCs through an opened entrance.
+- When stuck, the NPC searches a few small local rings for a genuinely reachable standing position on the accessible side of the barrier. It never teleports or jumps over the fence.
+- After recovery, incomplete paths that immediately terminate against the same type of barrier are temporarily cancelled instead of making the NPC walk straight back into it.
+- Random-stroll destinations additionally reject fence blocks directly.
+- The recovery search only runs after a detected stall, so normal NPC movement does not gain another continuous world scan.
+
 ## 0.41.0
 
 ### Four-marker building system
