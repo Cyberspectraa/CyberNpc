@@ -29,5 +29,16 @@
   "block.cybernpc.guard_post": "Guard Post",
   "item.cybernpc.guard_post": "Guard Post Marker",
   "item.cybernpc.pope_npc_spawn_egg": "Pope NPC Spawn Egg",
-  "item.cybernpc.building_planner": "Building Planner"
+  "item.cybernpc.building_planner": "Building Planner",
+  "item.cybernpc.home_marker": "Home Marker",
+  "item.cybernpc.shop_marker": "Shop Marker",
+  "item.cybernpc.church_marker": "Church Marker",
+  "item.cybernpc.bank_marker": "Bank Marker",
+  "item.cybernpc.post_office_marker": "Post Office Marker",
+  "item.cybernpc.inn_marker": "Inn Marker",
+  "item.cybernpc.public_area_marker": "Public Area Marker",
+  "item.cybernpc.staff_only_marker": "Staff Only Marker",
+  "item.cybernpc.bedroom_marker": "Bedroom Marker",
+  "item.cybernpc.altar_marker": "Altar Marker",
+  "item.cybernpc.counter_marker": "Counter Marker"
 }
