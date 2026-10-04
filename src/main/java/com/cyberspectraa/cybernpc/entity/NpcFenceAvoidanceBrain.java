@@ -5,6 +5,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.level.block.FenceBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.Path;
@@ -365,7 +366,8 @@ final class NpcFenceAvoidanceBrain {
 
     private static boolean isBlockingFence(BlockState state) {
         if (state.getBlock() instanceof FenceBlock
-                || state.getBlock() instanceof WallBlock) {
+                || state.getBlock() instanceof WallBlock
+                || state.getBlock() instanceof TrapDoorBlock) {
             return true;
         }
 
