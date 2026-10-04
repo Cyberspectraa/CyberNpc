@@ -35,12 +35,6 @@ public final class CyberNpcSkinCache {
                     "appearance/pope.b64"
             );
 
-    private static final ResourceLocation POPE_OUTFIT_TEXTURE =
-            new ResourceLocation(
-                    CyberNpc.MOD_ID,
-                    "generated/special/pope"
-            );
-
     private static final ResourceLocation FALLBACK_STEVE =
             new ResourceLocation("minecraft", "textures/entity/player/wide/steve.png");
 
@@ -53,7 +47,7 @@ public final class CyberNpcSkinCache {
     private static final Map<String, ResourceLocation> CACHE = new HashMap<>();
     private static Map<String, byte[]> packedAssets;
     private static Boolean justExpressionsPresent;
-    private static ResourceLocation popeTexture;
+    private static byte[] popeOutfitPng;
 
     private enum ZombieExpression {
         NORMAL,
@@ -88,16 +82,94 @@ public final class CyberNpcSkinCache {
     private static ResourceLocation getPopeTexture(
             CyberNpcEntity entity
     ) {
-        if (popeTexture != null) {
-            return popeTexture;
+        NpcAppearance.Gender gender =
+                entity.getAppearanceGender();
+        int tone = NpcAppearance.sanitizeSkinTone(
+                entity.getSkinToneIndex()
+        );
+        int eyes = NpcAppearance.sanitizeEyeStyle(
+                entity.getEyeStyleIndex()
+        );
+        int hair = NpcAppearance.sanitizeHairStyle(
+                entity.getHairStyleIndex()
+        );
+
+        String key = "pope_"
+                + gender.serializedName()
+                + "_" + tone
+                + "_" + eyes
+                + "_" + hair;
+
+        ResourceLocation existing = CACHE.get(key);
+        if (existing != null) {
+            return existing;
         }
 
         try {
+            // Start from the exact same generated living appearance used by
+            // ordinary CyberNpc entities: skin tone, eyes and hair remain
+            // unique to this Pope.
+            NativeImage composed = loadImage(
+                    "base/" + gender.serializedName() + "/"
+                            + NpcAppearance.skinToneKey(tone)
+                            + ".png"
+            );
+
+            try (NativeImage eyeLayer = loadImage(
+                    "eyes/" + NpcAppearance.eyeStyleKey(eyes)
+                            + ".png"
+            );
+                 NativeImage hairLayer = loadImage(
+                         "hair/brown/"
+                                 + NpcAppearance.hairStyleKey(hair)
+                                 + ".png"
+                 );
+                 NativeImage outfitLayer = loadPopeOutfit()) {
+                blend(composed, eyeLayer);
+                blend(composed, hairLayer);
+
+                // The supplied Pope asset is clothing only. Apply it last so
+                // its robes/headwear sit over the generated person without
+                // replacing their face, eyes, skin tone or hair.
+                blend(composed, outfitLayer);
+            }
+
+            clearUnusedTopLeftCorner(composed);
+
+            ResourceLocation generated = new ResourceLocation(
+                    CyberNpc.MOD_ID,
+                    "generated/appearance/" + key
+            );
+
+            DynamicTexture texture = new DynamicTexture(composed);
+            texture.upload();
+            Minecraft.getInstance()
+                    .getTextureManager()
+                    .register(generated, texture);
+
+            CACHE.put(key, generated);
+            return generated;
+        } catch (IOException | RuntimeException exception) {
+            return getTexture(
+                    false,
+                    gender,
+                    tone,
+                    eyes,
+                    hair,
+                    ZombieExpression.NORMAL
+            );
+        }
+    }
+
+    private static NativeImage loadPopeOutfit()
+            throws IOException {
+        if (popeOutfitPng == null) {
             Resource resource = Minecraft.getInstance()
                     .getResourceManager()
                     .getResource(POPE_OUTFIT_B64)
                     .orElseThrow(() -> new IOException(
-                            "Missing CyberNpc Pope outfit " + POPE_OUTFIT_B64
+                            "Missing CyberNpc Pope outfit "
+                                    + POPE_OUTFIT_B64
                     ));
 
             byte[] encoded;
@@ -105,25 +177,13 @@ public final class CyberNpcSkinCache {
                 encoded = input.readAllBytes();
             }
 
-            byte[] png = Base64.getMimeDecoder().decode(encoded);
+            popeOutfitPng =
+                    Base64.getMimeDecoder().decode(encoded);
+        }
 
-            try (ByteArrayInputStream input =
-                         new ByteArrayInputStream(png)) {
-                NativeImage image = NativeImage.read(input);
-                clearUnusedTopLeftCorner(image);
-
-                DynamicTexture texture = new DynamicTexture(image);
-                texture.upload();
-                Minecraft.getInstance()
-                        .getTextureManager()
-                        .register(POPE_OUTFIT_TEXTURE, texture);
-
-                popeTexture = POPE_OUTFIT_TEXTURE;
-                return popeTexture;
-            }
-        } catch (IOException
-                 | RuntimeException exception) {
-            return fallback(false, entity.getAppearanceGender());
+        try (ByteArrayInputStream input =
+                     new ByteArrayInputStream(popeOutfitPng)) {
+            return NativeImage.read(input);
         }
     }
 
