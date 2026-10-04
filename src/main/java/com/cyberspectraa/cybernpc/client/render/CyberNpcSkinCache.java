@@ -29,6 +29,18 @@ public final class CyberNpcSkinCache {
                     "textures/entity/postman.png"
             );
 
+    private static final ResourceLocation POPE_OUTFIT_B64 =
+            new ResourceLocation(
+                    CyberNpc.MOD_ID,
+                    "appearance/pope.b64"
+            );
+
+    private static final ResourceLocation POPE_OUTFIT_TEXTURE =
+            new ResourceLocation(
+                    CyberNpc.MOD_ID,
+                    "generated/special/pope"
+            );
+
     private static final ResourceLocation FALLBACK_STEVE =
             new ResourceLocation("minecraft", "textures/entity/player/wide/steve.png");
 
@@ -41,6 +53,7 @@ public final class CyberNpcSkinCache {
     private static final Map<String, ResourceLocation> CACHE = new HashMap<>();
     private static Map<String, byte[]> packedAssets;
     private static Boolean justExpressionsPresent;
+    private static ResourceLocation popeTexture;
 
     private enum ZombieExpression {
         NORMAL,
@@ -56,6 +69,12 @@ public final class CyberNpcSkinCache {
             return COURIER_POSTMAN;
         }
 
+        if ("Pope".equalsIgnoreCase(entity.getRole())
+                || "Priest".equalsIgnoreCase(entity.getRole())
+                || "Pontiff".equalsIgnoreCase(entity.getRole())) {
+            return getPopeTexture(entity);
+        }
+
         return getTexture(
                 false,
                 entity.getAppearanceGender(),
@@ -64,6 +83,49 @@ public final class CyberNpcSkinCache {
                 entity.getHairStyleIndex(),
                 ZombieExpression.NORMAL
         );
+    }
+
+    private static ResourceLocation getPopeTexture(
+            CyberNpcEntity entity
+    ) {
+        if (popeTexture != null) {
+            return popeTexture;
+        }
+
+        try {
+            Resource resource = Minecraft.getInstance()
+                    .getResourceManager()
+                    .getResource(POPE_OUTFIT_B64)
+                    .orElseThrow(() -> new IOException(
+                            "Missing CyberNpc Pope outfit " + POPE_OUTFIT_B64
+                    ));
+
+            byte[] encoded;
+            try (InputStream input = resource.open()) {
+                encoded = input.readAllBytes();
+            }
+
+            byte[] png = Base64.getMimeDecoder().decode(encoded);
+
+            try (ByteArrayInputStream input =
+                         new ByteArrayInputStream(png)) {
+                NativeImage image = NativeImage.read(input);
+                clearUnusedTopLeftCorner(image);
+
+                DynamicTexture texture = new DynamicTexture(image);
+                texture.upload();
+                Minecraft.getInstance()
+                        .getTextureManager()
+                        .register(POPE_OUTFIT_TEXTURE, texture);
+
+                popeTexture = POPE_OUTFIT_TEXTURE;
+                return popeTexture;
+            }
+        } catch (IOException
+                 | IllegalArgumentException
+                 | RuntimeException exception) {
+            return fallback(false, entity.getAppearanceGender());
+        }
     }
 
     public static ResourceLocation getZombieTexture(ZombieCyberNpcEntity entity) {
