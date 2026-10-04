@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.42.1
+
+### Pope outfit layering correction
+- The supplied Pope texture is now treated as an outfit layer instead of a complete fixed skin.
+- Pope/Priest/Pontiff NPCs keep CyberNpc's normal generated skin tone, eye style and hair style.
+- The Pope robes/headwear are composited over that generated appearance.
+- Each Pope therefore keeps an individual face/appearance while sharing the intended clerical outfit.
+- If the outfit resource cannot be loaded, the renderer falls back to the normal generated NPC appearance.
+
 ## 0.42.0
 
 ### Tinkers' Construct Wild NPC weapons
