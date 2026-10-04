@@ -5,6 +5,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.level.block.FenceBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.Path;
@@ -20,7 +21,7 @@ import javax.annotation.Nullable;
  *
  * This does not replace Minecraft pathfinding and does not continuously scan.
  * It only wakes up when an NPC with an active path is physically close to a
- * fence/wall/closed gate and stops making progress.
+ * fence/wall/trapdoor/closed gate and stops making progress.
  */
 final class NpcFenceAvoidanceBrain {
     private static final int STALL_TICKS_BEFORE_RECOVERY = 10;
@@ -365,7 +366,8 @@ final class NpcFenceAvoidanceBrain {
 
     private static boolean isBlockingFence(BlockState state) {
         if (state.getBlock() instanceof FenceBlock
-                || state.getBlock() instanceof WallBlock) {
+                || state.getBlock() instanceof WallBlock
+                || state.getBlock() instanceof TrapDoorBlock) {
             return true;
         }
 
