@@ -2,7 +2,9 @@ package com.cyberspectraa.cybernpc.entity;
 
 import com.cyberspectraa.cybernpc.building.BuildingSavedData;
 import com.cyberspectraa.cybernpc.compat.BetterHorsesCompat;
+import com.cyberspectraa.cybernpc.compat.EpicKnightsCompat;
 import com.cyberspectraa.cybernpc.compat.IronSpellsCompat;
+import com.cyberspectraa.cybernpc.compat.TinkersConstructCompat;
 import com.cyberspectraa.cybernpc.effect.ZombificationEffect;
 import com.cyberspectraa.cybernpc.economy.BankSavedData;
 import com.cyberspectraa.cybernpc.economy.CurrencyValue;
@@ -69,6 +71,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.CampfireBlockEntity;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -450,6 +453,7 @@ public class CyberNpcEntity extends PathfinderMob {
         // Explicitly make fences non-traversable for CyberNpc even when
         // another movement behaviour is trying to reach something beyond one.
         setPathfindingMalus(BlockPathTypes.FENCE, -1.0F);
+        setPathfindingMalus(BlockPathTypes.TRAPDOOR, -1.0F);
         setPathfindingMalus(BlockPathTypes.LAVA, -1.0F);
         setPathfindingMalus(BlockPathTypes.WATER, 1.0F);
         setPathfindingMalus(BlockPathTypes.WATER_BORDER, 0.5F);
@@ -597,43 +601,97 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
-        if (getMainHandItem().isEmpty()) {
-            setItemSlot(
-                    EquipmentSlot.MAINHAND,
-                    new ItemStack(Items.IRON_SWORD)
-            );
-        }
+        EpicKnightsCompat.GuardGear epic =
+                EpicKnightsCompat.createGuardGear();
 
-        if (getOffhandItem().isEmpty()) {
-            setItemSlot(
-                    EquipmentSlot.OFFHAND,
-                    new ItemStack(Items.SHIELD)
-            );
-        }
+        if (epic.complete()) {
+            if (getMainHandItem().isEmpty()
+                    || getMainHandItem().is(Items.IRON_SWORD)) {
+                setItemSlot(
+                        EquipmentSlot.MAINHAND,
+                        epic.weapon().copy()
+                );
+            }
 
-        if (getItemBySlot(EquipmentSlot.HEAD).isEmpty()) {
-            setItemSlot(
-                    EquipmentSlot.HEAD,
-                    new ItemStack(Items.IRON_HELMET)
-            );
-        }
-        if (getItemBySlot(EquipmentSlot.CHEST).isEmpty()) {
-            setItemSlot(
-                    EquipmentSlot.CHEST,
-                    new ItemStack(Items.IRON_CHESTPLATE)
-            );
-        }
-        if (getItemBySlot(EquipmentSlot.LEGS).isEmpty()) {
-            setItemSlot(
-                    EquipmentSlot.LEGS,
-                    new ItemStack(Items.IRON_LEGGINGS)
-            );
-        }
-        if (getItemBySlot(EquipmentSlot.FEET).isEmpty()) {
-            setItemSlot(
-                    EquipmentSlot.FEET,
-                    new ItemStack(Items.IRON_BOOTS)
-            );
+            if (getOffhandItem().isEmpty()
+                    || getOffhandItem().is(Items.SHIELD)) {
+                setItemSlot(
+                        EquipmentSlot.OFFHAND,
+                        epic.shield().copy()
+                );
+            }
+
+            if (getItemBySlot(EquipmentSlot.HEAD).isEmpty()
+                    || getItemBySlot(EquipmentSlot.HEAD)
+                    .is(Items.IRON_HELMET)) {
+                setItemSlot(
+                        EquipmentSlot.HEAD,
+                        epic.helmet().copy()
+                );
+            }
+            if (getItemBySlot(EquipmentSlot.CHEST).isEmpty()
+                    || getItemBySlot(EquipmentSlot.CHEST)
+                    .is(Items.IRON_CHESTPLATE)) {
+                setItemSlot(
+                        EquipmentSlot.CHEST,
+                        epic.chest().copy()
+                );
+            }
+            if (getItemBySlot(EquipmentSlot.LEGS).isEmpty()
+                    || getItemBySlot(EquipmentSlot.LEGS)
+                    .is(Items.IRON_LEGGINGS)) {
+                setItemSlot(
+                        EquipmentSlot.LEGS,
+                        epic.legs().copy()
+                );
+            }
+            if (getItemBySlot(EquipmentSlot.FEET).isEmpty()
+                    || getItemBySlot(EquipmentSlot.FEET)
+                    .is(Items.IRON_BOOTS)) {
+                setItemSlot(
+                        EquipmentSlot.FEET,
+                        epic.boots().copy()
+                );
+            }
+        } else {
+            if (getMainHandItem().isEmpty()) {
+                setItemSlot(
+                        EquipmentSlot.MAINHAND,
+                        new ItemStack(Items.IRON_SWORD)
+                );
+            }
+
+            if (getOffhandItem().isEmpty()) {
+                setItemSlot(
+                        EquipmentSlot.OFFHAND,
+                        new ItemStack(Items.SHIELD)
+                );
+            }
+
+            if (getItemBySlot(EquipmentSlot.HEAD).isEmpty()) {
+                setItemSlot(
+                        EquipmentSlot.HEAD,
+                        new ItemStack(Items.IRON_HELMET)
+                );
+            }
+            if (getItemBySlot(EquipmentSlot.CHEST).isEmpty()) {
+                setItemSlot(
+                        EquipmentSlot.CHEST,
+                        new ItemStack(Items.IRON_CHESTPLATE)
+                );
+            }
+            if (getItemBySlot(EquipmentSlot.LEGS).isEmpty()) {
+                setItemSlot(
+                        EquipmentSlot.LEGS,
+                        new ItemStack(Items.IRON_LEGGINGS)
+                );
+            }
+            if (getItemBySlot(EquipmentSlot.FEET).isEmpty()) {
+                setItemSlot(
+                        EquipmentSlot.FEET,
+                        new ItemStack(Items.IRON_BOOTS)
+                );
+            }
         }
 
         var maxHealth = getAttribute(Attributes.MAX_HEALTH);
@@ -1378,7 +1436,8 @@ public class CyberNpcEntity extends PathfinderMob {
                     ? new ItemStack(Items.CROSSBOW)
                     : new ItemStack(Items.BOW);
 
-            applyWeaponEnchantments(sword, tier);
+            sword = maybeTinkersSword(sword);
+        applyWeaponEnchantments(sword, tier);
             applyWeaponEnchantments(ranged, tier);
             inventory.add(sword);
             inventory.add(ranged);
@@ -1425,6 +1484,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 ? new ItemStack(Items.CROSSBOW)
                 : new ItemStack(Items.BOW);
 
+        sword = maybeTinkersSword(sword);
         applyWeaponEnchantments(sword, tier);
         applyWeaponEnchantments(ranged, tier);
         inventory.add(sword);
@@ -1467,6 +1527,7 @@ public class CyberNpcEntity extends PathfinderMob {
             default -> new ItemStack(Items.IRON_SWORD);
         };
 
+        sword = maybeTinkersSword(sword);
         applyWeaponEnchantments(sword, tier);
         inventory.add(sword);
 
@@ -1507,6 +1568,7 @@ public class CyberNpcEntity extends PathfinderMob {
             default -> new ItemStack(Items.STONE_SWORD);
         };
 
+        sword = maybeTinkersSword(sword);
         applyWeaponEnchantments(sword, tier);
         inventory.add(sword);
 
@@ -1590,6 +1652,7 @@ public class CyberNpcEntity extends PathfinderMob {
             case ELITE -> new ItemStack(Items.NETHERITE_SWORD);
         };
 
+        sword = maybeTinkersSword(sword);
         applyWeaponEnchantments(sword, tier);
         inventory.add(sword);
 
@@ -1673,6 +1736,7 @@ public class CyberNpcEntity extends PathfinderMob {
             case RARE -> new ItemStack(Items.DIAMOND_SWORD);
             case ELITE -> new ItemStack(Items.NETHERITE_SWORD);
         };
+        sword = maybeTinkersSword(sword);
         applyWeaponEnchantments(sword, tier);
         inventory.add(sword);
 
@@ -1846,7 +1910,26 @@ public class CyberNpcEntity extends PathfinderMob {
         }
     }
 
+    private ItemStack maybeTinkersSword(ItemStack vanillaSword) {
+        if (TinkersConstructCompat.isLoaded()
+                && getRandom().nextFloat() < 0.30F) {
+            ItemStack tinkers =
+                    TinkersConstructCompat.createRandomSword(
+                            getRandom()
+                    );
+            if (!tinkers.isEmpty()) {
+                return tinkers;
+            }
+        }
+
+        return vanillaSword;
+    }
+
     private void applyWeaponEnchantments(ItemStack stack, WildNpcGearTier tier) {
+        if (TinkersConstructCompat.isTinkersSword(stack)) {
+            return;
+        }
+
         int level = switch (tier) {
             case FINE -> 1;
             case RARE -> 2;
@@ -2028,7 +2111,8 @@ public class CyberNpcEntity extends PathfinderMob {
     private boolean isSwordStack(ItemStack stack) {
         return !stack.isEmpty()
                 && (stack.is(CyberNpcWeaponPool.WILD_NPC_SWORDS)
-                || stack.getItem() instanceof SwordItem);
+                || stack.getItem() instanceof SwordItem
+                || TinkersConstructCompat.isTinkersSword(stack));
     }
 
     private boolean isMeleeWeaponStack(ItemStack stack) {
@@ -4563,6 +4647,12 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private boolean isGapJumpBodyClear(BlockPos feet) {
+        if (isTrapdoorBlock(feet)
+                || isTrapdoorBlock(feet.above())
+                || isTrapdoorBlock(feet.below())) {
+            return false;
+        }
+
         return level().getFluidState(feet).isEmpty()
                 && level().getFluidState(feet.above()).isEmpty()
                 && level().getBlockState(feet)
@@ -4575,10 +4665,21 @@ public class CyberNpcEntity extends PathfinderMob {
 
     private boolean hasGapJumpSupport(BlockPos feet) {
         BlockPos support = feet.below();
+
+        if (isTrapdoorBlock(feet)
+                || isTrapdoorBlock(support)) {
+            return false;
+        }
+
         return level().getFluidState(support).isEmpty()
                 && !level().getBlockState(support)
                         .getCollisionShape(level(), support)
                         .isEmpty();
+    }
+
+    private boolean isTrapdoorBlock(BlockPos pos) {
+        return level().getBlockState(pos).getBlock()
+                instanceof TrapDoorBlock;
     }
 
     private void tickHunger() {
