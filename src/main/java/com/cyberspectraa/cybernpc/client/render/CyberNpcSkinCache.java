@@ -122,7 +122,6 @@ public final class CyberNpcSkinCache {
                 return popeTexture;
             }
         } catch (IOException
-                 | IllegalArgumentException
                  | RuntimeException exception) {
             return fallback(false, entity.getAppearanceGender());
         }
