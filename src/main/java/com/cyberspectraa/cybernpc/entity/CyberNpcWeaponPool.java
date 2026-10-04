@@ -1,6 +1,7 @@
 package com.cyberspectraa.cybernpc.entity;
 
 import com.cyberspectraa.cybernpc.CyberNpc;
+import com.cyberspectraa.cybernpc.compat.TinkersConstructCompat;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -18,7 +19,20 @@ public final class CyberNpcWeaponPool {
             TagKey.create(Registries.ITEM, new ResourceLocation(CyberNpc.MOD_ID, "wild_npc_ranged_weapons"));
 
     public static ItemStack randomWildSword(RandomSource random) {
-        return randomFromTag(WILD_NPC_SWORDS, random, Items.WOODEN_SWORD);
+        if (TinkersConstructCompat.isLoaded()
+                && random.nextFloat() < 0.30F) {
+            ItemStack tinkers =
+                    TinkersConstructCompat.createRandomSword(random);
+            if (!tinkers.isEmpty()) {
+                return tinkers;
+            }
+        }
+
+        return randomFromTag(
+                WILD_NPC_SWORDS,
+                random,
+                Items.WOODEN_SWORD
+        );
     }
 
     public static ItemStack randomWildRangedWeapon(RandomSource random) {

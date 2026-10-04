@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.42.0
+
+### Tinkers' Construct Wild NPC weapons
+- Added optional Tinkers' Construct compatibility (tconstruct).
+- Sword-using Wild NPC loadouts can now roll genuine Tinkers sword/dagger/cleaver tools.
+- Tinkers weapons are built through Tinkers' own random-material tool builder rather than spawning an invalid raw tool item.
+- Tinkers weapons are recognised as melee weapons by CyberNpc combat, inventory and weapon-stowing logic.
+- Vanilla enchantments are not forced onto generated Tinkers tools; their normal Tinkers material/modifier system remains authoritative.
+- Tinkers remains a soft optional dependency; vanilla weapons remain the fallback.
+
+### Epic Knights Guard equipment
+- Added optional Epic Knights compatibility (magistuarmory) for Guard NPCs.
+- Guards use an Epic Knights iron short sword, medieval iron shield, armet and Knight armor set when all required items are available.
+- Existing default vanilla iron Guard equipment automatically upgrades to the Epic Knights kit.
+- Custom/non-default equipment is preserved instead of being overwritten.
+- If Epic Knights is absent or an expected item is disabled/missing, Guards safely retain the vanilla iron sword/shield/armor fallback.
+
+### Stronger trapdoor avoidance
+- CyberNpc now marks the TRAPDOOR path type as non-traversable.
+- Player-like custom gap jumping explicitly refuses to start or land across trapdoors.
+- Trapdoors are included in the global obstacle/stuck-recovery system alongside fences and walls.
+- This prevents NPCs from repeatedly trying to jump over trapdoors instead of routing around them.
+
+### Pope outfit
+- Added the supplied 64x64 Pope outfit as the fixed texture for Pope/Priest/Pontiff service NPCs.
+- Courier and normal generated NPC appearance handling remains unchanged.
+
 ## 0.41.1
 
 ### Fence avoidance and stuck recovery
