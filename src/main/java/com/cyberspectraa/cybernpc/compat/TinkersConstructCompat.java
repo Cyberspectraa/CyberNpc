@@ -34,6 +34,26 @@ public final class TinkersConstructCompat {
      * Creates a genuine Tinkers tool with material data instead of returning
      * the raw registry item, which would be an unbuilt/invalid tool.
      */
+    public static boolean isTinkersSword(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+
+        if (stack.hasTag()
+                && stack.getTag().getBoolean(
+                "CyberNpcTinkersWeapon"
+        )) {
+            return true;
+        }
+
+        ResourceLocation id = ForgeRegistries.ITEMS
+                .getKey(stack.getItem());
+
+        return id != null
+                && MOD_ID.equals(id.getNamespace())
+                && SWORD_TOOLS.contains(id.getPath());
+    }
+
     public static ItemStack createRandomSword(RandomSource random) {
         if (!isLoaded() || random == null || !initializeReflection()) {
             return ItemStack.EMPTY;
