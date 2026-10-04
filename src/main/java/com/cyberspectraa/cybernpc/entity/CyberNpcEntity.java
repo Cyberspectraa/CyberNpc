@@ -2,7 +2,9 @@ package com.cyberspectraa.cybernpc.entity;
 
 import com.cyberspectraa.cybernpc.building.BuildingSavedData;
 import com.cyberspectraa.cybernpc.compat.BetterHorsesCompat;
+import com.cyberspectraa.cybernpc.compat.EpicKnightsCompat;
 import com.cyberspectraa.cybernpc.compat.IronSpellsCompat;
+import com.cyberspectraa.cybernpc.compat.TinkersConstructCompat;
 import com.cyberspectraa.cybernpc.effect.ZombificationEffect;
 import com.cyberspectraa.cybernpc.economy.BankSavedData;
 import com.cyberspectraa.cybernpc.economy.CurrencyValue;
@@ -69,6 +71,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.CampfireBlockEntity;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -597,44 +600,39 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
-        if (getMainHandItem().isEmpty()) {
-            setItemSlot(
-                    EquipmentSlot.MAINHAND,
-                    new ItemStack(Items.IRON_SWORD)
-            );
-        }
+        EpicKnightsCompat.GuardLoadout epic =
+                EpicKnightsCompat.createGuardLoadout(getRandom());
 
-        if (getOffhandItem().isEmpty()) {
-            setItemSlot(
-                    EquipmentSlot.OFFHAND,
-                    new ItemStack(Items.SHIELD)
-            );
-        }
-
-        if (getItemBySlot(EquipmentSlot.HEAD).isEmpty()) {
-            setItemSlot(
-                    EquipmentSlot.HEAD,
-                    new ItemStack(Items.IRON_HELMET)
-            );
-        }
-        if (getItemBySlot(EquipmentSlot.CHEST).isEmpty()) {
-            setItemSlot(
-                    EquipmentSlot.CHEST,
-                    new ItemStack(Items.IRON_CHESTPLATE)
-            );
-        }
-        if (getItemBySlot(EquipmentSlot.LEGS).isEmpty()) {
-            setItemSlot(
-                    EquipmentSlot.LEGS,
-                    new ItemStack(Items.IRON_LEGGINGS)
-            );
-        }
-        if (getItemBySlot(EquipmentSlot.FEET).isEmpty()) {
-            setItemSlot(
-                    EquipmentSlot.FEET,
-                    new ItemStack(Items.IRON_BOOTS)
-            );
-        }
+        equipGuardSlot(
+                EquipmentSlot.MAINHAND,
+                epic.weapon(),
+                Items.IRON_SWORD
+        );
+        equipGuardSlot(
+                EquipmentSlot.OFFHAND,
+                epic.shield(),
+                Items.SHIELD
+        );
+        equipGuardSlot(
+                EquipmentSlot.HEAD,
+                epic.helmet(),
+                Items.IRON_HELMET
+        );
+        equipGuardSlot(
+                EquipmentSlot.CHEST,
+                epic.chestplate(),
+                Items.IRON_CHESTPLATE
+        );
+        equipGuardSlot(
+                EquipmentSlot.LEGS,
+                epic.leggings(),
+                Items.IRON_LEGGINGS
+        );
+        equipGuardSlot(
+                EquipmentSlot.FEET,
+                epic.boots(),
+                Items.IRON_BOOTS
+        );
 
         var maxHealth = getAttribute(Attributes.MAX_HEALTH);
         if (maxHealth != null && maxHealth.getBaseValue() < 24.0D) {
@@ -645,6 +643,26 @@ public class CyberNpcEntity extends PathfinderMob {
         if (attack != null && attack.getBaseValue() < 3.0D) {
             attack.setBaseValue(3.0D);
         }
+    }
+
+    private void equipGuardSlot(
+            EquipmentSlot slot,
+            ItemStack epicItem,
+            net.minecraft.world.item.Item legacyDefault
+    ) {
+        ItemStack current = getItemBySlot(slot);
+
+        // Upgrade old/default Guard equipment when Epic Knights is present,
+        // but never overwrite equipment the player deliberately changed.
+        if (!current.isEmpty() && !current.is(legacyDefault)) {
+            return;
+        }
+
+        ItemStack replacement = epicItem == null || epicItem.isEmpty()
+                ? new ItemStack(legacyDefault)
+                : epicItem.copy();
+
+        setItemSlot(slot, replacement);
     }
 
     public NpcType getNpcType() {
@@ -1314,7 +1332,9 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (getWildClass() == WildNpcClass.CLASSLESS) {
             if (getStoredSword().isEmpty()) {
-                inventory.add(CyberNpcWeaponPool.randomWildSword(getRandom()));
+                inventory.add(createWildSword(
+                        CyberNpcWeaponPool.randomWildSword(getRandom())
+                ));
             }
             if (getStoredRangedWeapon().isEmpty()) {
                 inventory.add(CyberNpcWeaponPool.randomWildRangedWeapon(getRandom()));
@@ -1368,10 +1388,12 @@ public class CyberNpcEntity extends PathfinderMob {
             );
 
             ItemStack sword = switch (tier) {
-                case FINE -> new ItemStack(Items.IRON_SWORD);
-                case RARE -> new ItemStack(Items.DIAMOND_SWORD);
-                case ELITE -> new ItemStack(Items.NETHERITE_SWORD);
-                default -> CyberNpcWeaponPool.randomWildSword(getRandom());
+                case FINE -> createWildSword(new ItemStack(Items.IRON_SWORD));
+                case RARE -> createWildSword(new ItemStack(Items.DIAMOND_SWORD));
+                case ELITE -> createWildSword(new ItemStack(Items.NETHERITE_SWORD));
+                default -> createWildSword(
+                        CyberNpcWeaponPool.randomWildSword(getRandom())
+                );
             };
 
             ItemStack ranged = getRandom().nextFloat() < 0.30F
@@ -1416,9 +1438,9 @@ public class CyberNpcEntity extends PathfinderMob {
         WildNpcGearTier tier = getGearTier();
 
         ItemStack sword = switch (tier) {
-            case ELITE, RARE -> new ItemStack(Items.DIAMOND_SWORD);
-            case FINE -> new ItemStack(Items.IRON_SWORD);
-            default -> new ItemStack(Items.STONE_SWORD);
+            case ELITE, RARE -> createWildSword(new ItemStack(Items.DIAMOND_SWORD));
+            case FINE -> createWildSword(new ItemStack(Items.IRON_SWORD));
+            default -> createWildSword(new ItemStack(Items.STONE_SWORD));
         };
 
         ItemStack ranged = getRandom().nextFloat() < 0.35F
@@ -1462,9 +1484,9 @@ public class CyberNpcEntity extends PathfinderMob {
         WildNpcGearTier tier = getGearTier();
 
         ItemStack sword = switch (tier) {
-            case ELITE -> new ItemStack(Items.NETHERITE_SWORD);
-            case RARE -> new ItemStack(Items.DIAMOND_SWORD);
-            default -> new ItemStack(Items.IRON_SWORD);
+            case ELITE -> createWildSword(new ItemStack(Items.NETHERITE_SWORD));
+            case RARE -> createWildSword(new ItemStack(Items.DIAMOND_SWORD));
+            default -> createWildSword(new ItemStack(Items.IRON_SWORD));
         };
 
         applyWeaponEnchantments(sword, tier);
@@ -1502,9 +1524,9 @@ public class CyberNpcEntity extends PathfinderMob {
         WildNpcGearTier tier = getGearTier();
 
         ItemStack sword = switch (tier) {
-            case ELITE -> new ItemStack(Items.DIAMOND_SWORD);
-            case RARE, FINE -> new ItemStack(Items.IRON_SWORD);
-            default -> new ItemStack(Items.STONE_SWORD);
+            case ELITE -> createWildSword(new ItemStack(Items.DIAMOND_SWORD));
+            case RARE, FINE -> createWildSword(new ItemStack(Items.IRON_SWORD));
+            default -> createWildSword(new ItemStack(Items.STONE_SWORD));
         };
 
         applyWeaponEnchantments(sword, tier);
@@ -1584,10 +1606,10 @@ public class CyberNpcEntity extends PathfinderMob {
         WildNpcGearTier tier = getGearTier();
 
         ItemStack sword = switch (tier) {
-            case STANDARD -> new ItemStack(Items.STONE_SWORD);
-            case FINE -> new ItemStack(Items.IRON_SWORD);
-            case RARE -> new ItemStack(Items.DIAMOND_SWORD);
-            case ELITE -> new ItemStack(Items.NETHERITE_SWORD);
+            case STANDARD -> createWildSword(new ItemStack(Items.STONE_SWORD));
+            case FINE -> createWildSword(new ItemStack(Items.IRON_SWORD));
+            case RARE -> createWildSword(new ItemStack(Items.DIAMOND_SWORD));
+            case ELITE -> createWildSword(new ItemStack(Items.NETHERITE_SWORD));
         };
 
         applyWeaponEnchantments(sword, tier);
@@ -1668,10 +1690,10 @@ public class CyberNpcEntity extends PathfinderMob {
         WildNpcGearTier tier = getGearTier();
 
         ItemStack sword = switch (tier) {
-            case STANDARD -> new ItemStack(Items.IRON_SWORD);
-            case FINE -> new ItemStack(Items.IRON_SWORD);
-            case RARE -> new ItemStack(Items.DIAMOND_SWORD);
-            case ELITE -> new ItemStack(Items.NETHERITE_SWORD);
+            case STANDARD -> createWildSword(new ItemStack(Items.IRON_SWORD));
+            case FINE -> createWildSword(new ItemStack(Items.IRON_SWORD));
+            case RARE -> createWildSword(new ItemStack(Items.DIAMOND_SWORD));
+            case ELITE -> createWildSword(new ItemStack(Items.NETHERITE_SWORD));
         };
         applyWeaponEnchantments(sword, tier);
         inventory.add(sword);
@@ -1846,7 +1868,21 @@ public class CyberNpcEntity extends PathfinderMob {
         }
     }
 
+    private ItemStack createWildSword(ItemStack vanillaFallback) {
+        return TinkersConstructCompat.maybeCreateWildSword(
+                getRandom(),
+                getGearTier(),
+                vanillaFallback
+        );
+    }
+
     private void applyWeaponEnchantments(ItemStack stack, WildNpcGearTier tier) {
+        // Tinkers tools get stats/traits from their materials and modifiers.
+        // Do not bolt vanilla enchantments onto the generated tool.
+        if (TinkersConstructCompat.isSupportedSword(stack)) {
+            return;
+        }
+
         int level = switch (tier) {
             case FINE -> 1;
             case RARE -> 2;
@@ -2028,7 +2064,8 @@ public class CyberNpcEntity extends PathfinderMob {
     private boolean isSwordStack(ItemStack stack) {
         return !stack.isEmpty()
                 && (stack.is(CyberNpcWeaponPool.WILD_NPC_SWORDS)
-                || stack.getItem() instanceof SwordItem);
+                || stack.getItem() instanceof SwordItem
+                || TinkersConstructCompat.isSupportedSword(stack));
     }
 
     private boolean isMeleeWeaponStack(ItemStack stack) {
@@ -4511,6 +4548,11 @@ public class CyberNpcEntity extends PathfinderMob {
     @Nullable
     private GapJumpPlan findJumpableGap(Vec3 direction, int maxGapBlocks) {
         BlockPos origin = blockPosition();
+
+        if (isTrapdoorJumpSample(origin)) {
+            return null;
+        }
+
         BlockPos previous = origin;
         boolean enteredGap = false;
         int gapBlocks = 0;
@@ -4528,6 +4570,12 @@ public class CyberNpcEntity extends PathfinderMob {
                 continue;
             }
             previous = sample;
+
+            // Trapdoors are never treated as something to hop over. They are
+            // a deliberate route barrier and normal pathfinding must go around.
+            if (isTrapdoorJumpSample(sample)) {
+                return null;
+            }
 
             // Only jump level gaps. Height changes remain normal pathfinding's
             // job so this never becomes an unintended super-jump.
@@ -4560,6 +4608,15 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         return null;
+    }
+
+    private boolean isTrapdoorJumpSample(BlockPos feet) {
+        return level().getBlockState(feet).getBlock()
+                instanceof TrapDoorBlock
+                || level().getBlockState(feet.above()).getBlock()
+                instanceof TrapDoorBlock
+                || level().getBlockState(feet.below()).getBlock()
+                instanceof TrapDoorBlock;
     }
 
     private boolean isGapJumpBodyClear(BlockPos feet) {
