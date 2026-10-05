@@ -2,6 +2,7 @@ package com.cyberspectraa.cybernpc.entity;
 
 import com.cyberspectraa.cybernpc.building.BuildingSavedData;
 import com.cyberspectraa.cybernpc.compat.BetterHorsesCompat;
+import com.cyberspectraa.cybernpc.compat.CyberClassesNpcCompat;
 import com.cyberspectraa.cybernpc.compat.CyberRacesNpcCompat;
 import com.cyberspectraa.cybernpc.compat.EpicKnightsCompat;
 import com.cyberspectraa.cybernpc.compat.IronSpellsCompat;
@@ -733,17 +734,45 @@ public class CyberNpcEntity extends PathfinderMob {
         }
     }
 
-    public WildNpcClass getWildClass() {
-        return WildNpcClass.fromSerializedName(entityData.get(DATA_WILD_CLASS));
+    public String getWildClass() {
+        return CyberClassesNpcCompat.normalize(
+                entityData.get(DATA_WILD_CLASS)
+        );
     }
 
     public String getWildClassDisplayName() {
-        return getWildClass().displayName();
+        return CyberClassesNpcCompat.displayName(
+                getWildClass()
+        );
     }
 
-    private void setWildClass(WildNpcClass wildClass) {
-        WildNpcClass safe = wildClass == null ? WildNpcClass.CLASSLESS : wildClass;
-        entityData.set(DATA_WILD_CLASS, safe.serializedName());
+    private void setWildClass(String wildClass) {
+        entityData.set(
+                DATA_WILD_CLASS,
+                CyberClassesNpcCompat.normalize(wildClass)
+        );
+    }
+
+    private boolean isWildClass(String classId) {
+        return getWildClass().equals(classId);
+    }
+
+    private boolean wildClassAvailable() {
+        return CyberClassesNpcCompat.isAvailable(
+                getWildClass()
+        );
+    }
+
+    private boolean wildClassUsesSpellBook() {
+        return CyberClassesNpcCompat.usesSpellBook(
+                getWildClass()
+        );
+    }
+
+    private boolean wildClassHasMagicSchool() {
+        return CyberClassesNpcCompat.hasMagicSchool(
+                getWildClass()
+        );
     }
 
     public WildNpcPersonality getPersonality() {
@@ -779,7 +808,7 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     public String getMageSchoolDisplayName() {
-        return getWildClass().hasMagicSchool()
+        return wildClassHasMagicSchool()
                 ? getMageSchool().displayName()
                 : "None";
     }
@@ -894,7 +923,7 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     public String getDebugRangerState() {
-        if (getWildClass() != WildNpcClass.RANGER) {
+        if (!isWildClass("ranger")) {
             return "not ranger";
         }
 
@@ -1330,15 +1359,15 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         if (entityData.get(DATA_WILD_CLASS).isBlank()) {
-            setWildClass(WildNpcClass.randomSpawnClass(getRandom()));
+            setWildClass(CyberClassesNpcCompat.randomClassId(getRandom()));
         }
 
         if (entityData.get(DATA_PERSONALITY).isBlank()) {
             setPersonality(WildNpcPersonality.randomPersonality(getRandom()));
         }
 
-        if (!getWildClass().isAvailable()) {
-            setWildClass(WildNpcClass.CLASSLESS);
+        if (!wildClassAvailable()) {
+            setWildClass("classless");
             setMageSchool(null);
             classLoadoutInitialized = false;
         }
@@ -1347,8 +1376,8 @@ public class CyberNpcEntity extends PathfinderMob {
             setGearTier(WildNpcGearTier.randomTier(getRandom()));
         }
 
-        if (getWildClass().hasMagicSchool()) {
-            if (getWildClass() == WildNpcClass.CLERIC) {
+        if (wildClassHasMagicSchool()) {
+            if (isWildClass("cleric")) {
                 setMageSchool(MageSchool.HOLY);
             } else if (entityData.get(DATA_MAGE_SCHOOL).isBlank()) {
                 setMageSchool(MageSchool.randomSchool(getRandom()));
@@ -1380,7 +1409,7 @@ public class CyberNpcEntity extends PathfinderMob {
             entityData.set(DATA_AGGRESSION, aggressionLevel);
         }
 
-        if (getWildClass() == WildNpcClass.CLASSLESS) {
+        if (isWildClass("classless")) {
             if (getStoredSword().isEmpty()) {
                 inventory.add(CyberNpcWeaponPool.randomWildSword(getRandom()));
             }
@@ -1398,7 +1427,7 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void initializeClassLoadout() {
-        if (getWildClass() == WildNpcClass.CLASSLESS) {
+        if (isWildClass("classless")) {
             initializeClasslessLoadout();
             return;
         }
@@ -1412,14 +1441,14 @@ public class CyberNpcEntity extends PathfinderMob {
         clearArmorSlots();
 
         switch (getWildClass()) {
-            case ARCHER -> initializeArcherLoadout();
-            case KNIGHT -> initializeKnightLoadout();
-            case ROGUE -> initializeRogueLoadout();
-            case BERSERKER -> initializeBerserkerLoadout();
-            case RANGER -> initializeRangerLoadout();
-            case MAGE -> initializeMageLoadout();
-            case CLERIC -> initializeClericLoadout();
-            case SPELLBLADE -> initializeSpellbladeLoadout();
+            case "archer" -> initializeArcherLoadout();
+            case "knight" -> initializeKnightLoadout();
+            case "rogue" -> initializeRogueLoadout();
+            case "berserker" -> initializeBerserkerLoadout();
+            case "ranger" -> initializeRangerLoadout();
+            case "mage" -> initializeMageLoadout();
+            case "cleric" -> initializeClericLoadout();
+            case "spellblade" -> initializeSpellbladeLoadout();
             default -> initializeClasslessLoadout();
         }
     }
@@ -1704,7 +1733,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
     private void initializeClericLoadout() {
         if (!IronSpellsCompat.isLoaded()) {
-            setWildClass(WildNpcClass.CLASSLESS);
+            setWildClass("classless");
             setMageSchool(null);
             classLoadoutInitialized = false;
             return;
@@ -1731,7 +1760,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
     private void initializeSpellbladeLoadout() {
         if (!IronSpellsCompat.isLoaded()) {
-            setWildClass(WildNpcClass.CLASSLESS);
+            setWildClass("classless");
             setMageSchool(null);
             classLoadoutInitialized = false;
             return;
@@ -1770,7 +1799,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
     private void initializeMageLoadout() {
         if (!IronSpellsCompat.isLoaded()) {
-            setWildClass(WildNpcClass.CLASSLESS);
+            setWildClass("classless");
             setMageSchool(null);
             classLoadoutInitialized = false;
             return;
@@ -1835,7 +1864,7 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         chainmailMigrationChecked = true;
-        boolean knight = getWildClass() == WildNpcClass.KNIGHT;
+        boolean knight = isWildClass("knight");
 
         replaceLegacyChainmailSlot(
                 EquipmentSlot.HEAD,
@@ -1981,49 +2010,49 @@ public class CyberNpcEntity extends PathfinderMob {
         double attackDamage;
 
         switch (getWildClass()) {
-            case ARCHER -> {
+            case "archer" -> {
                 maxHealth = 20.0D;
                 movementSpeed = 0.435D;
                 armor = 0.0D;
                 attackDamage = 2.0D;
             }
-            case KNIGHT -> {
+            case "knight" -> {
                 maxHealth = 26.0D;
                 movementSpeed = 0.395D;
                 armor = 2.0D;
                 attackDamage = 3.0D;
             }
-            case ROGUE -> {
+            case "rogue" -> {
                 maxHealth = 18.0D;
                 movementSpeed = 0.455D;
                 armor = 0.0D;
                 attackDamage = 2.5D;
             }
-            case BERSERKER -> {
+            case "berserker" -> {
                 maxHealth = 24.0D;
                 movementSpeed = 0.440D;
                 armor = 0.5D;
                 attackDamage = 4.0D;
             }
-            case RANGER -> {
+            case "ranger" -> {
                 maxHealth = 22.0D;
                 movementSpeed = 0.440D;
                 armor = 0.5D;
                 attackDamage = 2.8D;
             }
-            case MAGE -> {
+            case "mage" -> {
                 maxHealth = 22.0D;
                 movementSpeed = 0.420D;
                 armor = 0.0D;
                 attackDamage = 2.0D;
             }
-            case CLERIC -> {
+            case "cleric" -> {
                 maxHealth = 22.0D;
                 movementSpeed = 0.415D;
                 armor = 1.0D;
                 attackDamage = 2.0D;
             }
-            case SPELLBLADE -> {
+            case "spellblade" -> {
                 maxHealth = 23.0D;
                 movementSpeed = 0.430D;
                 armor = 1.0D;
@@ -2075,13 +2104,13 @@ public class CyberNpcEntity extends PathfinderMob {
     private float getEmergencyHealthThreshold() {
         float base = getPersonality().emergencyHealth();
 
-        if (getWildClass() == WildNpcClass.KNIGHT) {
+        if (isWildClass("knight")) {
             base -= 1.0F;
-        } else if (getWildClass() == WildNpcClass.BERSERKER) {
+        } else if (isWildClass("berserker")) {
             base -= 1.5F;
-        } else if (getWildClass() == WildNpcClass.MAGE) {
+        } else if (isWildClass("mage")) {
             base += 1.0F;
-        } else if (getWildClass() == WildNpcClass.CLERIC) {
+        } else if (isWildClass("cleric")) {
             base += 1.5F;
         }
 
@@ -2095,11 +2124,11 @@ public class CyberNpcEntity extends PathfinderMob {
     private double getThreatRequiredRatio() {
         double ratio = getPersonality().threatRequiredRatio();
 
-        if (getWildClass() == WildNpcClass.KNIGHT
-                || getWildClass() == WildNpcClass.BERSERKER) {
+        if (isWildClass("knight")
+                || isWildClass("berserker")) {
             ratio -= 0.08D;
-        } else if (getWildClass() == WildNpcClass.MAGE
-                || getWildClass() == WildNpcClass.CLERIC) {
+        } else if (isWildClass("mage")
+                || isWildClass("cleric")) {
             ratio += 0.05D;
         }
 
@@ -2388,7 +2417,7 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     boolean shouldRangerReturnBeforeSleeping() {
-        if (getWildClass() != WildNpcClass.RANGER
+        if (!isWildClass("ranger")
                 || !(getVehicle() instanceof AbstractHorse)
                 || rangerHomePos == null
                 || blockPosition().distSqr(rangerHomePos)
@@ -2423,7 +2452,7 @@ public class CyberNpcEntity extends PathfinderMob {
             setHunger(MAX_HUNGER);
             ensureWildProfile();
 
-            if (getWildClass() == WildNpcClass.RANGER
+            if (isWildClass("ranger")
                     && rangerHomePos == null) {
                 rangerHomePos = blockPosition().immutable();
             }
@@ -2625,7 +2654,7 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private boolean tickHorseUse() {
-        if (getWildClass() != WildNpcClass.RANGER) {
+        if (!isWildClass("ranger")) {
             if (getVehicle() instanceof AbstractHorse horse) {
                 stopUsingHorse(horse);
             } else {
@@ -3277,7 +3306,7 @@ public class CyberNpcEntity extends PathfinderMob {
             AbstractHorse horse,
             boolean alreadyClaimedByThisNpc
     ) {
-        if (getWildClass() != WildNpcClass.RANGER
+        if (!isWildClass("ranger")
                 || horse == null
                 || !horse.isAlive()
                 || horse.isBaby()
@@ -4132,10 +4161,10 @@ public class CyberNpcEntity extends PathfinderMob {
         };
 
         score += switch (getWildClass()) {
-            case KNIGHT -> 3;
-            case BERSERKER -> 2;
-            case CLERIC -> 2;
-            case SPELLBLADE -> 2;
+            case "knight" -> 3;
+            case "berserker" -> 2;
+            case "cleric" -> 2;
+            case "spellblade" -> 2;
             default -> 0;
         };
 
@@ -6193,13 +6222,13 @@ public class CyberNpcEntity extends PathfinderMob {
 
         score += getPersonality().confidenceModifier();
 
-        if (getWildClass() == WildNpcClass.KNIGHT) {
+        if (isWildClass("knight")) {
             score += 5.0D;
-        } else if (getWildClass() == WildNpcClass.BERSERKER) {
+        } else if (isWildClass("berserker")) {
             score += 8.0D;
-        } else if (getWildClass() == WildNpcClass.SPELLBLADE) {
+        } else if (isWildClass("spellblade")) {
             score += 3.0D;
-        } else if (getWildClass().usesSpellBook()
+        } else if (wildClassUsesSpellBook()
                 && IronSpellsCompat.hasActiveCast(this)) {
             score += 3.0D;
         }
@@ -6344,11 +6373,11 @@ public class CyberNpcEntity extends PathfinderMob {
         double tierBonus = getGearTier().attackBonus();
 
         return switch (getWildClass()) {
-            case KNIGHT -> Math.max(base, 8.0D + tierBonus);
-            case ROGUE -> Math.max(base, 7.0D + tierBonus);
-            case BERSERKER -> Math.max(base, 10.0D + tierBonus);
-            case ARCHER -> Math.max(base, 6.5D + tierBonus);
-            case MAGE, CLERIC, SPELLBLADE -> Math.max(
+            case "knight" -> Math.max(base, 8.0D + tierBonus);
+            case "rogue" -> Math.max(base, 7.0D + tierBonus);
+            case "berserker" -> Math.max(base, 10.0D + tierBonus);
+            case "archer" -> Math.max(base, 6.5D + tierBonus);
+            case "mage", "cleric", "spellblade" -> Math.max(
                     base,
                     IronSpellsCompat.estimatePotentialDamage(
                             this,
@@ -6748,7 +6777,7 @@ public class CyberNpcEntity extends PathfinderMob {
             return "Sleeping";
         }
         if (getVehicle() instanceof AbstractHorse horse) {
-            if (getWildClass() == WildNpcClass.RANGER) {
+            if (isWildClass("ranger")) {
                 return rangerReturningHomeForSleep
                         ? "Ranger returning home"
                         : (rangerPatrolPauseTicks > 0
@@ -6764,11 +6793,11 @@ public class CyberNpcEntity extends PathfinderMob {
         if (horseTargetId != null) {
             return "Approaching horse";
         }
-        if (getWildClass() == WildNpcClass.RANGER
+        if (isWildClass("ranger")
                 && rangerPatrolPauseTicks > 0) {
             return "Ranger watching perimeter";
         }
-        if (getWildClass() == WildNpcClass.RANGER
+        if (isWildClass("ranger")
                 && rangerPatrolTarget != null) {
             return "Ranger patrolling perimeter";
         }
@@ -6851,12 +6880,12 @@ public class CyberNpcEntity extends PathfinderMob {
             return "It is night and this NPC is committed to reaching its claimed bed";
         }
         if (getVehicle() instanceof AbstractHorse horse) {
-            if (getWildClass() == WildNpcClass.RANGER
+            if (isWildClass("ranger")
                     && rangerReturningHomeForSleep) {
                 return "Night is approaching, so the Ranger is riding back from the perimeter before sleeping";
             }
 
-            if (getWildClass() == WildNpcClass.RANGER) {
+            if (isWildClass("ranger")) {
                 return rangerPatrolPauseTicks > 0
                         ? "The Ranger reached a perimeter point and is watching the surrounding area before continuing"
                         : "The Ranger is checking the local village/home perimeter instead of wandering far away";
@@ -6885,14 +6914,14 @@ public class CyberNpcEntity extends PathfinderMob {
             return "Returning to an owned horse for efficient travel";
         }
         if (horseRemountCooldown > 0
-                && getWildClass() == WildNpcClass.RANGER) {
+                && isWildClass("ranger")) {
             return "Recently dismounted for another need; delaying remount while continuing local Ranger duties on foot";
         }
-        if (getWildClass() == WildNpcClass.RANGER
+        if (isWildClass("ranger")
                 && rangerPatrolPauseTicks > 0) {
             return "The Ranger reached a perimeter point and is pausing to watch the surrounding area";
         }
-        if (getWildClass() == WildNpcClass.RANGER
+        if (isWildClass("ranger")
                 && rangerPatrolTarget != null) {
             return "The Ranger is checking the local home or village perimeter and stays within a bounded patrol area";
         }
@@ -6932,7 +6961,7 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private String buildMageSpellDebug() {
-        if (!getWildClass().usesSpellBook()) {
+        if (!wildClassUsesSpellBook()) {
             return "No spellbook class";
         }
 
@@ -7754,7 +7783,7 @@ public class CyberNpcEntity extends PathfinderMob {
                         displayName + " — " + getWildClassDisplayName()
                                 + " / " + getPersonalityDisplayName()
                                 + " / " + getGearTierDisplayName()
-                                + (getWildClass().hasMagicSchool()
+                                + (wildClassHasMagicSchool()
                                 ? " / " + getMageSchoolDisplayName()
                                 : "")
                                 + " — Hunger " + getHungerBar()
@@ -7790,12 +7819,12 @@ public class CyberNpcEntity extends PathfinderMob {
         tag.putInt("CyberNpcAppearanceHair", getHairStyleIndex());
 
         if (getNpcType() == NpcType.WILD) {
-            tag.putString("CyberNpcWildClass", getWildClass().serializedName());
+            tag.putString("CyberNpcWildClass", getWildClass());
             tag.putString("CyberNpcPersonality", getPersonality().serializedName());
             tag.putString("CyberNpcGearTier", getGearTier().serializedName());
             tag.putBoolean("CyberNpcClassLoadoutInitialized", classLoadoutInitialized);
 
-            if (getWildClass().hasMagicSchool()) {
+            if (wildClassHasMagicSchool()) {
                 tag.putString("CyberNpcMageSchool", getMageSchool().serializedName());
             }
         }
@@ -7920,16 +7949,18 @@ public class CyberNpcEntity extends PathfinderMob {
             boolean retiredBeastTamer =
                     "beast_tamer".equalsIgnoreCase(loadedClassName);
 
-            WildNpcClass loadedClass = retiredBeastTamer
-                    ? WildNpcClass.CLASSLESS
+            String loadedClass = retiredBeastTamer
+                    ? "classless"
                     : (loadedClassName.isBlank()
-                    ? WildNpcClass.randomSpawnClass(getRandom())
-                    : WildNpcClass.fromSerializedName(loadedClassName));
+                    ? CyberClassesNpcCompat.randomClassId(getRandom())
+                    : CyberClassesNpcCompat.normalize(loadedClassName));
 
-            boolean unavailableLoadedClass = !loadedClass.isAvailable();
+            boolean unavailableLoadedClass =
+                    !CyberClassesNpcCompat.isAvailable(loadedClass);
+
             setWildClass(
                     unavailableLoadedClass
-                            ? WildNpcClass.CLASSLESS
+                            ? "classless"
                             : loadedClass
             );
 
@@ -7945,8 +7976,8 @@ public class CyberNpcEntity extends PathfinderMob {
                 setGearTier(WildNpcGearTier.randomTier(getRandom()));
             }
 
-            if (getWildClass().hasMagicSchool()) {
-                if (getWildClass() == WildNpcClass.CLERIC) {
+            if (wildClassHasMagicSchool()) {
+                if (isWildClass("cleric")) {
                     setMageSchool(MageSchool.HOLY);
                 } else if (tag.contains("CyberNpcMageSchool")) {
                     setMageSchool(MageSchool.fromSerializedName(tag.getString("CyberNpcMageSchool")));
@@ -8344,11 +8375,11 @@ public class CyberNpcEntity extends PathfinderMob {
             }
 
             switch (npc.getWildClass()) {
-                case KNIGHT, ROGUE, BERSERKER -> {
+                case "knight", "rogue", "berserker" -> {
                     tickMelee(target, distanceSqr);
                     return;
                 }
-                case ARCHER -> {
+                case "archer" -> {
                     if (distanceSqr <= 16.0D && !npc.getStoredSword().isEmpty()) {
                         tickMelee(target, distanceSqr);
                     } else {
@@ -8356,15 +8387,15 @@ public class CyberNpcEntity extends PathfinderMob {
                     }
                     return;
                 }
-                case MAGE -> {
+                case "mage" -> {
                     tickMage(target, distanceSqr, lineOfSight);
                     return;
                 }
-                case CLERIC -> {
+                case "cleric" -> {
                     tickCleric(target, distanceSqr, lineOfSight);
                     return;
                 }
-                case SPELLBLADE -> {
+                case "spellblade" -> {
                     tickSpellblade(target, distanceSqr, lineOfSight);
                     return;
                 }
@@ -8384,22 +8415,22 @@ public class CyberNpcEntity extends PathfinderMob {
             npc.setShiftKeyDown(false);
             npc.equipMeleeWeapon();
 
-            WildNpcClass npcClass = npc.getWildClass();
+            String npcClass = npc.getWildClass();
             WildNpcPersonality personality = npc.getPersonality();
 
             int attackCooldown = switch (npcClass) {
-                case ROGUE -> 9;
-                case KNIGHT -> 13;
-                case BERSERKER -> 14;
-                case SPELLBLADE -> 11;
+                case "rogue" -> 9;
+                case "knight" -> 13;
+                case "berserker" -> 14;
+                case "spellblade" -> 11;
                 default -> MELEE_ATTACK_COOLDOWN;
             };
 
             int recoveryTicks = switch (npcClass) {
-                case ROGUE -> 4;
-                case KNIGHT -> 6;
-                case BERSERKER -> 5;
-                case SPELLBLADE -> 5;
+                case "rogue" -> 4;
+                case "knight" -> 6;
+                case "berserker" -> 5;
+                case "spellblade" -> 5;
                 default -> MELEE_RECOVERY_TICKS;
             };
 
@@ -8412,7 +8443,7 @@ public class CyberNpcEntity extends PathfinderMob {
                     recoveryTicks + personality.recoveryModifier()
             );
 
-            boolean berserkerRage = npcClass == WildNpcClass.BERSERKER
+            boolean berserkerRage = "berserker".equals(npcClass)
                     && npc.getHealth() <= npc.getMaxHealth() * 0.45F;
 
             if (berserkerRage) {
@@ -8421,22 +8452,22 @@ public class CyberNpcEntity extends PathfinderMob {
             }
 
             double attackDistanceSqr = switch (npcClass) {
-                case ROGUE -> 8.41D;
-                case BERSERKER -> 10.24D;
+                case "rogue" -> 8.41D;
+                case "berserker" -> 10.24D;
                 default -> MELEE_ATTACK_DISTANCE_SQR;
             };
 
             double tooCloseSqr = switch (npcClass) {
-                case KNIGHT -> 4.0D;
-                case BERSERKER -> 3.24D;
+                case "knight" -> 4.0D;
+                case "berserker" -> 3.24D;
                 default -> MELEE_TOO_CLOSE_SQR;
             };
 
             double approachSpeed = switch (npcClass) {
-                case ROGUE -> 1.20D;
-                case BERSERKER -> berserkerRage ? 1.28D : 1.16D;
-                case KNIGHT -> 1.02D;
-                case SPELLBLADE -> 1.10D;
+                case "rogue" -> 1.20D;
+                case "berserker" -> berserkerRage ? 1.28D : 1.16D;
+                case "knight" -> 1.02D;
+                case "spellblade" -> 1.10D;
                 default -> 1.06D;
             };
 
@@ -8463,7 +8494,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 boolean moving = npc.getNavigation().moveTo(target, approachSpeed);
                 npc.setSprinting(moving
                         && distanceSqr > 10.24D
-                        && npcClass != WildNpcClass.KNIGHT);
+                        && !"knight".equals(npcClass));
                 return;
             }
 
@@ -8498,22 +8529,22 @@ public class CyberNpcEntity extends PathfinderMob {
 
             away = away.normalize();
 
-            double sideStrength = npc.getWildClass() == WildNpcClass.ROGUE
+            double sideStrength = npc.isWildClass("rogue")
                     ? 1.25D
-                    : (npc.getWildClass() == WildNpcClass.BERSERKER ? 0.45D : 0.75D);
+                    : (npc.isWildClass("berserker") ? 0.45D : 0.75D);
             sideStrength *= npc.getPersonality().strafeMultiplier();
 
             Vec3 side = new Vec3(-away.z, 0.0D, away.x)
                     .scale(sideStrength * meleeStrafeDirection);
 
             double radius;
-            if (npc.getWildClass() == WildNpcClass.KNIGHT) {
+            if (npc.isWildClass("knight")) {
                 radius = retreat ? 3.0D : 2.55D;
-            } else if (npc.getWildClass() == WildNpcClass.ROGUE) {
+            } else if (npc.isWildClass("rogue")) {
                 radius = retreat ? 4.2D : 3.1D;
-            } else if (npc.getWildClass() == WildNpcClass.BERSERKER) {
+            } else if (npc.isWildClass("berserker")) {
                 radius = retreat ? 2.7D : 2.3D;
-            } else if (npc.getWildClass() == WildNpcClass.SPELLBLADE) {
+            } else if (npc.isWildClass("spellblade")) {
                 radius = retreat ? 3.8D : 3.0D;
             } else {
                 radius = retreat ? 3.6D : 2.85D;
@@ -8526,9 +8557,9 @@ public class CyberNpcEntity extends PathfinderMob {
                     .add(side);
 
             double speed = switch (npc.getWildClass()) {
-                case ROGUE -> retreat ? 1.20D : 0.96D;
-                case BERSERKER -> retreat ? 1.12D : 0.98D;
-                case SPELLBLADE -> retreat ? 1.12D : 0.90D;
+                case "rogue" -> retreat ? 1.20D : 0.96D;
+                case "berserker" -> retreat ? 1.12D : 0.98D;
+                case "spellblade" -> retreat ? 1.12D : 0.90D;
                 default -> retreat ? 1.08D : 0.82D;
             };
 
@@ -8583,7 +8614,7 @@ public class CyberNpcEntity extends PathfinderMob {
                     desired.x,
                     npc.getY(),
                     desired.z,
-                    npc.getWildClass() == WildNpcClass.ARCHER ? 1.05D : 0.95D
+                    npc.isWildClass("archer") ? 1.05D : 0.95D
             );
         }
 
@@ -8642,7 +8673,7 @@ public class CyberNpcEntity extends PathfinderMob {
             crossbowLostSightTicks = 0;
             npc.setSprinting(false);
 
-            boolean archer = npc.getWildClass() == WildNpcClass.ARCHER;
+            boolean archer = npc.isWildClass("archer");
             double preferredStopSqr = archer
                     ? 144.0D
                     : RANGED_STOP_DISTANCE_SQR;
@@ -8821,7 +8852,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
             if (!IronSpellsCompat.isLoaded()) {
                 npc.cancelMageCast();
-                npc.setWildClass(WildNpcClass.CLASSLESS);
+                npc.setWildClass("classless");
                 npc.setMageSchool(null);
                 npc.classLoadoutInitialized = false;
                 npc.ensureWildProfile();
@@ -9055,7 +9086,7 @@ public class CyberNpcEntity extends PathfinderMob {
             bowDrawTicks = 0;
             rangedCooldown = Math.max(
                     6,
-                    (npc.getWildClass() == WildNpcClass.ARCHER ? 10 : 12)
+                    (npc.isWildClass("archer") ? 10 : 12)
                             + npc.getPersonality().attackCooldownModifier()
             );
         }
@@ -9137,7 +9168,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 crossbowHoldTicks = 0;
                 rangedCooldown = Math.max(
                         14,
-                        (npc.getWildClass() == WildNpcClass.ARCHER ? 24 : 28)
+                        (npc.isWildClass("archer") ? 24 : 28)
                                 + npc.getPersonality().attackCooldownModifier() * 2
                 );
             }

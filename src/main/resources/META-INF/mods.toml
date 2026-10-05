@@ -24,6 +24,13 @@ versionRange="${minecraft_version_range}"
 ordering="NONE"
 side="BOTH"
 
+[[dependencies.${mod_id}]]
+modId="cyberclasses"
+mandatory=true
+versionRange="[0.1.1-alpha.2,)"
+ordering="AFTER"
+side="BOTH"
+
 
 [[dependencies.${mod_id}]]
 modId="irons_spellbooks"
