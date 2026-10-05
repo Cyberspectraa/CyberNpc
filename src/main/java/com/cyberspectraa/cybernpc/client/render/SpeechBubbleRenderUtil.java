@@ -1,5 +1,6 @@
 package com.cyberspectraa.cybernpc.client.render;
 
+import com.cyberspectraa.cybernpc.compat.PehkuiRenderCompat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.gui.Font;
@@ -67,6 +68,18 @@ public final class SpeechBubbleRenderUtil {
         ) * 0.035F;
 
         poseStack.pushPose();
+
+        // Pehkui scales the entire entity renderer before CyberNpc gets this
+        // pose stack. Cancel only that outer model scale so the bubble keeps
+        // a stable world-space size and can be positioned from the entity's
+        // already-scaled bounding-box height. Without this, a 0.5x Fairy
+        // scales the bubble offset a second time and pulls it into the head.
+        cancelEntityRenderScale(
+                entity,
+                partialTicks,
+                poseStack
+        );
+
         poseStack.translate(
                 0.0D,
                 entity.getBbHeight() + 1.02D + bob,
@@ -171,6 +184,13 @@ public final class SpeechBubbleRenderUtil {
         ) * 0.025F;
 
         poseStack.pushPose();
+
+        cancelEntityRenderScale(
+                entity,
+                partialTicks,
+                poseStack
+        );
+
         poseStack.translate(
                 0.0D,
                 entity.getBbHeight() + 1.10D + bob,
@@ -215,6 +235,24 @@ public final class SpeechBubbleRenderUtil {
         }
 
         poseStack.popPose();
+    }
+
+    private static void cancelEntityRenderScale(
+            LivingEntity entity,
+            float partialTicks,
+            PoseStack poseStack
+    ) {
+        PehkuiRenderCompat.ModelScale modelScale =
+                PehkuiRenderCompat.getModelScale(
+                        entity,
+                        partialTicks
+                );
+
+        poseStack.scale(
+                modelScale.inverseWidth(),
+                modelScale.inverseHeight(),
+                modelScale.inverseWidth()
+        );
     }
 
     private static void drawFrameAndFill(
