@@ -2,6 +2,7 @@ package com.cyberspectraa.cybernpc.entity;
 
 import com.cyberspectraa.cybernpc.building.BuildingSavedData;
 import com.cyberspectraa.cybernpc.compat.BetterHorsesCompat;
+import com.cyberspectraa.cybernpc.compat.CyberRacesNpcCompat;
 import com.cyberspectraa.cybernpc.compat.EpicKnightsCompat;
 import com.cyberspectraa.cybernpc.compat.IronSpellsCompat;
 import com.cyberspectraa.cybernpc.compat.TinkersConstructCompat;
@@ -335,6 +336,9 @@ public class CyberNpcEntity extends PathfinderMob {
 
     private boolean regroupingWithParty;
     private int chatReactionCooldown;
+    private int racialAiControlTicks;
+    private boolean naturalSocialSeedPending;
+    private int naturalSocialSeedWaitTicks;
 
     @Nullable
     private UUID horseTargetId;
@@ -976,6 +980,12 @@ public class CyberNpcEntity extends PathfinderMob {
         switch (intent) {
             case POSITIVE -> {
                 int gain = direct ? 5 : 2;
+
+                if (direct
+                        && CyberRacesNpcCompat.socialAffinity(this, player) >= 3) {
+                    gain++;
+                }
+
                 socialMemory.adjustPlayerReputation(
                         player.getUUID(),
                         gain
@@ -2165,6 +2175,42 @@ public class CyberNpcEntity extends PathfinderMob {
         return inventory.add(stack);
     }
 
+    /**
+     * Narrow public hook used by CyberRaces' Goblin Scavenger Sense AI.
+     * CyberRaces finds this through reflection, keeping the mods optional and
+     * independently buildable.
+     */
+    public boolean collectRacialScavengeItem(ItemEntity item) {
+        if (level().isClientSide
+                || item == null
+                || !item.isAlive()
+                || item.hasPickUpDelay()
+                || getNpcType() != NpcType.WILD) {
+            return false;
+        }
+
+        ItemStack stack = item.getItem();
+        if (stack.isEmpty() || !inventory.canAdd(stack)) {
+            return false;
+        }
+
+        int before = stack.getCount();
+        ItemStack remaining = addToInventory(stack);
+
+        if (remaining.isEmpty()) {
+            item.discard();
+        } else {
+            item.setItem(remaining);
+        }
+
+        boolean collected = remaining.getCount() < before;
+        if (collected) {
+            showReaction(NpcReactionIcon.HAPPY, 45);
+        }
+
+        return collected;
+    }
+
     private void equipMeleeWeapon() {
         ItemStack storedWeapon = getStoredMeleeWeapon();
         if (getNpcType() != NpcType.WILD || storedWeapon.isEmpty()) {
@@ -2387,7 +2433,11 @@ public class CyberNpcEntity extends PathfinderMob {
 
             if (spawnType == MobSpawnType.NATURAL
                     || spawnType == MobSpawnType.CHUNK_GENERATION) {
-                seedNaturalSpawnSocialContext();
+                // CyberRaces assigns a Wild NPC race just after the entity
+                // joins the level. Delay natural friendship/party seeding so
+                // race preference can participate in the initial social group.
+                naturalSocialSeedPending = true;
+                naturalSocialSeedWaitTicks = 40;
             }
         }
 
@@ -2445,6 +2495,12 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         ensureWildProfile();
+        tickPendingNaturalSocialSeed();
+
+        if (racialAiControlTicks > 0) {
+            racialAiControlTicks--;
+        }
+
         intentions.tick();
 
         if (isZombifying()) {
@@ -2511,6 +2567,20 @@ public class CyberNpcEntity extends PathfinderMob {
             return;
         }
 
+        // Active race effects stay owned by CyberRaces. CyberNpc only gives
+        // that optional bridge a short movement window when a race such as
+        // Dogfolk deliberately tracks a hidden combat target.
+        if (tickCount % 4
+                == Math.floorMod(getUUID().hashCode(), 4)
+                && CyberRacesNpcCompat.tickCombatRacialAi(this)) {
+            racialAiControlTicks = Math.max(racialAiControlTicks, 4);
+        }
+
+        if (racialAiControlTicks > 0 && getTarget() != null) {
+            finishAiTick();
+            return;
+        }
+
         tickWildCombat();
 
         if (sleepBrain.tick()) {
@@ -2525,6 +2595,20 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         if (tickHorseUse()) {
+            finishAiTick();
+            return;
+        }
+
+        if (!isBusyWithNeeds()
+                && tickCount % 10
+                == Math.floorMod(getUUID().hashCode(), 10)
+                && CyberRacesNpcCompat.tickIdleRacialAi(this)) {
+            racialAiControlTicks = Math.max(racialAiControlTicks, 12);
+        }
+
+        if (racialAiControlTicks > 0
+                && getTarget() == null
+                && !isBusyWithNeeds()) {
             finishAiTick();
             return;
         }
@@ -3444,21 +3528,37 @@ public class CyberNpcEntity extends PathfinderMob {
     private void showConversationReactionPair(CyberNpcEntity other) {
         int thisSupport = socialMemory.supportScore(other.getUUID());
         int otherSupport = other.socialMemory.supportScore(getUUID());
+        int thisAffinity = CyberRacesNpcCompat.socialAffinity(this, other);
+        int otherAffinity = CyberRacesNpcCompat.socialAffinity(other, this);
+        boolean sameRace = CyberRacesNpcCompat.sameRace(this, other);
 
         NpcReactionIcon mine;
         NpcReactionIcon theirs;
 
-        if (thisSupport >= 20 && otherSupport >= 20) {
+        if (sameRace) {
+            mine = CyberRacesNpcCompat.encounterReaction(this, other, 0);
+            theirs = CyberRacesNpcCompat.encounterReaction(other, this, 0);
+        } else if (thisAffinity >= 2 || otherAffinity >= 2) {
+            mine = thisAffinity >= 2
+                    ? CyberRacesNpcCompat.encounterReaction(this, other, 0)
+                    : NpcReactionIcon.THINKING;
+            theirs = otherAffinity >= 2
+                    ? CyberRacesNpcCompat.encounterReaction(other, this, 0)
+                    : NpcReactionIcon.THINKING;
+        } else if (thisSupport >= 20 && otherSupport >= 20) {
             mine = getRandom().nextBoolean()
                     ? NpcReactionIcon.HAPPY
                     : NpcReactionIcon.FRIENDLY;
             theirs = getRandom().nextBoolean()
                     ? NpcReactionIcon.HAPPY
                     : NpcReactionIcon.FRIENDLY;
-        } else if (thisSupport <= -15 || otherSupport <= -15) {
-            mine = NpcReactionIcon.ANNOYED;
-            theirs = getRandom().nextBoolean()
-                    ? NpcReactionIcon.ANNOYED
+        } else if (thisAffinity < 0 || otherAffinity < 0
+                || thisSupport <= -15 || otherSupport <= -15) {
+            mine = thisAffinity < 0
+                    ? CyberRacesNpcCompat.encounterReaction(this, other, 0)
+                    : NpcReactionIcon.CONFUSED;
+            theirs = otherAffinity < 0
+                    ? CyberRacesNpcCompat.encounterReaction(other, this, 0)
                     : NpcReactionIcon.CONFUSED;
         } else {
             mine = getRandom().nextBoolean()
@@ -3481,6 +3581,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 == WildNpcPersonality.SKITTISH ? 1 : 2;
         int trust = 2;
         int respect = 0;
+        int affinity = CyberRacesNpcCompat.socialAffinity(source, target);
 
         if (source.getPersonality() == WildNpcPersonality.LOYAL
                 || source.getPersonality()
@@ -3490,12 +3591,25 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         if (source.getPersonality() == WildNpcPersonality.BRAVE
-                || source.getPersonality()
-                == WildNpcPersonality.TACTICAL
-                || source.getPersonality()
-                == WildNpcPersonality.STUBBORN) {
+                || source.getPersonality() == WildNpcPersonality.TACTICAL
+                || source.getPersonality() == WildNpcPersonality.STUBBORN) {
             respect++;
         }
+
+        if (affinity >= 3) {
+            friendship += 2;
+            trust++;
+        } else if (affinity >= 1) {
+            friendship++;
+        } else if (affinity < 0) {
+            friendship = Math.max(1, friendship - 1);
+            trust = Math.max(1, trust - 1);
+        }
+
+        int rivalryDelta = affinity < 0
+                && source.getRandom().nextFloat() < 0.25F
+                ? 1
+                : -1;
 
         source.socialMemory.adjustRelationship(
                 target.getUUID(),
@@ -3503,7 +3617,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 trust,
                 respect,
                 -1,
-                -1
+                rivalryDelta
         );
     }
 
@@ -3618,8 +3732,7 @@ public class CyberNpcEntity extends PathfinderMob {
         if (!areMutualFriends(other)
                 || isSameParty(other)
                 || partyInviteCooldown > 0
-                || other.partyInviteCooldown > 0
-                || getRandom().nextFloat() >= PARTY_INVITE_CHANCE) {
+                || other.partyInviteCooldown > 0) {
             return;
         }
 
@@ -3631,6 +3744,20 @@ public class CyberNpcEntity extends PathfinderMob {
         CyberNpcEntity invitee = inviter == this ? other : this;
 
         if (!canInviteToParty(inviter, invitee)) {
+            return;
+        }
+
+        float inviteChance = Mth.clamp(
+                PARTY_INVITE_CHANCE
+                        * CyberRacesNpcCompat.partyInviteMultiplier(
+                        inviter,
+                        invitee
+                ),
+                0.10F,
+                0.82F
+        );
+
+        if (getRandom().nextFloat() >= inviteChance) {
             return;
         }
 
@@ -3857,6 +3984,23 @@ public class CyberNpcEntity extends PathfinderMob {
         );
     }
 
+    private void tickPendingNaturalSocialSeed() {
+        if (!naturalSocialSeedPending) {
+            return;
+        }
+
+        if (CyberRacesNpcCompat.isLoaded()
+                && !CyberRacesNpcCompat.hasRace(this)
+                && naturalSocialSeedWaitTicks > 0) {
+            naturalSocialSeedWaitTicks--;
+            return;
+        }
+
+        naturalSocialSeedPending = false;
+        naturalSocialSeedWaitTicks = 0;
+        seedNaturalSpawnSocialContext();
+    }
+
     private void seedNaturalSpawnSocialContext() {
         if (!(level() instanceof ServerLevel serverLevel)
                 || getRandom().nextFloat()
@@ -3876,7 +4020,15 @@ public class CyberNpcEntity extends PathfinderMob {
                                 && npc.getNpcType() == NpcType.WILD
                                 && !npc.isZombifying()
                 ).stream()
-                .sorted(Comparator.comparingDouble(this::distanceToSqr))
+                .sorted(
+                        Comparator
+                                .<CyberNpcEntity>comparingInt(
+                                        npc -> CyberRacesNpcCompat
+                                                .socialAffinity(this, npc)
+                                )
+                                .reversed()
+                                .thenComparingDouble(this::distanceToSqr)
+                )
                 .limit(PARTY_MAX_SIZE)
                 .toList();
 
@@ -3892,15 +4044,34 @@ public class CyberNpcEntity extends PathfinderMob {
             seedPreExistingFriendship(nearby.get(1));
         }
 
-        if (getRandom().nextFloat() < NATURAL_PARTY_SEED_CHANCE) {
+        float naturalPartyChance = Mth.clamp(
+                NATURAL_PARTY_SEED_CHANCE
+                        * CyberRacesNpcCompat.partyInviteMultiplier(
+                        this,
+                        primary
+                ),
+                0.20F,
+                0.90F
+        );
+
+        if (getRandom().nextFloat() < naturalPartyChance) {
             seedPreExistingParty(primary);
         }
     }
 
     private void seedPreExistingFriendship(CyberNpcEntity other) {
-        int friendship = 36 + getRandom().nextInt(25);
-        int trust = 30 + getRandom().nextInt(26);
-        int respect = 8 + getRandom().nextInt(28);
+        int affinity = CyberRacesNpcCompat.socialAffinity(this, other);
+        int friendship = 36 + getRandom().nextInt(25)
+                + Math.max(0, affinity * 2);
+        int trust = 30 + getRandom().nextInt(26)
+                + Math.max(0, affinity);
+        int respect = 8 + getRandom().nextInt(28)
+                + (affinity < 0 ? 2 : 0);
+
+        if (affinity < 0) {
+            friendship = Math.max(28, friendship - 4);
+            trust = Math.max(22, trust - 3);
+        }
 
         socialMemory.seedFriendship(
                 other.getUUID(),
@@ -6941,16 +7112,25 @@ public class CyberNpcEntity extends PathfinderMob {
                         && npc.getNpcType() == NpcType.WILD
                         && (isSameParty(npc)
                         || npc.isFriendWith(this)
-                        || npc.socialMemory.supportScore(getUUID()) >= 8)
+                        || npc.socialMemory.supportScore(getUUID()) >= 8
+                        || CyberRacesNpcCompat.strongSameRaceBond(
+                                npc,
+                                this
+                        ))
         );
 
         for (CyberNpcEntity witness : witnesses) {
             boolean closeBond = isSameParty(witness)
                     || witness.isFriendWith(this);
+            boolean racialKinship =
+                    CyberRacesNpcCompat.strongSameRaceBond(
+                            witness,
+                            this
+                    );
 
             int penalty = fatal
-                    ? (closeBond ? -28 : -18)
-                    : (closeBond ? -8 : -4);
+                    ? (closeBond ? -28 : racialKinship ? -10 : -18)
+                    : (closeBond ? -8 : racialKinship ? -3 : -4);
 
             witness.socialMemory.adjustPlayerReputation(
                     player.getUUID(),
@@ -6960,6 +7140,12 @@ public class CyberNpcEntity extends PathfinderMob {
             witness.showReaction(
                     fatal || witness.isSameParty(this)
                             ? NpcReactionIcon.ANGRY
+                            : racialKinship
+                            ? CyberRacesNpcCompat.encounterReaction(
+                                    witness,
+                                    this,
+                                    0
+                            )
                             : NpcReactionIcon.ANNOYED,
                     fatal ? 80 : 55
             );
@@ -8821,7 +9007,18 @@ public class CyberNpcEntity extends PathfinderMob {
             bowDrawTicks++;
 
             double distance = Math.sqrt(distanceSqr);
-            int desiredDrawTicks = Mth.clamp((int) Math.round(11.0D + distance * 0.35D), 12, 20);
+            int desiredDrawTicks = Mth.clamp(
+                    (int) Math.round(11.0D + distance * 0.35D),
+                    12,
+                    20
+            );
+
+            if (CyberRacesNpcCompat.isRace(npc, "elf")) {
+                desiredDrawTicks = Math.max(
+                        10,
+                        Math.round(desiredDrawTicks * 0.85F)
+                );
+            }
 
             if (bowDrawTicks < desiredDrawTicks) {
                 return;

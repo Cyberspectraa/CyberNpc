@@ -1,5 +1,6 @@
 package com.cyberspectraa.cybernpc.entity;
 
+import com.cyberspectraa.cybernpc.compat.CyberRacesNpcCompat;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionResult;
@@ -39,6 +40,7 @@ final class NpcAttentionBrain {
     private final NpcIntentionController intentions;
 
     private int scanCooldown = 30;
+    private int raceReactionCooldown;
     private boolean workstationUsed;
 
     NpcAttentionBrain(
@@ -52,6 +54,10 @@ final class NpcAttentionBrain {
     }
 
     boolean tick() {
+        if (raceReactionCooldown > 0) {
+            raceReactionCooldown--;
+        }
+
         if (!(npc.level() instanceof ServerLevel level)
                 || !npc.canStartPlayerLikeLifeActivity()) {
             workstationUsed = false;
@@ -178,7 +184,8 @@ final class NpcAttentionBrain {
                                 && !candidate.isSpectator()
                                 && (candidate.isSprinting()
                                 || candidate.isShiftKeyDown()
-                                || candidate.isUsingItem())
+                                || candidate.isUsingItem()
+                                || CyberRacesNpcCompat.hasRace(candidate))
                 ).stream()
                 .filter(candidate -> npc.getSensing().hasLineOfSight(candidate))
                 .min(Comparator.comparingDouble(npc::distanceToSqr))
@@ -189,13 +196,19 @@ final class NpcAttentionBrain {
             return false;
         }
 
+        String playerRace = CyberRacesNpcCompat.raceId(player);
+
         String action = player.isUsingItem()
                 ? "using an item"
                 : player.isSprinting()
                 ? "moving quickly"
-                : "sneaking";
+                : player.isShiftKeyDown()
+                ? "sneaking"
+                : playerRace != null
+                ? "a " + playerRace + " nearby"
+                : "nearby";
 
-        return intentions.request(
+        boolean accepted = intentions.request(
                 NpcIntentionController.Intent.WATCH_PLAYER,
                 25,
                 60 + npc.getRandom().nextInt(101),
@@ -203,6 +216,24 @@ final class NpcAttentionBrain {
                 null,
                 "A nearby player is " + action + ", which was interesting enough to watch for a moment"
         );
+
+        if (accepted
+                && playerRace != null
+                && raceReactionCooldown <= 0) {
+            npc.showReaction(
+                    CyberRacesNpcCompat.encounterReaction(
+                            npc,
+                            player,
+                            npc.getPlayerReputation(player.getUUID())
+                    ),
+                    55
+            );
+
+            raceReactionCooldown = 600
+                    + npc.getRandom().nextInt(401);
+        }
+
+        return accepted;
     }
 
     private boolean trySunset(ServerLevel level) {
