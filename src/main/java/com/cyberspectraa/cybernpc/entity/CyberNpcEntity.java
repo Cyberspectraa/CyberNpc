@@ -785,7 +785,7 @@ public class CyberNpcEntity extends PathfinderMob {
                 );
     }
 
-    private void ensureWildClassAdvancement() {
+    public void ensureWildClassAdvancement() {
         if (getNpcType() != NpcType.WILD
                 || !getWildClassAdvancement().isBlank()) {
             return;
@@ -804,6 +804,13 @@ public class CyberNpcEntity extends PathfinderMob {
                         getRandom()
                 )
         );
+
+        if (!getWildClassAdvancement().isBlank()) {
+            // The new path can change armour/magic/loadout rules (for
+            // example Arcane Archer), so rebuild once using the shared
+            // CyberClasses definition on the next normal Wild profile tick.
+            classLoadoutInitialized = false;
+        }
     }
 
     private boolean isWildClass(String classId) {
@@ -1432,8 +1439,10 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         if (wildClassHasMagicSchool()) {
-            if (isWildClass("cleric")) {
+            if (isWildClass("cleric") || isWildClass("bard")) {
                 setMageSchool(MageSchool.HOLY);
+            } else if (isWildClass("druid")) {
+                setMageSchool(MageSchool.NATURE);
             } else if (entityData.get(DATA_MAGE_SCHOOL).isBlank()) {
                 setMageSchool(MageSchool.randomSchool(getRandom()));
             }
@@ -1504,8 +1513,14 @@ public class CyberNpcEntity extends PathfinderMob {
             case "mage" -> initializeMageLoadout();
             case "cleric" -> initializeClericLoadout();
             case "spellblade" -> initializeSpellbladeLoadout();
+            case "monk" -> initializeMonkLoadout();
+            case "druid" -> initializeDruidLoadout();
+            case "bard" -> initializeBardLoadout();
+            case "alchemist" -> initializeAlchemistLoadout();
             default -> initializeClasslessLoadout();
         }
+
+        applyClassAdvancementLoadout();
     }
 
     private void initializeClasslessLoadout() {
@@ -1783,6 +1798,61 @@ public class CyberNpcEntity extends PathfinderMob {
                     Items.DIAMOND_LEGGINGS,
                     Items.DIAMOND_BOOTS
             );
+        }
+    }
+
+    private void initializeMonkLoadout() {
+        equipArmorSet(
+                Items.LEATHER_HELMET,
+                Items.LEATHER_CHESTPLATE,
+                Items.LEATHER_LEGGINGS,
+                Items.LEATHER_BOOTS
+        );
+    }
+
+    private void initializeDruidLoadout() {
+        setMageSchool(MageSchool.NATURE);
+        initializeMageLoadout();
+    }
+
+    private void initializeBardLoadout() {
+        setMageSchool(MageSchool.HOLY);
+        initializeClericLoadout();
+    }
+
+    private void initializeAlchemistLoadout() {
+        equipArmorSet(
+                Items.LEATHER_HELMET,
+                Items.LEATHER_CHESTPLATE,
+                Items.LEATHER_LEGGINGS,
+                Items.LEATHER_BOOTS
+        );
+    }
+
+    private void applyClassAdvancementLoadout() {
+        if (!"arcane_archer".equals(getWildClassAdvancement())
+                || !IronSpellsCompat.isLoaded()) {
+            return;
+        }
+
+        if (entityData.get(DATA_MAGE_SCHOOL).isBlank()) {
+            setMageSchool(MageSchool.randomSchool(getRandom()));
+        }
+
+        MageSchool school = getMageSchool();
+        ItemStack book = IronSpellsCompat.createMageSpellBook(
+                school.preferredSpellBookId(),
+                school.spellIds(),
+                getGearTier(),
+                getRandom()
+        );
+
+        if (!book.isEmpty()) {
+            book.getOrCreateTag().putString(
+                    "CyberNpcMageSchool",
+                    school.serializedName()
+            );
+            inventory.add(book);
         }
     }
 
@@ -2113,6 +2183,30 @@ public class CyberNpcEntity extends PathfinderMob {
                 armor = 1.0D;
                 attackDamage = 3.0D;
             }
+            case "monk" -> {
+                maxHealth = 20.0D;
+                movementSpeed = 0.460D;
+                armor = 0.0D;
+                attackDamage = 4.5D;
+            }
+            case "druid" -> {
+                maxHealth = 20.0D;
+                movementSpeed = 0.425D;
+                armor = 0.5D;
+                attackDamage = 2.0D;
+            }
+            case "bard" -> {
+                maxHealth = 20.0D;
+                movementSpeed = 0.430D;
+                armor = 0.5D;
+                attackDamage = 2.5D;
+            }
+            case "alchemist" -> {
+                maxHealth = 20.0D;
+                movementSpeed = 0.425D;
+                armor = 0.5D;
+                attackDamage = 2.5D;
+            }
             default -> {
                 maxHealth = 20.0D;
                 movementSpeed = 0.425D;
@@ -2163,9 +2257,9 @@ public class CyberNpcEntity extends PathfinderMob {
             base -= 1.0F;
         } else if (isWildClass("berserker")) {
             base -= 1.5F;
-        } else if (isWildClass("mage")) {
+        } else if (isWildClass("mage") || isWildClass("druid")) {
             base += 1.0F;
-        } else if (isWildClass("cleric")) {
+        } else if (isWildClass("cleric") || isWildClass("bard")) {
             base += 1.5F;
         }
 
@@ -2183,7 +2277,9 @@ public class CyberNpcEntity extends PathfinderMob {
                 || isWildClass("berserker")) {
             ratio -= 0.08D;
         } else if (isWildClass("mage")
-                || isWildClass("cleric")) {
+                || isWildClass("cleric")
+                || isWildClass("druid")
+                || isWildClass("bard")) {
             ratio += 0.05D;
         }
 
@@ -6479,7 +6575,7 @@ public class CyberNpcEntity extends PathfinderMob {
             case "rogue" -> Math.max(base, 7.0D + tierBonus);
             case "berserker" -> Math.max(base, 10.0D + tierBonus);
             case "archer" -> Math.max(base, 6.5D + tierBonus);
-            case "mage", "cleric", "spellblade" -> Math.max(
+            case "mage", "cleric", "spellblade", "druid", "bard" -> Math.max(
                     base,
                     IronSpellsCompat.estimatePotentialDamage(
                             this,
@@ -8094,8 +8190,10 @@ public class CyberNpcEntity extends PathfinderMob {
             }
 
             if (wildClassHasMagicSchool()) {
-                if (isWildClass("cleric")) {
+                if (isWildClass("cleric") || isWildClass("bard")) {
                     setMageSchool(MageSchool.HOLY);
+                } else if (isWildClass("druid")) {
+                    setMageSchool(MageSchool.NATURE);
                 } else if (tag.contains("CyberNpcMageSchool")) {
                     setMageSchool(MageSchool.fromSerializedName(tag.getString("CyberNpcMageSchool")));
                 } else {
@@ -8492,7 +8590,7 @@ public class CyberNpcEntity extends PathfinderMob {
             }
 
             switch (npc.getWildClass()) {
-                case "knight", "rogue", "berserker" -> {
+                case "knight", "rogue", "berserker", "monk", "alchemist" -> {
                     tickMelee(target, distanceSqr);
                     return;
                 }
@@ -8504,11 +8602,11 @@ public class CyberNpcEntity extends PathfinderMob {
                     }
                     return;
                 }
-                case "mage" -> {
+                case "mage", "druid" -> {
                     tickMage(target, distanceSqr, lineOfSight);
                     return;
                 }
-                case "cleric" -> {
+                case "cleric", "bard" -> {
                     tickCleric(target, distanceSqr, lineOfSight);
                     return;
                 }

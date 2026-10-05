@@ -29,5 +29,10 @@ public final class NpcProgressionEvents {
             npc,
             event.getEntity()
         );
+
+        // If this kill crossed Cyber Level 20, resolve the same shared
+        // advancement tree a player would use. CyberNpc only chooses when;
+        // CyberClasses remains the source of truth for available paths.
+        npc.ensureWildClassAdvancement();
     }
 }
