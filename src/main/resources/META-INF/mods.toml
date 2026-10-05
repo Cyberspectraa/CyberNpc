@@ -27,7 +27,7 @@ side="BOTH"
 [[dependencies.${mod_id}]]
 modId="cyberclasses"
 mandatory=true
-versionRange="[0.1.1-alpha.2,)"
+versionRange="[0.1.2-alpha.3,)"
 ordering="AFTER"
 side="BOTH"
 
