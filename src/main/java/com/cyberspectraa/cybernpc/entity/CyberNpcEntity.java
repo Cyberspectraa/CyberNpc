@@ -317,6 +317,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
     private int aggressionLevel = -1;
     private boolean classLoadoutInitialized;
+    private String wildClassAdvancement = "";
     private int provocation;
     private int outOfRangeTicks;
     private int hungerDecayTimer;
@@ -721,6 +722,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (safeType != NpcType.WILD) {
             entityData.set(DATA_WILD_CLASS, "");
+            wildClassAdvancement = "";
             entityData.set(DATA_PERSONALITY, "");
             entityData.set(DATA_GEAR_TIER, "");
             entityData.set(DATA_MAGE_SCHOOL, "");
@@ -742,15 +744,65 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     public String getWildClassDisplayName() {
-        return CyberClassesNpcCompat.displayName(
-                getWildClass()
+        return CyberClassesNpcCompat.effectiveDisplayName(
+                getWildClass(),
+                getWildClassAdvancement()
+        );
+    }
+
+    public String getWildClassAdvancement() {
+        return CyberClassesNpcCompat.normalizeAdvancement(
+                getWildClass(),
+                wildClassAdvancement
+        );
+    }
+
+    public String getWildClassAdvancementDisplayName() {
+        return CyberClassesNpcCompat.advancementDisplayName(
+                getWildClassAdvancement()
         );
     }
 
     private void setWildClass(String wildClass) {
+        String normalized =
+                CyberClassesNpcCompat.normalize(wildClass);
+
+        if (!normalized.equals(getWildClass())) {
+            wildClassAdvancement = "";
+        }
+
         entityData.set(
                 DATA_WILD_CLASS,
-                CyberClassesNpcCompat.normalize(wildClass)
+                normalized
+        );
+    }
+
+    private void setWildClassAdvancement(String advancementId) {
+        wildClassAdvancement =
+                CyberClassesNpcCompat.normalizeAdvancement(
+                        getWildClass(),
+                        advancementId
+                );
+    }
+
+    private void ensureWildClassAdvancement() {
+        if (getNpcType() != NpcType.WILD
+                || !getWildClassAdvancement().isBlank()) {
+            return;
+        }
+
+        int level = CyberProgressionCompat.getLevel(this);
+
+        if (level < 20) {
+            return;
+        }
+
+        setWildClassAdvancement(
+                CyberClassesNpcCompat.randomAdvancementId(
+                        getWildClass(),
+                        level,
+                        getRandom()
+                )
         );
     }
 
@@ -766,13 +818,15 @@ public class CyberNpcEntity extends PathfinderMob {
 
     private boolean wildClassUsesSpellBook() {
         return CyberClassesNpcCompat.usesSpellBook(
-                getWildClass()
+                getWildClass(),
+                getWildClassAdvancement()
         );
     }
 
     private boolean wildClassHasMagicSchool() {
         return CyberClassesNpcCompat.hasMagicSchool(
-                getWildClass()
+                getWildClass(),
+                getWildClassAdvancement()
         );
     }
 
@@ -2464,6 +2518,7 @@ public class CyberNpcEntity extends PathfinderMob {
             if (spawnType == MobSpawnType.NATURAL
                     || spawnType == MobSpawnType.CHUNK_GENERATION) {
                 initializeNaturalCyberLevel(difficulty);
+                ensureWildClassAdvancement();
                 // CyberRaces assigns a Wild NPC race just after the entity
                 // joins the level. Delay natural friendship/party seeding so
                 // race preference can participate in the initial social group.
@@ -7867,6 +7922,12 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (getNpcType() == NpcType.WILD) {
             tag.putString("CyberNpcWildClass", getWildClass());
+            if (!getWildClassAdvancement().isBlank()) {
+                tag.putString(
+                        "CyberNpcClassAdvancement",
+                        getWildClassAdvancement()
+                );
+            }
             tag.putString("CyberNpcPersonality", getPersonality().serializedName());
             tag.putString("CyberNpcGearTier", getGearTier().serializedName());
             tag.putBoolean("CyberNpcClassLoadoutInitialized", classLoadoutInitialized);
@@ -8010,6 +8071,15 @@ public class CyberNpcEntity extends PathfinderMob {
                             ? "classless"
                             : loadedClass
             );
+
+            if (tag.contains("CyberNpcClassAdvancement")) {
+                setWildClassAdvancement(
+                        tag.getString("CyberNpcClassAdvancement")
+                );
+            } else {
+                wildClassAdvancement = "";
+                ensureWildClassAdvancement();
+            }
 
             if (tag.contains("CyberNpcPersonality")) {
                 setPersonality(WildNpcPersonality.fromSerializedName(tag.getString("CyberNpcPersonality")));
