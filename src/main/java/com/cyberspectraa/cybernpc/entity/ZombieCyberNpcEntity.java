@@ -27,6 +27,9 @@ import javax.annotation.Nullable;
 import java.util.Comparator;
 
 public final class ZombieCyberNpcEntity extends Zombie {
+    public static final String NATURAL_WILD_ZOMBIE_KEY =
+            "CyberNpcNaturalWildZombie";
+
     private static final int RETARGET_INTERVAL_TICKS = 5;
     private static final double RETARGET_SWITCH_ADVANTAGE_SQR = 1.0D;
 
@@ -196,6 +199,38 @@ public final class ZombieCyberNpcEntity extends Zombie {
         return candidate instanceof Mob mob
                 && !(mob instanceof Zombie)
                 && mob.getTarget() == this;
+    }
+
+    public void randomizeNaturalWildAppearance() {
+        super.setBaby(false);
+
+        entityData.set(
+                DATA_GENDER,
+                NpcAppearance.Gender.random(getRandom()).serializedName()
+        );
+        entityData.set(
+                DATA_SKIN_TONE,
+                getRandom().nextInt(NpcAppearance.skinToneCount())
+        );
+        entityData.set(
+                DATA_EYE_STYLE,
+                getRandom().nextInt(NpcAppearance.eyeStyleCount())
+        );
+        entityData.set(
+                DATA_HAIR_STYLE,
+                getRandom().nextInt(NpcAppearance.hairStyleCount())
+        );
+
+        getPersistentData().putBoolean(
+                NATURAL_WILD_ZOMBIE_KEY,
+                true
+        );
+    }
+
+    public boolean isNaturalWildZombie() {
+        return getPersistentData().getBoolean(
+                NATURAL_WILD_ZOMBIE_KEY
+        );
     }
 
     public NpcAppearance.Gender getAppearanceGender() {
