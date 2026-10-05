@@ -1,6 +1,7 @@
 package com.cyberspectraa.cybernpc.entity;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -235,6 +236,25 @@ public final class ZombieCyberNpcEntity extends Zombie {
         entityData.set(DATA_SKIN_TONE, source.getSkinToneIndex());
         entityData.set(DATA_EYE_STYLE, source.getEyeStyleIndex());
         entityData.set(DATA_HAIR_STYLE, source.getHairStyleIndex());
+
+        /*
+         * Keep optional CyberRaces data through conversion without taking a
+         * compile-time dependency on CyberRaces. If the source Wild NPC had a
+         * race, the zombie keeps the same race/feature choices and CyberRaces
+         * can reapply its scale/stats/visuals when this entity joins.
+         */
+        CompoundTag sourcePersistent = source.getPersistentData();
+        if (sourcePersistent.contains(
+                "CyberRacesWildNpc",
+                Tag.TAG_COMPOUND
+        )) {
+            getPersistentData().put(
+                    "CyberRacesWildNpc",
+                    sourcePersistent
+                            .getCompound("CyberRacesWildNpc")
+                            .copy()
+            );
+        }
 
         preservedInventory.load(
                 source.saveInventoryForZombieConversion()

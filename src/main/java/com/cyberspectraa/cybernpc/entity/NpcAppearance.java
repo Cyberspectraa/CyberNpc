@@ -10,6 +10,28 @@ public final class NpcAppearance {
             "pale", "medium", "mediumdark", "tan", "tanmedium", "tandark", "dark"
     };
 
+    /*
+     * Representative face colours taken directly from the supplied 64x64
+     * male/female base skins. Both genders use the same seven tone palette.
+     * These are used by CyberRaces so skin-matched ears do not accidentally
+     * sample hair, eyes or clothing UVs.
+     */
+    private static final int[] SKIN_TONE_RGB = {
+            0xF2C1B2, // pale
+            0xA46D33, // medium
+            0x79462A, // mediumdark
+            0xFCC19D, // tan
+            0xDEA27B, // tanmedium
+            0xC08359, // tandark
+            0x5F3A1F  // dark
+    };
+
+    /*
+     * Male and female zombie base skins supplied for this update share the
+     * same dominant face green.
+     */
+    private static final int ZOMBIE_SKIN_RGB = 0x1E6C22;
+
     private static final String[] EYE_STYLES = {
             "low", "middle", "high"
     };
@@ -98,6 +120,14 @@ public final class NpcAppearance {
 
     public static String skinToneKey(int index) {
         return SKIN_TONES[sanitizeSkinTone(index)];
+    }
+
+    public static int skinToneRgb(int index) {
+        return SKIN_TONE_RGB[sanitizeSkinTone(index)];
+    }
+
+    public static int zombieSkinRgb() {
+        return ZOMBIE_SKIN_RGB;
     }
 
     public static String eyeStyleKey(int index) {
