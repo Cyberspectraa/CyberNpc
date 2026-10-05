@@ -3,6 +3,7 @@ package com.cyberspectraa.cybernpc.entity;
 import com.cyberspectraa.cybernpc.building.BuildingSavedData;
 import com.cyberspectraa.cybernpc.compat.BetterHorsesCompat;
 import com.cyberspectraa.cybernpc.compat.CyberClassesNpcCompat;
+import com.cyberspectraa.cybernpc.compat.CyberProgressionCompat;
 import com.cyberspectraa.cybernpc.compat.CyberRacesNpcCompat;
 import com.cyberspectraa.cybernpc.compat.EpicKnightsCompat;
 import com.cyberspectraa.cybernpc.compat.IronSpellsCompat;
@@ -2462,6 +2463,7 @@ public class CyberNpcEntity extends PathfinderMob {
 
             if (spawnType == MobSpawnType.NATURAL
                     || spawnType == MobSpawnType.CHUNK_GENERATION) {
+                initializeNaturalCyberLevel(difficulty);
                 // CyberRaces assigns a Wild NPC race just after the entity
                 // joins the level. Delay natural friendship/party seeding so
                 // race preference can participate in the initial social group.
@@ -2471,6 +2473,51 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         return result;
+    }
+
+    private void initializeNaturalCyberLevel(
+            DifficultyInstance difficulty
+    ) {
+        if (difficulty == null) {
+            return;
+        }
+
+        long worldDays = Math.max(
+                0L,
+                level().getGameTime() / 24_000L
+        );
+
+        int worldBonus = (int) Math.min(
+                20L,
+                worldDays / 10L
+        );
+
+        int localBonus = Mth.clamp(
+                Mth.floor(
+                        Math.max(
+                                0.0D,
+                                difficulty.getEffectiveDifficulty() - 1.0D
+                        ) * 1.5D
+                ),
+                0,
+                8
+        );
+
+        int generatedLevel = 1
+                + worldBonus
+                + localBonus
+                + getRandom().nextInt(4);
+
+        // A small veteran roll makes naturally spawned experienced NPCs
+        // possible without making advanced characters commonplace.
+        if (getRandom().nextFloat() < 0.04F) {
+            generatedLevel += 3 + getRandom().nextInt(6);
+        }
+
+        CyberProgressionCompat.setLevel(
+                this,
+                Mth.clamp(generatedLevel, 1, 35)
+        );
     }
 
     @Override
