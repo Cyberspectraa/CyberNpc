@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.42.2
+
+### Pehkui-aware NPC speech bubbles
+- Fixed Wild NPC reaction/speech bubbles being pulled into scaled NPC models, most noticeably Fairies.
+- CyberNpc now reads Pehkui's actual model width/height render scale through an optional reflection bridge.
+- The Pehkui entity render transform is cancelled only while drawing the bubble, so bubble size stays readable instead of shrinking/growing with the NPC.
+- Bubble height is then based on the NPC's already-scaled bounding-box height, keeping the same clean gap above Fairies, Halflings, Dwarves, Orcs, Dragonborn and other scaled races.
+- Both icon/reaction bubbles and text bubbles use the same corrected placement.
+- CyberNpc still has no hard Pehkui dependency; without Pehkui the helper falls back to normal 1x rendering.
+
 ## 0.42.1
 
 ### Pope outfit layering correction
