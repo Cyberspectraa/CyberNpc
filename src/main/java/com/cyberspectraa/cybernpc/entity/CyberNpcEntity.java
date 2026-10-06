@@ -182,6 +182,9 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final int BACKGROUND_CLAIM_SCAN_INTERVAL = 100;
     private static final int DEBUG_SYNC_INTERVAL = 20;
 
+    public static final String NATURAL_SPAWN_TAG = "CyberNpcNaturalSpawn";
+    public static final String CLASS_ADVANCEMENT_LOCK_TAG = "CyberNpcClassAdvancementLocked";
+
     private static final int CHAT_REACTION_COOLDOWN_TICKS = 40;
 
     private static final double FIGHT_CONFIDENCE = 55.0D;
@@ -787,6 +790,9 @@ public class CyberNpcEntity extends PathfinderMob {
 
     public void ensureWildClassAdvancement() {
         if (getNpcType() != NpcType.WILD
+                || getPersistentData().getBoolean(
+                    CLASS_ADVANCEMENT_LOCK_TAG
+                )
                 || !getWildClassAdvancement().isBlank()) {
             return;
         }
@@ -2613,8 +2619,18 @@ public class CyberNpcEntity extends PathfinderMob {
 
             if (spawnType == MobSpawnType.NATURAL
                     || spawnType == MobSpawnType.CHUNK_GENERATION) {
-                initializeNaturalCyberLevel(difficulty);
-                ensureWildClassAdvancement();
+                /*
+                 * CyberNpc owns the fact that this is a natural Wild spawn,
+                 * but no longer owns world-specific level/advancement policy.
+                 * CyberServer (when installed) consumes this marker and
+                 * applies the server's progression rules. Without CyberServer,
+                 * the NPC simply starts at the shared default Cyber Level.
+                 */
+                getPersistentData().putBoolean(
+                    NATURAL_SPAWN_TAG,
+                    true
+                );
+
                 // CyberRaces assigns a Wild NPC race just after the entity
                 // joins the level. Delay natural friendship/party seeding so
                 // race preference can participate in the initial social group.
@@ -2624,51 +2640,6 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         return result;
-    }
-
-    private void initializeNaturalCyberLevel(
-            DifficultyInstance difficulty
-    ) {
-        if (difficulty == null) {
-            return;
-        }
-
-        long worldDays = Math.max(
-                0L,
-                level().getGameTime() / 24_000L
-        );
-
-        int worldBonus = (int) Math.min(
-                20L,
-                worldDays / 10L
-        );
-
-        int localBonus = Mth.clamp(
-                Mth.floor(
-                        Math.max(
-                                0.0D,
-                                difficulty.getEffectiveDifficulty() - 1.0D
-                        ) * 1.5D
-                ),
-                0,
-                8
-        );
-
-        int generatedLevel = 1
-                + worldBonus
-                + localBonus
-                + getRandom().nextInt(4);
-
-        // A small veteran roll makes naturally spawned experienced NPCs
-        // possible without making advanced characters commonplace.
-        if (getRandom().nextFloat() < 0.04F) {
-            generatedLevel += 3 + getRandom().nextInt(6);
-        }
-
-        CyberProgressionCompat.setLevel(
-                this,
-                Mth.clamp(generatedLevel, 1, 35)
-        );
     }
 
     @Override
