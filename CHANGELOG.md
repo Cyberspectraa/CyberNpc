@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.44.11
+
+### Choso plush UV/model fix
+- Restored the original supplied Choso 64x64 texture unchanged.
+- Fixed the plush OBJ UV conversion instead of editing the texture.
+- Matched My Totem Doll's Blockbench-to-Minecraft face conversion: east/west faces are swapped into Minecraft model space and top/bottom faces use the corresponding reversed UV mapping.
+- Kept the existing plush geometry, sitting pose, wide-arm variant, model dilation and item display transforms.
+- This makes the standard Minecraft skin layout wrap onto the doll model the same way the reference 3D doll renderer expects.
+
 ## 0.42.2
 
 ### Pehkui-aware NPC speech bubbles
