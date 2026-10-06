@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.44.14
+
+### Choso plush static mesh renderer
+- Removed the PlayerModel-based plush renderer introduced in 0.44.13; resetting and reusing humanoid model parts was the cause of the distorted dangling pose.
+- The plush is now a fully static mesh: there is no humanoid animation state, walking pose or model-part animation involved.
+- Reuses the already-baked seated doll geometry in normal item coordinates, so its GUI, shelf/fixed, ground and hand transforms remain controlled by the item model.
+- Sends the mesh directly through Minecraft's entity-translucent render pipeline with its real per-face normals for proper 3D lighting.
+- Keeps the original Choso texture unchanged and keeps the base/hat/jacket/sleeve/pants geometry as separate physical layers in the baked mesh.
+- If the item is rendered as a loose dropped ItemEntity, Minecraft's normal item bob/spin can still occur; the plush mesh itself is static.
+
+# Changelog
+
 ## 0.44.13
 
 ### Choso plush native 3D renderer

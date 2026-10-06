@@ -4,49 +4,48 @@ import com.cyberspectraa.cybernpc.CyberNpc;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.model.PlayerModel;
-import net.minecraft.client.model.geom.ModelLayers;
-import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.Mth;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Renders the Choso plush with Minecraft's actual player-model geometry instead
- * of baking the doll through an OBJ.  The proportions are a chibi half-scale
- * player body with an enlarged head and the original 64x64 skin layout.
+ * Static plush renderer.
+ *
+ * The plush geometry is read from the baked doll mesh resource and submitted
+ * directly to Minecraft's entity-translucent pipeline.  No HumanoidModel or
+ * PlayerModel is involved, so there is no limb animation state to leak into
+ * the item.  The mesh remains in normal item-model coordinates, allowing the
+ * item JSON's GUI/ground/fixed/hand transforms to work normally.
  */
 public final class ChosoPlushItemRenderer extends BlockEntityWithoutLevelRenderer {
+    private static final Logger LOGGER = LoggerFactory.getLogger("CyberNpc/ChosoPlush");
+
     private static final ResourceLocation TEXTURE =
             new ResourceLocation(CyberNpc.MOD_ID, "textures/item/choso_plush.png");
+    private static final ResourceLocation MESH_RESOURCE =
+            new ResourceLocation(CyberNpc.MOD_ID, "models/item/choso_plush.obj");
 
-    private static final float BODY_SCALE = 0.5F;
-    private static final float HEAD_SCALE = 5.5F / 8.0F;
-    private static final float HAT_SCALE = 6.0F / 9.0F;
-
-    private static final float LEG_PITCH = -79.0F * Mth.DEG_TO_RAD;
-    private static final float LEG_YAW = 22.5F * Mth.DEG_TO_RAD;
-    private static final float ARM_PITCH = -39.75778F * Mth.DEG_TO_RAD;
-    private static final float ARM_YAW = 4.81281F * Mth.DEG_TO_RAD;
-    private static final float ARM_ROLL = 5.7589F * Mth.DEG_TO_RAD;
-
-    private final PlayerModel<LivingEntity> model;
+    private volatile Mesh mesh;
 
     public ChosoPlushItemRenderer() {
         super(
                 Minecraft.getInstance().getBlockEntityRenderDispatcher(),
                 Minecraft.getInstance().getEntityModels()
         );
-        this.model = new PlayerModel<>(
-                Minecraft.getInstance().getEntityModels().bakeLayer(ModelLayers.PLAYER),
-                false
-        );
-        this.model.setAllVisible(true);
     }
 
     @Override
@@ -58,103 +57,162 @@ public final class ChosoPlushItemRenderer extends BlockEntityWithoutLevelRendere
             int packedLight,
             int packedOverlay
     ) {
-        poseStack.pushPose();
-
-        // Keep the model centred in normal item-model coordinates.  Minecraft
-        // entity models use +Y downward, so Y is flipped exactly once here.
-        poseStack.translate(0.5F, 0.55F, 0.5F);
-        poseStack.scale(-1.0F, -1.0F, 1.0F);
-
-        poseModel();
+        Mesh current = mesh;
+        if (current == null) {
+            current = loadMesh();
+            mesh = current;
+        }
+        if (current.vertices.length == 0) {
+            return;
+        }
 
         VertexConsumer consumer = buffer.getBuffer(RenderType.entityTranslucent(TEXTURE));
-        model.renderToBuffer(
-                poseStack,
-                consumer,
-                packedLight,
-                packedOverlay,
-                1.0F,
-                1.0F,
-                1.0F,
-                1.0F
+        PoseStack.Pose pose = poseStack.last();
+        Matrix4f positionMatrix = pose.pose();
+        Matrix3f normalMatrix = pose.normal();
+
+        for (MeshVertex vertex : current.vertices) {
+            consumer.vertex(positionMatrix, vertex.x, vertex.y, vertex.z)
+                    .color(255, 255, 255, 255)
+                    .uv(vertex.u, vertex.v)
+                    .overlayCoords(packedOverlay)
+                    .uv2(packedLight)
+                    .normal(normalMatrix, vertex.nx, vertex.ny, vertex.nz)
+                    .endVertex();
+        }
+    }
+
+    private static Mesh loadMesh() {
+        List<float[]> positions = new ArrayList<>();
+        List<float[]> uvs = new ArrayList<>();
+        List<float[]> normals = new ArrayList<>();
+        List<MeshVertex> output = new ArrayList<>();
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                Minecraft.getInstance().getResourceManager()
+                        .open(MESH_RESOURCE),
+                StandardCharsets.UTF_8
+        ))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    continue;
+                }
+
+                String[] tokens = trimmed.split("\\s+");
+                switch (tokens[0]) {
+                    case "v" -> positions.add(new float[]{
+                            Float.parseFloat(tokens[1]),
+                            Float.parseFloat(tokens[2]),
+                            Float.parseFloat(tokens[3])
+                    });
+                    case "vt" -> uvs.add(new float[]{
+                            Float.parseFloat(tokens[1]),
+                            // The OBJ resource was authored for Forge's flip_v=true path.
+                            // Entity textures use Minecraft's normal top-down V direction.
+                            1.0F - Float.parseFloat(tokens[2])
+                    });
+                    case "vn" -> normals.add(new float[]{
+                            Float.parseFloat(tokens[1]),
+                            Float.parseFloat(tokens[2]),
+                            Float.parseFloat(tokens[3])
+                    });
+                    case "f" -> appendFace(tokens, positions, uvs, normals, output);
+                    default -> {
+                        // Material/group/object declarations are intentionally ignored.
+                    }
+                }
+            }
+        } catch (Exception exception) {
+            LOGGER.error("Failed to load Choso plush mesh {}", MESH_RESOURCE, exception);
+            return Mesh.EMPTY;
+        }
+
+        return new Mesh(output.toArray(MeshVertex[]::new));
+    }
+
+    private static void appendFace(
+            String[] tokens,
+            List<float[]> positions,
+            List<float[]> uvs,
+            List<float[]> normals,
+            List<MeshVertex> output
+    ) throws IOException {
+        if (tokens.length < 4) {
+            return;
+        }
+
+        // The source mesh uses quads.  If a resource pack supplies a polygon
+        // with more vertices, fan-triangulate it while preserving winding.
+        int[][] refs = new int[tokens.length - 1][];
+        for (int i = 1; i < tokens.length; i++) {
+            String[] pieces = tokens[i].split("/");
+            if (pieces.length < 3) {
+                throw new IOException("Choso plush OBJ face is missing UV or normal data");
+            }
+            refs[i - 1] = new int[]{
+                    parseObjIndex(pieces[0], positions.size()),
+                    parseObjIndex(pieces[1], uvs.size()),
+                    parseObjIndex(pieces[2], normals.size())
+            };
+        }
+
+        if (refs.length == 4) {
+            for (int[] ref : refs) {
+                output.add(vertexOf(ref, positions, uvs, normals));
+            }
+            return;
+        }
+
+        // VertexConsumer quads require groups of four vertices.  Degenerate
+        // the fourth point for triangle fans; the bundled plush never needs
+        // this fallback, but it keeps the parser safe for overrides.
+        for (int i = 1; i < refs.length - 1; i++) {
+            MeshVertex a = vertexOf(refs[0], positions, uvs, normals);
+            MeshVertex b = vertexOf(refs[i], positions, uvs, normals);
+            MeshVertex c = vertexOf(refs[i + 1], positions, uvs, normals);
+            output.add(a);
+            output.add(b);
+            output.add(c);
+            output.add(c);
+        }
+    }
+
+    private static MeshVertex vertexOf(
+            int[] ref,
+            List<float[]> positions,
+            List<float[]> uvs,
+            List<float[]> normals
+    ) {
+        float[] p = positions.get(ref[0]);
+        float[] uv = uvs.get(ref[1]);
+        float[] n = normals.get(ref[2]);
+        return new MeshVertex(
+                p[0], p[1], p[2],
+                uv[0], uv[1],
+                n[0], n[1], n[2]
         );
-
-        poseStack.popPose();
     }
 
-    private void poseModel() {
-        resetPart(model.head);
-        resetPart(model.hat);
-        resetPart(model.body);
-        resetPart(model.jacket);
-        resetPart(model.rightArm);
-        resetPart(model.rightSleeve);
-        resetPart(model.leftArm);
-        resetPart(model.leftSleeve);
-        resetPart(model.rightLeg);
-        resetPart(model.rightPants);
-        resetPart(model.leftLeg);
-        resetPart(model.leftPants);
-
-        // Head: the source doll has a 5.5-unit base head and a 6-unit outer
-        // head layer.  Scaling vanilla player parts preserves every normal
-        // Minecraft skin UV while matching those proportions exactly.
-        setScale(model.head, HEAD_SCALE);
-        model.hat.copyFrom(model.head);
-        setScale(model.hat, HAT_SCALE);
-
-        setScale(model.body, BODY_SCALE);
-        model.jacket.copyFrom(model.body);
-        setScale(model.jacket, BODY_SCALE);
-
-        // Wide player arms scaled to half size are 2x6x2, matching the doll.
-        model.rightArm.setPos(-2.5F, 1.0F, 0.21443F);
-        model.rightArm.xRot = ARM_PITCH;
-        model.rightArm.yRot = ARM_YAW;
-        model.rightArm.zRot = ARM_ROLL;
-        setScale(model.rightArm, BODY_SCALE);
-        model.rightSleeve.copyFrom(model.rightArm);
-        setScale(model.rightSleeve, BODY_SCALE);
-
-        model.leftArm.setPos(2.5F, 1.0F, 0.21443F);
-        model.leftArm.xRot = ARM_PITCH;
-        model.leftArm.yRot = -ARM_YAW;
-        model.leftArm.zRot = -ARM_ROLL;
-        setScale(model.leftArm, BODY_SCALE);
-        model.leftSleeve.copyFrom(model.leftArm);
-        setScale(model.leftSleeve, BODY_SCALE);
-
-        // Seated legs, using the source doll's pose rather than a standing
-        // player pose.
-        model.rightLeg.setPos(-1.0F, 6.0F, 0.50F);
-        model.rightLeg.xRot = LEG_PITCH;
-        model.rightLeg.yRot = LEG_YAW;
-        setScale(model.rightLeg, BODY_SCALE);
-        model.rightPants.copyFrom(model.rightLeg);
-        setScale(model.rightPants, BODY_SCALE);
-
-        model.leftLeg.setPos(1.0F, 6.0F, 0.45431F);
-        model.leftLeg.xRot = LEG_PITCH;
-        model.leftLeg.yRot = -LEG_YAW;
-        setScale(model.leftLeg, BODY_SCALE);
-        model.leftPants.copyFrom(model.leftLeg);
-        setScale(model.leftPants, BODY_SCALE);
+    private static int parseObjIndex(String raw, int size) {
+        int index = Integer.parseInt(raw);
+        return index < 0 ? size + index : index - 1;
     }
 
-    private static void resetPart(ModelPart part) {
-        part.setPos(0.0F, 0.0F, 0.0F);
-        part.xRot = 0.0F;
-        part.yRot = 0.0F;
-        part.zRot = 0.0F;
-        part.xScale = 1.0F;
-        part.yScale = 1.0F;
-        part.zScale = 1.0F;
-        part.visible = true;
+    private record Mesh(MeshVertex[] vertices) {
+        private static final Mesh EMPTY = new Mesh(new MeshVertex[0]);
     }
 
-    private static void setScale(ModelPart part, float scale) {
-        part.xScale = scale;
-        part.yScale = scale;
-        part.zScale = scale;
+    private record MeshVertex(
+            float x,
+            float y,
+            float z,
+            float u,
+            float v,
+            float nx,
+            float ny,
+            float nz
+    ) {
     }
 }
