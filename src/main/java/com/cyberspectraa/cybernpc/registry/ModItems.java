@@ -7,6 +7,7 @@ import com.cyberspectraa.cybernpc.item.AddressedLetterItem;
 import com.cyberspectraa.cybernpc.item.BuildingMarkerItem;
 import com.cyberspectraa.cybernpc.item.BuildingPlannerItem;
 import com.cyberspectraa.cybernpc.item.CyberNpcSpawnEggItem;
+import com.cyberspectraa.cybernpc.item.ChosoPlushItem;
 import com.cyberspectraa.cybernpc.item.DeveloperGlassesItem;
 import com.cyberspectraa.cybernpc.item.LetterPaperItem;
 import com.cyberspectraa.cybernpc.item.GuardPostMarkerItem;
@@ -130,7 +131,7 @@ public final class ModItems {
 
     public static final RegistryObject<Item> CHOSO_PLUSH =
             ITEMS.register("choso_plush", () ->
-                    new Item(
+                    new ChosoPlushItem(
                             new Item.Properties()
                                     .stacksTo(1)
                                     .rarity(Rarity.UNCOMMON)

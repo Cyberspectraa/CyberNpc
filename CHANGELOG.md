@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.44.13
+
+### Choso plush native 3D renderer
+- Replaced the Forge OBJ plush pipeline with a dedicated Minecraft entity-model renderer.
+- The plush now uses Minecraft's real PlayerModel geometry and 64x64 player-skin UV layout, so the Choso texture is not manually rewrapped or converted.
+- Preserved the original supplied Choso texture unchanged.
+- Matched the 3D doll proportions with a half-scale player body, enlarged 5.5-unit head, 6-unit outer head layer, wide arms and proper jacket/sleeve/pants second layers.
+- Recreated the source doll's seated arm and leg pose with native ModelPart transforms.
+- Uses entity-translucent rendering and side GUI lighting, giving the doll normal Minecraft 3D face lighting and transparent outer skin layers.
+- The old OBJ/MTL files are no longer referenced by the item model.
+
 ## 0.44.12
 
 ### Choso plush 3D render correction
