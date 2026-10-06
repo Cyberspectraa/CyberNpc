@@ -128,14 +128,7 @@ public final class CyberNpcCommands {
         npc.setCanWander(false);
         npc.setPersistenceRequired();
 
-        npc.getPersistentData().putString(
-                "CyberQuestNpcId",
-                "mason"
-        );
-        npc.getPersistentData().putString(
-                "CyberNpcStoryId",
-                "mason"
-        );
+        npc.setStoryNpcId("mason");
 
         if (!level.addFreshEntity(npc)) {
             source.sendFailure(

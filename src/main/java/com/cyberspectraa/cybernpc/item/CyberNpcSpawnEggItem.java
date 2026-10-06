@@ -159,6 +159,17 @@ public final class CyberNpcSpawnEggItem extends ForgeSpawnEggItem {
         }
 
         if (!storyNpcId.isEmpty()) {
+            // Top-level custom data is read by CyberNpcEntity and copied into
+            // synced entity data so clients can render special story skins.
+            entityTag.putString(
+                    "CyberNpcStoryId",
+                    storyNpcId
+            );
+            entityTag.putString(
+                    "CyberQuestNpcId",
+                    storyNpcId
+            );
+
             CompoundTag forgeData =
                     entityTag.contains(
                             "ForgeData",

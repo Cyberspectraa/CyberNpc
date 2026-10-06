@@ -231,6 +231,9 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> DATA_NPC_TYPE =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
 
+    private static final EntityDataAccessor<String> DATA_STORY_NPC_ID =
+            SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
+
     private static final EntityDataAccessor<String> DATA_WILD_CLASS =
             SynchedEntityData.defineId(CyberNpcEntity.class, EntityDataSerializers.STRING);
 
@@ -499,6 +502,7 @@ public class CyberNpcEntity extends PathfinderMob {
         entityData.define(DATA_ROLE, "Citizen");
         entityData.define(DATA_CAN_WANDER, true);
         entityData.define(DATA_NPC_TYPE, NpcType.MAIN.serializedName());
+        entityData.define(DATA_STORY_NPC_ID, "");
         entityData.define(DATA_WILD_CLASS, "");
         entityData.define(DATA_PERSONALITY, "");
         entityData.define(DATA_GEAR_TIER, "");
@@ -542,6 +546,30 @@ public class CyberNpcEntity extends PathfinderMob {
 
     public String getRole() {
         return entityData.get(DATA_ROLE);
+    }
+
+    public String getStoryNpcId() {
+        return entityData.get(DATA_STORY_NPC_ID);
+    }
+
+    public void setStoryNpcId(String storyNpcId) {
+        String normalized = storyNpcId == null
+                ? ""
+                : storyNpcId.trim().toLowerCase(java.util.Locale.ROOT);
+
+        entityData.set(DATA_STORY_NPC_ID, normalized);
+
+        if (!level().isClientSide) {
+            CompoundTag persistent = getPersistentData();
+
+            if (normalized.isBlank()) {
+                persistent.remove("CyberNpcStoryId");
+                persistent.remove("CyberQuestNpcId");
+            } else {
+                persistent.putString("CyberNpcStoryId", normalized);
+                persistent.putString("CyberQuestNpcId", normalized);
+            }
+        }
     }
 
     @Nullable
@@ -895,9 +923,11 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     public boolean isSlimModel() {
-        if ("mason".equalsIgnoreCase(
-                getPersistentData().getString("CyberQuestNpcId")
-        )) {
+        if ("mason".equalsIgnoreCase(getStoryNpcId())
+                || (getCustomName() != null
+                && "Mason".equalsIgnoreCase(
+                    getCustomName().getString()
+                ))) {
             return false;
         }
 
@@ -7980,6 +8010,10 @@ public class CyberNpcEntity extends PathfinderMob {
         tag.putBoolean("CyberNpcCanWander", canWander());
         tag.putString("CyberNpcType", getNpcType().serializedName());
 
+        if (!getStoryNpcId().isBlank()) {
+            tag.putString("CyberNpcStoryId", getStoryNpcId());
+        }
+
         if (specialNpcId != null) {
             tag.putUUID("CyberNpcSpecialId", specialNpcId);
         }
@@ -8057,6 +8091,25 @@ public class CyberNpcEntity extends PathfinderMob {
         specialNpcId = tag.hasUUID("CyberNpcSpecialId")
                 ? tag.getUUID("CyberNpcSpecialId")
                 : null;
+
+        String loadedStoryNpcId = tag.contains("CyberNpcStoryId")
+                ? tag.getString("CyberNpcStoryId")
+                : getPersistentData().getString("CyberNpcStoryId");
+
+        if (loadedStoryNpcId.isBlank()) {
+            loadedStoryNpcId =
+                    getPersistentData().getString("CyberQuestNpcId");
+        }
+
+        if (loadedStoryNpcId.isBlank()
+                && getCustomName() != null
+                && "Mason".equalsIgnoreCase(
+                    getCustomName().getString()
+                )) {
+            loadedStoryNpcId = "mason";
+        }
+
+        setStoryNpcId(loadedStoryNpcId);
 
         if (tag.contains("CyberNpcRole")) {
             setRole(tag.getString("CyberNpcRole"));

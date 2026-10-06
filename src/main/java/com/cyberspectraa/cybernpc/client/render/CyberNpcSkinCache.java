@@ -65,10 +65,11 @@ public final class CyberNpcSkinCache {
     }
 
     public static ResourceLocation getNpcTexture(CyberNpcEntity entity) {
-        String questNpcId = entity.getPersistentData()
-                .getString("CyberQuestNpcId");
-
-        if ("mason".equalsIgnoreCase(questNpcId)) {
+        if ("mason".equalsIgnoreCase(entity.getStoryNpcId())
+                || (entity.getCustomName() != null
+                && "Mason".equalsIgnoreCase(
+                    entity.getCustomName().getString()
+                ))) {
             return MASON;
         }
 
