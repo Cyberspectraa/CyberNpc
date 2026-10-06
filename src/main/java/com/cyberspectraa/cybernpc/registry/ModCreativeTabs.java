@@ -26,6 +26,9 @@ public final class ModCreativeTabs {
                                             .getDefaultInstance()
                             )
                             .displayItems((parameters, output) -> {
+                                // Story / quest items.
+                                output.accept(ModItems.CHOSO_PLUSH.get());
+
                                 // Economy.
                                 output.accept(ModItems.COPPER_COIN.get());
                                 output.accept(ModItems.SILVER_COIN.get());

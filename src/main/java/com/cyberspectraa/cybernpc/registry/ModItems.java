@@ -17,6 +17,7 @@ import com.cyberspectraa.cybernpc.item.SpecialNpcRemovalStickItem;
 import com.cyberspectraa.cybernpc.item.TownRegisterItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Rarity;
 import net.minecraftforge.common.ForgeSpawnEggItem;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -125,6 +126,14 @@ public final class ModItems {
                             0x3E4B32,
                             0x7A8F67,
                             new Item.Properties()
+                    ));
+
+    public static final RegistryObject<Item> CHOSO_PLUSH =
+            ITEMS.register("choso_plush", () ->
+                    new Item(
+                            new Item.Properties()
+                                    .stacksTo(1)
+                                    .rarity(Rarity.UNCOMMON)
                     ));
 
     public static final RegistryObject<Item> COPPER_COIN =

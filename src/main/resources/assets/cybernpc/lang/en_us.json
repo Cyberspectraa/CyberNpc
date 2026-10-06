@@ -51,5 +51,6 @@
   "item.cybernpc.work_marker": "Work Marker",
   "item.cybernpc.mason_npc_spawn_egg": "Mason Spawn Egg",
   "item.cybernpc.zombie_npc_spawn_egg": "Zombie NPC Spawn Egg",
-  "itemGroup.cybernpc.spawn_eggs": "CyberNpc Spawn Eggs"
+  "itemGroup.cybernpc.spawn_eggs": "CyberNpc Spawn Eggs",
+  "item.cybernpc.choso_plush": "Choso Plush"
 }
