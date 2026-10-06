@@ -21,21 +21,11 @@ public final class ModCreativeTabs {
                                     "itemGroup.cybernpc"
                             ))
                             .icon(() ->
-                                    ModItems.WILD_NPC_SPAWN_EGG
+                                    ModItems.TOWN_REGISTER
                                             .get()
                                             .getDefaultInstance()
                             )
                             .displayItems((parameters, output) -> {
-                                // NPCs first: the original three plus specific
-                                // service-role eggs.
-                                output.accept(ModItems.MAIN_NPC_SPAWN_EGG.get());
-                                output.accept(ModItems.QUEST_NPC_SPAWN_EGG.get());
-                                output.accept(ModItems.WILD_NPC_SPAWN_EGG.get());
-                                output.accept(ModItems.BANKER_NPC_SPAWN_EGG.get());
-                                output.accept(ModItems.COURIER_NPC_SPAWN_EGG.get());
-                                output.accept(ModItems.GUARD_NPC_SPAWN_EGG.get());
-                                output.accept(ModItems.POPE_NPC_SPAWN_EGG.get());
-
                                 // Economy.
                                 output.accept(ModItems.COPPER_COIN.get());
                                 output.accept(ModItems.SILVER_COIN.get());
@@ -64,6 +54,33 @@ public final class ModCreativeTabs {
 
                                 output.accept(ModItems.SPECIAL_NPC_REMOVAL_STICK.get());
                                 output.accept(ModItems.DEVELOPER_GLASSES.get());
+                            })
+                            .build()
+            );
+
+    public static final RegistryObject<CreativeModeTab> CYBERNPC_SPAWN_EGGS_TAB =
+            TABS.register("cybernpc_spawn_eggs", () ->
+                    CreativeModeTab.builder()
+                            .title(Component.translatable(
+                                    "itemGroup.cybernpc.spawn_eggs"
+                            ))
+                            .icon(() ->
+                                    ModItems.MASON_NPC_SPAWN_EGG
+                                            .get()
+                                            .getDefaultInstance()
+                            )
+                            .displayItems((parameters, output) -> {
+                                output.accept(ModItems.MAIN_NPC_SPAWN_EGG.get());
+                                output.accept(ModItems.QUEST_NPC_SPAWN_EGG.get());
+                                output.accept(ModItems.WILD_NPC_SPAWN_EGG.get());
+
+                                output.accept(ModItems.BANKER_NPC_SPAWN_EGG.get());
+                                output.accept(ModItems.COURIER_NPC_SPAWN_EGG.get());
+                                output.accept(ModItems.GUARD_NPC_SPAWN_EGG.get());
+                                output.accept(ModItems.POPE_NPC_SPAWN_EGG.get());
+
+                                output.accept(ModItems.MASON_NPC_SPAWN_EGG.get());
+                                output.accept(ModItems.ZOMBIE_NPC_SPAWN_EGG.get());
                             })
                             .build()
             );

@@ -17,6 +17,7 @@ import com.cyberspectraa.cybernpc.item.SpecialNpcRemovalStickItem;
 import com.cyberspectraa.cybernpc.item.TownRegisterItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
+import net.minecraftforge.common.ForgeSpawnEggItem;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
@@ -100,6 +101,29 @@ public final class ModItems {
                             NpcType.MAIN,
                             "Pope",
                             false,
+                            new Item.Properties()
+                    ));
+
+    public static final RegistryObject<Item> MASON_NPC_SPAWN_EGG =
+            ITEMS.register("mason_npc_spawn_egg", () ->
+                    new CyberNpcSpawnEggItem(
+                            ModEntities.CYBER_NPC,
+                            0x17151B,
+                            0x8E7AA8,
+                            NpcType.MAIN,
+                            "Citizen",
+                            false,
+                            "Mason",
+                            "mason",
+                            new Item.Properties()
+                    ));
+
+    public static final RegistryObject<Item> ZOMBIE_NPC_SPAWN_EGG =
+            ITEMS.register("zombie_npc_spawn_egg", () ->
+                    new ForgeSpawnEggItem(
+                            ModEntities.ZOMBIE_CYBER_NPC,
+                            0x3E4B32,
+                            0x7A8F67,
                             new Item.Properties()
                     ));
 

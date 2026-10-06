@@ -48,5 +48,8 @@
   "item.cybernpc.building_marker": "Building Marker",
   "item.cybernpc.room_marker": "Room Marker",
   "item.cybernpc.bed_marker": "Bed Marker",
-  "item.cybernpc.work_marker": "Work Marker"
+  "item.cybernpc.work_marker": "Work Marker",
+  "item.cybernpc.mason_npc_spawn_egg": "Mason Spawn Egg",
+  "item.cybernpc.zombie_npc_spawn_egg": "Zombie NPC Spawn Egg",
+  "itemGroup.cybernpc.spawn_eggs": "CyberNpc Spawn Eggs"
 }
