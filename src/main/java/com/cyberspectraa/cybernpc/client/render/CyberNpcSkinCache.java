@@ -23,6 +23,12 @@ public final class CyberNpcSkinCache {
     private static final ResourceLocation APPEARANCE_PACK =
             new ResourceLocation(CyberNpc.MOD_ID, "appearance/lunarskins.b64");
 
+    private static final ResourceLocation MASON =
+            new ResourceLocation(
+                    CyberNpc.MOD_ID,
+                    "textures/entity/mason.png"
+            );
+
     private static final ResourceLocation COURIER_POSTMAN =
             new ResourceLocation(
                     CyberNpc.MOD_ID,
@@ -59,6 +65,13 @@ public final class CyberNpcSkinCache {
     }
 
     public static ResourceLocation getNpcTexture(CyberNpcEntity entity) {
+        String questNpcId = entity.getPersistentData()
+                .getString("CyberQuestNpcId");
+
+        if ("mason".equalsIgnoreCase(questNpcId)) {
+            return MASON;
+        }
+
         if ("Courier".equalsIgnoreCase(entity.getRole())) {
             return COURIER_POSTMAN;
         }

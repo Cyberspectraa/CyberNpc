@@ -895,6 +895,12 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     public boolean isSlimModel() {
+        if ("mason".equalsIgnoreCase(
+                getPersistentData().getString("CyberQuestNpcId")
+        )) {
+            return false;
+        }
+
         if (NpcServiceRole.fromRole(getRole()) == NpcServiceRole.COURIER) {
             return false;
         }

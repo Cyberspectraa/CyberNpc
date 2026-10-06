@@ -20,6 +20,11 @@ public final class CyberNpcCommands {
         event.getDispatcher().register(
                 Commands.literal("cybernpc")
                         .requires(source -> source.hasPermission(2))
+                        .then(Commands.literal("mason")
+                                .then(Commands.literal("spawn")
+                                        .executes(context -> spawnMason(
+                                                context.getSource()
+                                        ))))
                         .then(Commands.literal("spawn")
                                 .then(Commands.argument("name", StringArgumentType.greedyString())
                                         .executes(context -> spawn(
@@ -88,6 +93,67 @@ public final class CyberNpcCommands {
         }
 
         source.sendSuccess(() -> Component.literal("Created NPC '" + name + "'."), true);
+        return 1;
+    }
+
+    private static int spawnMason(
+            CommandSourceStack source
+    ) {
+        ServerLevel level = source.getLevel();
+        CyberNpcEntity npc =
+                ModEntities.CYBER_NPC.get().create(level);
+
+        if (npc == null) {
+            source.sendFailure(
+                    Component.literal(
+                            "CyberNpc could not create Mason."
+                    )
+            );
+            return 0;
+        }
+
+        Vec3 position = source.getPosition();
+        npc.moveTo(
+                position.x,
+                position.y,
+                position.z,
+                source.getRotation().y,
+                0.0F
+        );
+
+        npc.setNpcType(NpcType.MAIN);
+        npc.setCustomName(Component.literal("Mason"));
+        npc.setCustomNameVisible(true);
+        npc.setRole("Citizen");
+        npc.setCanWander(false);
+        npc.setPersistenceRequired();
+
+        npc.getPersistentData().putString(
+                "CyberQuestNpcId",
+                "mason"
+        );
+        npc.getPersistentData().putString(
+                "CyberNpcStoryId",
+                "mason"
+        );
+
+        if (!level.addFreshEntity(npc)) {
+            source.sendFailure(
+                    Component.literal(
+                            "CyberNpc could not add Mason to the world."
+                    )
+            );
+            return 0;
+        }
+
+        source.sendSuccess(
+                () -> Component.literal(
+                        "Created Mason as a persistent main NPC "
+                                + "with CyberQuest id 'mason'."
+                ),
+                true
+        );
+
         return 1;
     }
 
