@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.44.12
+
+### Choso plush 3D render correction
+- Kept the original supplied Choso 64x64 texture completely unchanged.
+- Corrected the remaining OBJ UV orientation to match Minecraft ModelPart.Polygon's actual four-corner mapping used by My Totem Doll.
+- Switched the plush model to Forge's translucent item render type so transparent second-layer skin pixels render as proper outer layers instead of visually flattening the doll.
+- Replaced obsolete OBJ loader option names with Forge 1.20.x settings: automatic_culling, shade_quads and emissive_ambient.
+- Disabled emissive ambient lighting and removed the white MTL ambient term, allowing normal Minecraft face lighting to create real depth across the head, body and bent limbs.
+- Kept the exact existing 3D geometry, seated pose, wide-arm variant, doll dilation and item display transforms.
+
 ## 0.44.11
 
 ### Choso plush UV/model fix
