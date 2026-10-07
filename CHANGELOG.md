@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.44.16
+
+### Remove Mason quest binding for now
+- Mason remains a persistent CyberNpc story NPC with the same name, skin, spawn egg and story id.
+- Mason no longer receives the legacy CyberQuestNpcId automatically from the "mason" story id.
+- Story NPC identity and CyberQuest binding are now separate systems, so future quests can be added explicitly without story/appearance ids silently becoming quest ids.
+- Existing saved Mason NPCs automatically clear the old legacy "mason" CyberQuestNpcId when loaded.
+- Existing Mason spawn eggs also remove stale quest-id NBT when used, while preserving Mason's story identity.
+- The /cybernpc mason spawn command no longer describes Mason as a CyberQuest NPC.
+- No CyberQuest framework code or unrelated quest definitions were removed.
+
 ## 0.44.15
 
 ### Choso plush top/bottom UV correction

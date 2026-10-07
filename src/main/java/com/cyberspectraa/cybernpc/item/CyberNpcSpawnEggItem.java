@@ -159,16 +159,15 @@ public final class CyberNpcSpawnEggItem extends ForgeSpawnEggItem {
         }
 
         if (!storyNpcId.isEmpty()) {
-            // Top-level custom data is read by CyberNpcEntity and copied into
-            // synced entity data so clients can render special story skins.
+            // Story identity is deliberately separate from CyberQuest binding.
+            // A story NPC can be used by quests later, but only after an
+            // explicit quest id/binding is added rather than inheriting one
+            // from its appearance/story id.
             entityTag.putString(
                     "CyberNpcStoryId",
                     storyNpcId
             );
-            entityTag.putString(
-                    "CyberQuestNpcId",
-                    storyNpcId
-            );
+            entityTag.remove("CyberQuestNpcId");
 
             CompoundTag forgeData =
                     entityTag.contains(
@@ -179,13 +178,10 @@ public final class CyberNpcSpawnEggItem extends ForgeSpawnEggItem {
                     : new CompoundTag();
 
             forgeData.putString(
-                    "CyberQuestNpcId",
-                    storyNpcId
-            );
-            forgeData.putString(
                     "CyberNpcStoryId",
                     storyNpcId
             );
+            forgeData.remove("CyberQuestNpcId");
 
             entityTag.put(
                     "ForgeData",

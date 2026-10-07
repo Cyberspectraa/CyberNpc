@@ -564,10 +564,8 @@ public class CyberNpcEntity extends PathfinderMob {
 
             if (normalized.isBlank()) {
                 persistent.remove("CyberNpcStoryId");
-                persistent.remove("CyberQuestNpcId");
             } else {
                 persistent.putString("CyberNpcStoryId", normalized);
-                persistent.putString("CyberQuestNpcId", normalized);
             }
         }
     }
@@ -8110,6 +8108,18 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         setStoryNpcId(loadedStoryNpcId);
+
+        // Mason used to double as a CyberQuest NPC simply because its story
+        // identity was "mason". Story identity and quest binding are separate
+        // systems now. Clean the legacy quest id from existing saved Masons so
+        // worlds made with older CyberNpc builds stop treating Mason as a quest
+        // interaction target without removing Mason himself.
+        if ("mason".equalsIgnoreCase(getStoryNpcId())
+                && "mason".equalsIgnoreCase(
+                    getPersistentData().getString("CyberQuestNpcId")
+                )) {
+            getPersistentData().remove("CyberQuestNpcId");
+        }
 
         if (tag.contains("CyberNpcRole")) {
             setRole(tag.getString("CyberNpcRole"));

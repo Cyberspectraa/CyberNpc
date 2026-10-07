@@ -141,8 +141,7 @@ public final class CyberNpcCommands {
 
         source.sendSuccess(
                 () -> Component.literal(
-                        "Created Mason as a persistent main NPC "
-                                + "with CyberQuest id 'mason'."
+                        "Created Mason as a persistent story NPC."
                 ),
                 true
         );
