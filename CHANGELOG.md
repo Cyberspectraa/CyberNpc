@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.44.17
+
+### Guild Hall building support
+- Added Guild Hall as a first-class CyberNpc building type for the existing item-frame marker system.
+- Added a Guild Hall Marker with a larger public building influence area suitable for a medieval guild building.
+- Added the Guild Hall Marker to the CyberNpc creative tab.
+- This is a building classification/marker, not a forced generated structure, so servers can build guild halls in any medieval style they want and register them cleanly.
+
 ## 0.44.16
 
 ### Remove Mason quest binding for now

@@ -9,6 +9,7 @@ public enum BuildingType {
     BANK("bank", "Bank", true),
     POST_OFFICE("post_office", "Post Office", true),
     INN("inn", "Inn", true),
+    GUILD("guild", "Guild Hall", true),
     WORKSHOP("workshop", "Workshop", false),
     GUARD_HOUSE("guard_house", "Guard House", false),
     PUBLIC("public", "Public Building", true),

@@ -255,6 +255,8 @@ public final class ModItems {
             marker("post_office_marker", BuildingMarkerType.POST_OFFICE);
     public static final RegistryObject<Item> INN_MARKER =
             marker("inn_marker", BuildingMarkerType.INN);
+    public static final RegistryObject<Item> GUILD_MARKER =
+            marker("guild_marker", BuildingMarkerType.GUILD);
 
     public static final RegistryObject<Item> PUBLIC_AREA_MARKER =
             marker("public_area_marker", BuildingMarkerType.PUBLIC_AREA);

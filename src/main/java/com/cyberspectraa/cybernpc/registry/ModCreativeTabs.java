@@ -47,6 +47,7 @@ public final class ModCreativeTabs {
                                 // Town defence / special-NPC utilities.
                                 output.accept(ModItems.GUARD_POST.get());
                                 output.accept(ModItems.TOWN_REGISTER.get());
+                                output.accept(ModItems.GUILD_MARKER.get());
 
                                 // Simple building setup. These four
                                 // blocks are invisible after placement.

@@ -14,6 +14,7 @@ public enum BuildingMarkerType {
     BANK("Bank", BuildingType.BANK, RoomKind.MAIN, null, 16, 8),
     POST_OFFICE("Post Office", BuildingType.POST_OFFICE, RoomKind.MAIN, null, 16, 8),
     INN("Inn", BuildingType.INN, RoomKind.MAIN, null, 20, 10),
+    GUILD("Guild Hall", BuildingType.GUILD, RoomKind.MAIN, null, 24, 10),
 
     PUBLIC_AREA("Public Area", null, RoomKind.PUBLIC_AREA, null, 12, 8),
     STAFF_ONLY("Staff Only", null, RoomKind.STAFF_ONLY, null, 8, 6),
