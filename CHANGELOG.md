@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.44.15
+
+### Choso plush top/bottom UV correction
+- Kept the Choso texture and static plush renderer unchanged.
+- Corrected only the top and bottom UV faces on the head, headwear, wide arms/sleeves and both legs/pants.
+- The baked item-space mesh now takes each visible UP/DOWN face from the matching Blockbench skin face instead of the opposite face used by My Totem Doll's internally Y-flipped ModelPart conversion.
+- Fixes the underside of the head appearing on top and the shoulder/leg top textures being taken from the wrong side.
+- Side/front/back UVs, mesh geometry, seated pose and item transforms are untouched.
+
 ## 0.44.14
 
 ### Choso plush static mesh renderer
