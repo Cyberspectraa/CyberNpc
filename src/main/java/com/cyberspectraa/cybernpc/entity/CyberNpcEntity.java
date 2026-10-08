@@ -15,6 +15,7 @@ import com.cyberspectraa.cybernpc.registry.ModEffects;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.cyberspectraa.cybernpc.registry.ModItems;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
+import com.cyberspectraa.cybernpc.dialogue.NpcDialogueController;
 import com.cyberspectraa.cybernpc.service.SpecialNpcSavedData;
 import com.cyberspectraa.cybernpc.world.CyberNpcWorldClaims;
 import net.minecraft.core.BlockPos;
@@ -7840,164 +7841,24 @@ public class CyberNpcEntity extends PathfinderMob {
 
     @Override
     protected InteractionResult mobInteract(Player player, InteractionHand hand) {
-        ItemStack heldForTool = player.getItemInHand(hand);
+        ItemStack held = player.getItemInHand(hand);
 
-        // Configuration/removal tools must win over the role's normal use
-        // interaction. Otherwise Banker/Courier consume the right-click before
-        // the item's interactLivingEntity hook ever gets a chance to run.
+        // Keep creator/administration tools ahead of normal conversations.
         if (hand == InteractionHand.MAIN_HAND
-                && (heldForTool.is(ModItems.TOWN_REGISTER.get())
-                || heldForTool.is(
-                ModItems.SPECIAL_NPC_REMOVAL_STICK.get()
-        ))) {
-            return heldForTool.interactLivingEntity(
-                    player,
-                    this,
-                    hand
-            );
+                && (held.is(ModItems.TOWN_REGISTER.get())
+                    || held.is(ModItems.SPECIAL_NPC_REMOVAL_STICK.get()))) {
+            return held.interactLivingEntity(player, this, hand);
         }
 
-        if (!level().isClientSide && hand == InteractionHand.MAIN_HAND) {
-            NpcServiceRole serviceRole =
-                    NpcServiceRole.fromRole(getRole());
-
-            if (serviceRole == NpcServiceRole.BANKER
-                    && level() instanceof ServerLevel serverLevel) {
-                ItemStack held = player.getItemInHand(hand);
-                long deposit = CurrencyValue.valueOf(held);
-                BankSavedData bank = BankSavedData.get(serverLevel);
-
-                if (held.isEmpty() && player.isShiftKeyDown()) {
-                    long balance = bank.getBalance(player.getUUID());
-
-                    if (balance <= 0L) {
-                        player.sendSystemMessage(Component.literal(
-                                "Your bank balance is empty."
-                        ));
-                        return InteractionResult.CONSUME;
-                    }
-
-                    // Bound one physical payout to a normal inventory-sized
-                    // amount so an absurd balance cannot create thousands of
-                    // dropped item stacks in a single click.
-                    long withdrawn = Math.min(
-                            balance,
-                            23_040_000L
-                    );
-
-                    if (!bank.withdraw(
-                            player.getUUID(),
-                            withdrawn
-                    )) {
-                        return InteractionResult.CONSUME;
-                    }
-
-                    int droppedStacks = 0;
-                    for (ItemStack payout
-                            : CurrencyValue.makePayout(withdrawn)) {
-                        if (!player.getInventory().add(payout)) {
-                            player.drop(payout, false);
-                            droppedStacks++;
-                        }
-                    }
-
-                    level().playSound(
-                            null,
-                            blockPosition(),
-                            SoundEvents.EXPERIENCE_ORB_PICKUP,
-                            SoundSource.NEUTRAL,
-                            0.55F,
-                            0.92F
-                    );
-
-                    long remaining = bank.getBalance(player.getUUID());
-                    player.sendSystemMessage(Component.literal(
-                            "Withdrew "
-                                    + CurrencyValue.format(withdrawn)
-                                    + " credits as coins. Balance: "
-                                    + CurrencyValue.format(remaining)
-                                    + " credits."
-                                    + (droppedStacks > 0
-                                    ? " Some coins were dropped because your inventory was full."
-                                    : "")
-                    ));
-
-                    return InteractionResult.CONSUME;
-                }
-
-                if (deposit > 0L) {
-                    if (!player.getAbilities().instabuild) {
-                        held.setCount(0);
-                    }
-
-                    long balance = bank.deposit(
-                            player.getUUID(),
-                            deposit
-                    );
-
-                    level().playSound(
-                            null,
-                            blockPosition(),
-                            SoundEvents.EXPERIENCE_ORB_PICKUP,
-                            SoundSource.NEUTRAL,
-                            0.55F,
-                            1.15F
-                    );
-
-                    player.sendSystemMessage(Component.literal(
-                            "Deposited "
-                                    + CurrencyValue.format(deposit)
-                                    + " credits. Balance: "
-                                    + CurrencyValue.format(balance)
-                                    + " credits."
-                    ));
-
-                    return InteractionResult.CONSUME;
-                }
-
-                long balance = bank.getBalance(player.getUUID());
-                player.sendSystemMessage(Component.literal(
-                        "Bank balance: "
-                                + CurrencyValue.format(balance)
-                                + " credits."
-                ));
-                player.sendSystemMessage(Component.literal(
-                        "Hold coins and right-click to deposit. Sneak-right-click with an empty hand to withdraw your balance as coins."
-                ));
-
-                return InteractionResult.CONSUME;
-            }
-
-            if (serviceRole == NpcServiceRole.COURIER
-                    || serviceRole == NpcServiceRole.GUARD) {
-                player.sendSystemMessage(Component.literal(
-                        serviceRole.displayName()
-                                + " — " + serviceBrain.status()
-                ));
-                return InteractionResult.CONSUME;
-            }
-
-            String displayName = getCustomName() != null
-                    ? getCustomName().getString()
-                    : "Cyber NPC";
-
-            if (getNpcType() == NpcType.WILD) {
-                player.sendSystemMessage(Component.literal(
-                        displayName + " — " + getWildClassDisplayName()
-                                + " / " + getPersonalityDisplayName()
-                                + " / " + getGearTierDisplayName()
-                                + (wildClassHasMagicSchool()
-                                ? " / " + getMageSchoolDisplayName()
-                                : "")
-                                + " — Hunger " + getHungerBar()
-                ));
-            } else {
-                player.sendSystemMessage(Component.literal(
-                        displayName + " — " + getRole()
-                ));
-            }
+        // Only open one dialogue for the main hand to avoid duplicate packets.
+        if (hand != InteractionHand.MAIN_HAND) {
+            return InteractionResult.PASS;
         }
 
+        if (!level().isClientSide
+                && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+            NpcDialogueController.open(serverPlayer, this);
+        }
         return InteractionResult.sidedSuccess(level().isClientSide);
     }
 
