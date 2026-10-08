@@ -6,7 +6,7 @@ import java.util.List;
 
 /** A server-built dialogue snapshot; actions are revalidated on receipt. */
 public record DialogueView(
-        int entityId, String name, String role, String speech,
+        int entityId, String name, String role, String playerLine, String speech,
         List<Option> options
 ) {
     public DialogueView {
@@ -17,6 +17,7 @@ public record DialogueView(
         buf.writeVarInt(view.entityId());
         buf.writeUtf(view.name(), 96);
         buf.writeUtf(view.role(), 96);
+        buf.writeUtf(view.playerLine(), 160);
         buf.writeUtf(view.speech(), 1024);
         buf.writeVarInt(view.options().size());
         for (Option choice : view.options()) {
@@ -29,6 +30,7 @@ public record DialogueView(
         int id = buf.readVarInt();
         String name = buf.readUtf(96);
         String role = buf.readUtf(96);
+        String playerLine = buf.readUtf(160);
         String speech = buf.readUtf(1024);
         int count = buf.readVarInt();
         if (count < 0 || count > 8) {
@@ -38,7 +40,7 @@ public record DialogueView(
         for (int i = 0; i < count; i++) {
             choices.add(new Option(buf.readUtf(40), buf.readUtf(80)));
         }
-        return new DialogueView(id, name, role, speech, choices);
+        return new DialogueView(id, name, role, playerLine, speech, choices);
     }
 
     public record Option(String id, String label) {}
