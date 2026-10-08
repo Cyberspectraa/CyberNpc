@@ -82,6 +82,7 @@ public final class ModCreativeTabs {
                                 output.accept(ModItems.COURIER_NPC_SPAWN_EGG.get());
                                 output.accept(ModItems.GUARD_NPC_SPAWN_EGG.get());
                                 output.accept(ModItems.POPE_NPC_SPAWN_EGG.get());
+                                output.accept(ModItems.GUILD_RECEPTIONIST_NPC_SPAWN_EGG.get());
 
                                 output.accept(ModItems.MASON_NPC_SPAWN_EGG.get());
                                 output.accept(ModItems.ZOMBIE_NPC_SPAWN_EGG.get());

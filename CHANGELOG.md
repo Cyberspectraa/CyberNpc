@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.44.18
+- Added the Guild Receptionist NPC service role and a dedicated Guild Receptionist spawn egg in the CyberNpc Spawn Eggs creative tab.
+- Guild Receptionists are stationary persistent service NPCs, compatible with the existing Guild Hall marker setup.
+- The receptionist role can also be applied to an existing NPC using /cybernpc role <target> Guild Receptionist.
+- CyberQuest 0.3.0-alpha.4 handles registering physical guild contracts and receiving completed contracts when players interact with a Guild Receptionist.
+
 ## 0.44.17
 
 ### Guild Hall building support

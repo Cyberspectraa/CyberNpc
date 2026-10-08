@@ -7,7 +7,8 @@ public enum NpcServiceRole {
     BANKER("Banker"),
     COURIER("Courier"),
     GUARD("Guard"),
-    POPE("Pope");
+    POPE("Pope"),
+    GUILD_RECEPTIONIST("Guild Receptionist");
 
     private final String displayName;
 
@@ -31,6 +32,7 @@ public enum NpcServiceRole {
             case "courier", "mailman", "postman", "mail" -> COURIER;
             case "guard", "town_guard", "town guard" -> GUARD;
             case "pope", "priest", "pontiff" -> POPE;
+            case "guild receptionist", "guild_receptionist", "guild clerk" -> GUILD_RECEPTIONIST;
             default -> NONE;
         };
     }

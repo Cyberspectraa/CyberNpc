@@ -106,6 +106,18 @@ public final class ModItems {
                             new Item.Properties()
                     ));
 
+    public static final RegistryObject<Item> GUILD_RECEPTIONIST_NPC_SPAWN_EGG =
+            ITEMS.register("guild_receptionist_npc_spawn_egg", () ->
+                    new CyberNpcSpawnEggItem(
+                            ModEntities.CYBER_NPC,
+                            0x4B2D21,
+                            0xDCC58A,
+                            NpcType.MAIN,
+                            "Guild Receptionist",
+                            false,
+                            new Item.Properties()
+                    ));
+
     public static final RegistryObject<Item> MASON_NPC_SPAWN_EGG =
             ITEMS.register("mason_npc_spawn_egg", () ->
                     new CyberNpcSpawnEggItem(
