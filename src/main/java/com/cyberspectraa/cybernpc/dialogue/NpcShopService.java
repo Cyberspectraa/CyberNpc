@@ -14,10 +14,10 @@ public final class NpcShopService {
     public record Stock(String action, String label, Item item, int count, long cost) {}
 
     private static final List<Stock> GOODS = List.of(
-        new Stock("buy_bread", "3 Bread - 2 silver", Items.BREAD, 3, 20),
-        new Stock("buy_torches", "16 Torches - 1 silver", Items.TORCH, 16, 10),
-        new Stock("buy_beef", "4 Cooked Beef - 4 silver", Items.COOKED_BEEF, 4, 40),
-        new Stock("buy_arrows", "8 Arrows - 2 silver", Items.ARROW, 8, 20)
+        new Stock("buy_bread", "I'll take 3 bread (2s).", Items.BREAD, 3, 20),
+        new Stock("buy_torches", "I'll take 16 torches (1s).", Items.TORCH, 16, 10),
+        new Stock("buy_beef", "I'll take 4 beef (4s).", Items.COOKED_BEEF, 4, 40),
+        new Stock("buy_arrows", "I'll take 8 arrows (2s).", Items.ARROW, 8, 20)
     );
 
     private NpcShopService() {}
