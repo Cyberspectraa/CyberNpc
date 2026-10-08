@@ -21,7 +21,7 @@ import java.util.List;
 
 /**
  * Cinematic RPG conversation panel. Only the current speaker is rendered:
- * an NPC during dialogue, and the player while a choice awaits its server reply.
+ * an NPC during dialogue, and the player while their selected reply types out.
  * The actual server-owned dialogue choices are kept intact.
  */
 public final class NpcDialogueScreen extends Screen {
@@ -34,9 +34,13 @@ public final class NpcDialogueScreen extends Screen {
     private static final long ENTRY_MS = 280L;
     private static final long SWITCH_MS = 180L;
     private static final long LETTER_MS = 24L;
+    private static final long REPLY_HOLD_MS = 420L;
 
     private final DialogueView view;
     private String pendingReply = "";
+    // Server replies often arrive in the very same tick as the player's choice.
+    // Defer the visual switch, not the authoritative server action.
+    private DialogueView queuedNpcReply;
     private long screenStarted = System.currentTimeMillis();
     private long speakerChanged = screenStarted;
     private boolean waitingForServer;
@@ -49,7 +53,14 @@ public final class NpcDialogueScreen extends Screen {
     }
 
     public static void open(DialogueView view) {
-        Minecraft.getInstance().setScreen(new NpcDialogueScreen(view));
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen instanceof NpcDialogueScreen current
+                && current.waitingForServer
+                && current.view.entityId() == view.entityId()) {
+            current.queuedNpcReply = view;
+            return;
+        }
+        minecraft.setScreen(new NpcDialogueScreen(view));
     }
 
     @Override
@@ -160,7 +171,7 @@ public final class NpcDialogueScreen extends Screen {
                 g.drawString(font, line, textX + 7, lineY, INK, false);
                 lineY += 11;
             }
-            if (playerSpeaking) {
+            if (playerSpeaking && count >= speech.length() && queuedNpcReply == null) {
                 g.drawString(font, "Waiting for a response...",
                         textX + 7, textY + paperHeight - 14, MUTED, false);
             }
@@ -177,6 +188,34 @@ public final class NpcDialogueScreen extends Screen {
             if (entry < 1.0F) button.visible = false;
         }
         super.render(g, mouseX, mouseY, partialTick);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (!waitingForServer || queuedNpcReply == null) return;
+        long displayedFor = System.currentTimeMillis() - speakerChanged;
+        long completeAfter = pendingReply.length() * LETTER_MS + REPLY_HOLD_MS;
+        if (displayedFor >= completeAfter) {
+            DialogueView next = queuedNpcReply;
+            queuedNpcReply = null;
+            Minecraft.getInstance().setScreen(new NpcDialogueScreen(next));
+        }
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0) {
+            String currentLine = waitingForServer ? pendingReply : view.speech();
+            if (messageLength < currentLine.length()) {
+                // Clicking an unfinished line reveals it in full, without selecting a reply.
+                speakerChanged = System.currentTimeMillis()
+                        - currentLine.length() * LETTER_MS;
+                messageLength = currentLine.length();
+                return true;
+            }
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     private String playerName() {
