@@ -54,5 +54,6 @@
   "itemGroup.cybernpc.spawn_eggs": "CyberNpc Spawn Eggs",
   "item.cybernpc.choso_plush": "Choso Plush",
   "item.cybernpc.guild_marker": "Guild Hall Marker",
-  "item.cybernpc.guild_receptionist_npc_spawn_egg": "Guild Receptionist Spawn Egg"
+  "item.cybernpc.guild_receptionist_npc_spawn_egg": "Guild Receptionist Spawn Egg",
+  "item.cybernpc.shopkeeper_npc_spawn_egg": "Shopkeeper Spawn Egg"
 }
