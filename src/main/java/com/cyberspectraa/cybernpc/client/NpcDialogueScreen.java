@@ -20,12 +20,9 @@ import net.minecraft.world.entity.LivingEntity;
 import java.util.List;
 
 /**
- * A bottom-of-screen, two-portrait conversation panel.
- *
- * NPC and player portraits are live Minecraft entity renders, not generated
- * images or generic dummy icons. Text is rendered on a vanilla-book-derived
- * paper surface. Every offered reply is an actual first-person dialogue
- * choice; server responses replace the NPC's line after validation.
+ * Cinematic RPG conversation panel. Only the current speaker is rendered:
+ * an NPC during dialogue, and the player while a choice awaits its server reply.
+ * The actual server-owned dialogue choices are kept intact.
  */
 public final class NpcDialogueScreen extends Screen {
     private static final ResourceLocation WOOD =
@@ -34,9 +31,17 @@ public final class NpcDialogueScreen extends Screen {
             new ResourceLocation("minecraft", "textures/gui/book.png");
     private static final int INK = 0xFF42301C;
     private static final int MUTED = 0xFF785A3C;
+    private static final long ENTRY_MS = 280L;
+    private static final long SWITCH_MS = 180L;
+    private static final long LETTER_MS = 24L;
 
     private final DialogueView view;
     private String pendingReply = "";
+    private long screenStarted = System.currentTimeMillis();
+    private long speakerChanged = screenStarted;
+    private boolean waitingForServer;
+    private int messageLength;
+    private final java.util.List<Button> replyButtons = new java.util.ArrayList<>();
 
     public NpcDialogueScreen(DialogueView view) {
         super(Component.literal("Conversation"));
@@ -50,31 +55,38 @@ public final class NpcDialogueScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+        replyButtons.clear();
+        screenStarted = System.currentTimeMillis();
+        speakerChanged = screenStarted;
         int w = panelWidth();
         int x = (width - w) / 2;
         int y = panelTop();
         List<DialogueView.Option> options = view.options();
-        int buttonWidth = (w - 29) / 2;
-        int step = 20;
+        int buttonWidth = Math.max(80, (w - 29) / 2);
         for (int i = 0; i < options.size(); i++) {
             DialogueView.Option choice = options.get(i);
             int col = i % 2;
             int row = i / 2;
-            addRenderableWidget(Button.builder(Component.literal(choice.label()), b -> {
+            Button button = Button.builder(Component.literal(choice.label()), b -> {
+                if (waitingForServer) return;
                 if ("leave".equals(choice.id())) {
-                    onClose();
                     CyberNpcNetwork.CHANNEL.sendToServer(
-                        new DialogueChoicePacket(view.entityId(), "leave"));
+                            new DialogueChoicePacket(view.entityId(), "leave"));
+                    onClose();
                 } else {
                     pendingReply = choice.label();
+                    waitingForServer = true;
+                    speakerChanged = System.currentTimeMillis();
                     CyberNpcNetwork.CHANNEL.sendToServer(
-                        new DialogueChoicePacket(view.entityId(), choice.id()));
+                            new DialogueChoicePacket(view.entityId(), choice.id()));
+                    for (Button other : replyButtons) other.active = false;
                 }
-            }).pos(x + 9 + col * (buttonWidth + 9), y + 119 + row * step)
-              .size(buttonWidth, 18).build());
+            }).pos(x + 9 + col * (buttonWidth + 9),
+                    y + 119 + row * 20).size(buttonWidth, 18).build();
+            replyButtons.add(addRenderableWidget(button));
         }
         Minecraft.getInstance().getSoundManager().play(
-            SimpleSoundInstance.forUI(SoundEvents.BOOK_PAGE_TURN, 1.03F));
+                SimpleSoundInstance.forUI(SoundEvents.BOOK_PAGE_TURN, 1.03F));
     }
 
     private int panelWidth() {
@@ -96,72 +108,84 @@ public final class NpcDialogueScreen extends Screen {
         int h = panelHeight();
         int x = (width - w) / 2;
         int y = panelTop();
+        long now = System.currentTimeMillis();
+        float entry = ease(Math.min(1.0F, (now - screenStarted) / (float) ENTRY_MS));
+        int rise = Math.round((1.0F - entry) * 18.0F);
+        y += rise;
 
-        // Wood frame texture is tiled at actual vanilla 16x16 pixel scale.
+        // Frame and parchment remain a single compact HUD; no full-screen opaque overlay.
         g.fill(x - 2, y - 2, x + w + 2, y + h + 2, 0xEF1F130D);
         for (int px = x; px < x + w; px += 16) {
             for (int py = y; py < y + h; py += 16) {
-                int tw = Math.min(16, x + w - px);
-                int th = Math.min(16, y + h - py);
-                g.blit(WOOD, px, py, 0, 0, tw, th, 16, 16);
+                g.blit(WOOD, px, py, 0, 0, Math.min(16, x + w - px),
+                        Math.min(16, y + h - py), 16, 16);
             }
         }
         g.fill(x + 3, y + 3, x + w - 3, y + h - 3, 0xB023170F);
         g.fill(x + 4, y + 4, x + w - 4, y + 6, 0xFF977044);
 
-        int portraitY = y + 29;
-        int npcX = x + 10;
-        int playerX = x + w - 72;
+        boolean playerSpeaking = waitingForServer;
+        String speaker = playerSpeaking ? playerName() : view.name();
+        String speech = playerSpeaking ? pendingReply : view.speech();
+        int portraitX = x + 11;
+        int portraitY = y + 26;
+        int textX = x + 84;
+        int textWidth = Math.max(90, w - 96);
+        int textY = y + 26;
 
-        portraitFrame(g, npcX, portraitY);
-        portraitFrame(g, playerX, portraitY);
-        drawPortraits(g, npcX, playerX, portraitY, mouseX, mouseY);
+        // Only the active speaker receives a portrait or a nameplate.
+        float transition = ease(Math.min(1.0F, (now - speakerChanged) / (float) SWITCH_MS));
+        int slide = Math.round((1.0F - transition) * 9.0F);
+        portraitFrame(g, portraitX, portraitY);
+        drawSpeakerPortrait(g, playerSpeaking, portraitX - slide, portraitY,
+                mouseX, mouseY);
+        g.drawString(font, font.plainSubstrByWidth(speaker, textWidth - 18),
+                textX + 6, y + 12, 0xFFFFDFA7, false);
 
-        String name = font.plainSubstrByWidth(view.name(), 85);
-        String playerName = Minecraft.getInstance().player == null
-                ? "You" : font.plainSubstrByWidth(
-                    Minecraft.getInstance().player.getGameProfile().getName(), 82);
-        g.drawCenteredString(font, name, npcX + 29, y + 14, 0xFFFFDFA7);
-        g.drawCenteredString(font, playerName, playerX + 29, y + 14, 0xFFFFDFA7);
-
-        // Dialogue between the actual speaker portraits.
-        int textX = npcX + 69;
-        int textW = Math.max(64, playerX - textX - 7);
-        int textY = y + 28;
-        int textBottom = y + 105;
-        paperPanel(g, textX, textY, textW, textBottom - textY);
-
-        String yourLine = !pendingReply.isEmpty()
-                ? pendingReply : view.playerLine();
-        int cursor = textY + 5;
-        if (!yourLine.isEmpty()) {
-            g.drawString(font, "You:", textX + 6, cursor, MUTED, false);
-            cursor += 11;
-            List<FormattedCharSequence> lines = font.split(
-                Component.literal(yourLine), Math.max(50, textW - 12));
-            for (int i = 0; i < Math.min(2, lines.size()); i++) {
-                g.drawString(font, lines.get(i), textX + 6, cursor, INK, false);
-                cursor += 10;
+        int paperHeight = 77;
+        paperPanel(g, textX, textY, textWidth, paperHeight);
+        g.enableScissor(textX + 5, textY + 5, textX + textWidth - 5,
+                textY + paperHeight - 5);
+        try {
+            // Typewriter effect, restarted whenever the speaking character changes.
+            int count = (int) Math.min(speech.length(),
+                    Math.max(0L, (now - speakerChanged) / LETTER_MS));
+            messageLength = count;
+            String visible = speech.substring(0, count);
+            List<FormattedCharSequence> lines = font.split(Component.literal(visible),
+                    Math.max(60, textWidth - 14));
+            int lineY = textY + 7;
+            for (FormattedCharSequence line : lines) {
+                if (lineY + 9 > textY + paperHeight - 4) break;
+                g.drawString(font, line, textX + 7, lineY, INK, false);
+                lineY += 11;
             }
-            cursor += 2;
+            if (playerSpeaking) {
+                g.drawString(font, "Waiting for a response...",
+                        textX + 7, textY + paperHeight - 14, MUTED, false);
+            }
+        } finally {
+            g.disableScissor();
         }
 
-        g.drawString(font, font.plainSubstrByWidth(view.name() + ":", textW - 12),
-                textX + 6, cursor, MUTED, false);
-        cursor += 11;
-        List<FormattedCharSequence> lines = font.split(
-                Component.literal(pendingReply.isEmpty()
-                        ? view.speech() : "..."),
-                Math.max(50, textW - 12));
-        for (FormattedCharSequence line : lines) {
-            if (cursor + 9 > textBottom - 2) break;
-            g.drawString(font, line, textX + 6, cursor, INK, false);
-            cursor += 10;
+        g.drawCenteredString(font, playerSpeaking ? "Your reply" : "Choose your reply",
+                x + w / 2, y + 108, 0xFFFFD79A);
+        for (Button button : replyButtons) {
+            button.visible = !waitingForServer && messageLength >= view.speech().length();
+            // Widgets use fixed positions; keep them in sync with entrance motion.
+            // They become visible after the entrance and the spoken line finish.
+            if (entry < 1.0F) button.visible = false;
         }
-
-        g.drawCenteredString(font, "Choose your reply", x + w / 2,
-                y + 108, 0xFFFFD79A);
         super.render(g, mouseX, mouseY, partialTick);
+    }
+
+    private String playerName() {
+        LocalPlayer player = Minecraft.getInstance().player;
+        return player == null ? "You" : player.getGameProfile().getName();
+    }
+
+    private static float ease(float amount) {
+        return 1.0F - (1.0F - amount) * (1.0F - amount);
     }
 
     private static void portraitFrame(GuiGraphics g, int x, int y) {
@@ -171,44 +195,29 @@ public final class NpcDialogueScreen extends Screen {
         g.fill(x + 1, y + 74, x + 57, y + 77, 0xFFC39A5A);
     }
 
-    private void drawPortraits(GuiGraphics g, int npcX, int playerX,
-                               int top, int mouseX, int mouseY) {
+    private void drawSpeakerPortrait(GuiGraphics g, boolean playerSpeaking,
+                                     int x, int top, int mouseX, int mouseY) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
-        Entity npc = mc.level.getEntity(view.entityId());
-        LocalPlayer player = mc.player;
-
-        // Minecraft's own GUI entity renderer draws both real faces, armour
-        // and skins. Portrait clipping keeps the panel tidy on GUI scales.
-        if (npc instanceof LivingEntity living) {
-            try {
-                g.enableScissor(npcX + 3, top + 3, npcX + 55, top + 73);
-                try {
-                    InventoryScreen.renderEntityInInventoryFollowsMouse(
-                        g, npcX + 29, top + 101, 43,
-                        (float) (npcX + 29 - mouseX),
-                        (float) (top + 45 - mouseY), living);
-                } finally {
-                    g.disableScissor();
-                }
-            } catch (RuntimeException ignored) {
-                g.drawCenteredString(font, "NPC", npcX + 29, top + 36, 0xFFDDBB8E);
-            }
+        Entity speaker = playerSpeaking ? mc.player : mc.level.getEntity(view.entityId());
+        if (!(speaker instanceof LivingEntity living)) {
+            g.drawCenteredString(font, playerSpeaking ? "You" : "NPC",
+                    x + 29, top + 36, 0xFFDDBB8E);
+            return;
         }
-        if (player != null) {
+        try {
+            g.enableScissor(x + 3, top + 3, x + 55, top + 73);
             try {
-                g.enableScissor(playerX + 3, top + 3, playerX + 55, top + 73);
-                try {
-                    InventoryScreen.renderEntityInInventoryFollowsMouse(
-                        g, playerX + 29, top + 101, 43,
-                        (float) (playerX + 29 - mouseX),
-                        (float) (top + 45 - mouseY), player);
-                } finally {
-                    g.disableScissor();
-                }
-            } catch (RuntimeException ignored) {
-                g.drawCenteredString(font, "You", playerX + 29, top + 36, 0xFFDDBB8E);
+                InventoryScreen.renderEntityInInventoryFollowsMouse(
+                        g, x + 29, top + 101, 43,
+                        (float) (x + 29 - mouseX),
+                        (float) (top + 45 - mouseY), living);
+            } finally {
+                g.disableScissor();
             }
+        } catch (RuntimeException ignored) {
+            g.drawCenteredString(font, playerSpeaking ? "You" : "NPC",
+                    x + 29, top + 36, 0xFFDDBB8E);
         }
     }
 
@@ -216,10 +225,10 @@ public final class NpcDialogueScreen extends Screen {
         g.fill(x - 2, y - 2, x + w + 2, y + h + 2, 0xFF3F2918);
         for (int xx = x; xx < x + w; xx += 16) {
             for (int yy = y; yy < y + h; yy += 16) {
-                g.blit(BOOK, xx, yy, Math.min(16, x + w - xx),
-                    Math.min(16, y + h - yy), 57.0F, 66.0F,
-                    Math.min(16, x + w - xx), Math.min(16, y + h - yy),
-                    256, 256);
+                int bw = Math.min(16, x + w - xx);
+                int bh = Math.min(16, y + h - yy);
+                g.blit(BOOK, xx, yy, bw, bh, 57.0F, 66.0F,
+                        bw, bh, 256, 256);
             }
         }
         g.fill(x, y, x + w, y + 1, 0xFFC8A575);
