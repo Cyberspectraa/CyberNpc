@@ -73,6 +73,10 @@ public final class NpcDialogueScreen extends Screen {
         int y = panelTop();
         List<DialogueView.Option> options = view.options();
         int buttonWidth = Math.max(80, (w - 29) / 2);
+        // The shop may show seven temporary offers plus Back. Keep the
+        // fourth row inside the panel instead of clipping it off-screen.
+        int rowSpacing = options.size() > 6 ? 16 : 20;
+        int buttonHeight = options.size() > 6 ? 15 : 18;
         for (int i = 0; i < options.size(); i++) {
             DialogueView.Option choice = options.get(i);
             int col = i % 2;
@@ -93,7 +97,7 @@ public final class NpcDialogueScreen extends Screen {
                     for (Button other : replyButtons) other.active = false;
                 }
             }).pos(x + 9 + col * (buttonWidth + 9),
-                    y + 119 + row * 20).size(buttonWidth, 18).build();
+                    y + 119 + row * rowSpacing).size(buttonWidth, buttonHeight).build();
             replyButtons.add(addRenderableWidget(button));
         }
         Minecraft.getInstance().getSoundManager().play(
