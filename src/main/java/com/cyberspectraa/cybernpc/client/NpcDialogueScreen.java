@@ -170,7 +170,7 @@ public final class NpcDialogueScreen extends Screen {
                     && count % 3 == 0
                     && !Character.isWhitespace(speech.charAt(count - 1))) {
                 Minecraft.getInstance().getSoundManager().play(
-                        SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.65F, 0.14F));
+                        SimpleSoundInstance.forUI(SoundEvents.BOOK_PAGE_TURN, 1.65F, 0.14F));
             }
             messageLength = count;
             String visible = speech.substring(0, count);
