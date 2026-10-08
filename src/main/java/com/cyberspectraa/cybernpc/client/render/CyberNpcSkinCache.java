@@ -4,6 +4,7 @@ import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.entity.NpcAppearance;
 import com.cyberspectraa.cybernpc.entity.ZombieCyberNpcEntity;
+import com.cyberspectraa.cybernpc.service.NpcServiceRole;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
@@ -33,6 +34,13 @@ public final class CyberNpcSkinCache {
             new ResourceLocation(
                     CyberNpc.MOD_ID,
                     "textures/entity/postman.png"
+            );
+
+    // The uploaded 64x64 skin is an outfit overlay, not a replacement face.
+    private static final ResourceLocation SHOPKEEPER_OUTFIT =
+            new ResourceLocation(
+                    CyberNpc.MOD_ID,
+                    "textures/entity/shopkeeper_outfit.png"
             );
 
     private static final ResourceLocation POPE_OUTFIT_B64 =
@@ -77,10 +85,14 @@ public final class CyberNpcSkinCache {
             return COURIER_POSTMAN;
         }
 
+        if (NpcServiceRole.fromRole(entity.getRole()) == NpcServiceRole.SHOPKEEPER) {
+            return getRoleOutfitTexture(entity, true);
+        }
+
         if ("Pope".equalsIgnoreCase(entity.getRole())
                 || "Priest".equalsIgnoreCase(entity.getRole())
                 || "Pontiff".equalsIgnoreCase(entity.getRole())) {
-            return getPopeTexture(entity);
+            return getRoleOutfitTexture(entity, false);
         }
 
         return getTexture(
@@ -93,8 +105,9 @@ public final class CyberNpcSkinCache {
         );
     }
 
-    private static ResourceLocation getPopeTexture(
-            CyberNpcEntity entity
+    private static ResourceLocation getRoleOutfitTexture(
+            CyberNpcEntity entity,
+            boolean shopkeeper
     ) {
         NpcAppearance.Gender gender =
                 entity.getAppearanceGender();
@@ -108,7 +121,7 @@ public final class CyberNpcSkinCache {
                 entity.getHairStyleIndex()
         );
 
-        String key = "pope_"
+        String key = (shopkeeper ? "shopkeeper_" : "pope_")
                 + gender.serializedName()
                 + "_" + tone
                 + "_" + eyes
@@ -138,13 +151,15 @@ public final class CyberNpcSkinCache {
                                  + NpcAppearance.hairStyleKey(hair)
                                  + ".png"
                  );
-                 NativeImage outfitLayer = loadPopeOutfit()) {
+                 NativeImage outfitLayer = shopkeeper
+                         ? loadResourceImage(SHOPKEEPER_OUTFIT)
+                         : loadPopeOutfit()) {
                 blend(composed, eyeLayer);
                 blend(composed, hairLayer);
 
-                // The supplied Pope asset is clothing only. Apply it last so
-                // its robes/headwear sit over the generated person without
-                // replacing their face, eyes, skin tone or hair.
+                // Role clothing overlays the existing randomized living NPC
+                // skin, eyes and hair. Transparent regions keep the person
+                // underneath, just as with the existing Pope outfit.
                 blend(composed, outfitLayer);
             }
 

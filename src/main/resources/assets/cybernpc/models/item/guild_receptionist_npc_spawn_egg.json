@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "cybernpc:item/spawn_egg/guild_receptionist_npc_spawn_egg"
+  }
+}

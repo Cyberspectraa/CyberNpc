@@ -17,7 +17,12 @@ public final class NpcShopService {
         new Stock("buy_bread", "I'll take 3 bread (2s).", Items.BREAD, 3, 20),
         new Stock("buy_torches", "I'll take 16 torches (1s).", Items.TORCH, 16, 10),
         new Stock("buy_beef", "I'll take 4 beef (4s).", Items.COOKED_BEEF, 4, 40),
-        new Stock("buy_arrows", "I'll take 8 arrows (2s).", Items.ARROW, 8, 20)
+        new Stock("buy_arrows", "I'll take 8 arrows (2s).", Items.ARROW, 8, 20),
+        // Placeholder stock. All offers live in this single list for the
+        // planned shop/economy overhaul; keep <= 7 offers (+ Back = 8).
+        new Stock("buy_apples", "I'll take 6 apples (1s).", Items.APPLE, 6, 10),
+        new Stock("buy_leather_cap", "I'll take a leather cap (5s).", Items.LEATHER_HELMET, 1, 50),
+        new Stock("buy_iron_pickaxe", "I'll take an iron pickaxe (18s).", Items.IRON_PICKAXE, 1, 180)
     );
 
     private NpcShopService() {}

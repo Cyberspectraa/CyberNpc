@@ -1,1 +1,6 @@
-{"parent":"item/template_spawn_egg"}
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "cybernpc:item/spawn_egg/banker_npc_spawn_egg"
+  }
+}

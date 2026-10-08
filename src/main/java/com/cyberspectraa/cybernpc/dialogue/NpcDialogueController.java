@@ -109,7 +109,8 @@ public final class NpcDialogueController {
             case "shop_about" -> reply = "I buy useful materials and sell travel supplies. "
                     + "Payment is in copper, silver and gold coins.";
             case "shop_sell" -> reply = NpcShopService.sellHeld(player);
-            case "buy_bread", "buy_torches", "buy_beef", "buy_arrows" -> {
+            case "buy_bread", "buy_torches", "buy_beef", "buy_arrows",
+                 "buy_apples", "buy_leather_cap", "buy_iron_pickaxe" -> {
                 reply = NpcShopService.buy(player, action);
                 npc.level().playSound(null, npc.blockPosition(),
                     SoundEvents.VILLAGER_YES, SoundSource.NEUTRAL, 0.5F, 1.0F);
