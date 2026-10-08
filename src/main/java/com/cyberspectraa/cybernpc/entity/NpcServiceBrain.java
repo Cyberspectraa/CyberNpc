@@ -187,7 +187,9 @@ final class NpcServiceBrain {
         }
 
         if (role == NpcServiceRole.BANKER) {
-            tickBanker(level, data, record);
+            // Legacy bankers remain valid NPCs in old worlds, but the
+            // retired bank must not run its old service behaviour.
+            npc.getNavigation().stop();
             return;
         }
 

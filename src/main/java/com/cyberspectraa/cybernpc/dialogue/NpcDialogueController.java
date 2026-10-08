@@ -1,19 +1,15 @@
 package com.cyberspectraa.cybernpc.dialogue;
 
 import com.cyberspectraa.cybernpc.compat.CyberServerCompat;
-import com.cyberspectraa.cybernpc.economy.BankSavedData;
-import com.cyberspectraa.cybernpc.economy.CurrencyValue;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.network.DialogueOpenPacket;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModList;
@@ -29,8 +25,8 @@ import java.util.UUID;
 
 /**
  * Single conversation controller for every CyberNpc service and ordinary NPC.
- * The client renders the conversation but never decides rewards, banking,
- * trading, quest registration or NPC identity.
+ * The client renders the conversation but never decides rewards,
+ * coin payments, quest registration or NPC identity.
  */
 @Mod.EventBusSubscriber(modid = "cybernpc")
 public final class NpcDialogueController {
@@ -103,28 +99,18 @@ public final class NpcDialogueController {
             }
             case "shop" -> {
                 page = "shop";
-                reply = "Everything here has a price in guild coins. "
-                        + "Choose something that catches your eye.";
+                reply = "All prices are paid with CyberNpc coins from your inventory. "
+                        + "Your wallet: " + NpcShopService.walletDescription(player) + ".";
+
             }
-            case "shop_about" -> reply = "I buy useful materials and sell travel supplies. "
-                    + "Payment is in copper, silver and gold coins.";
+            case "shop_about" -> reply = "I only accept CyberNpc coins, not emeralds or bank credit. "
+                    + "10 copper = 1 silver, 10 silver = 1 gold; platinum and dragon coins "
+                    + "work too. I'll give change in coins.";
+
             case "shop_sell" -> reply = NpcShopService.sellHeld(player);
             case "buy_bread", "buy_torches", "buy_beef", "buy_arrows",
-                 "buy_apples", "buy_leather_cap", "buy_iron_pickaxe" -> {
-                reply = NpcShopService.buy(player, action);
-                npc.level().playSound(null, npc.blockPosition(),
-                    SoundEvents.VILLAGER_YES, SoundSource.NEUTRAL, 0.5F, 1.0F);
-            }
-            case "bank_balance" -> {
-                long balance = BankSavedData.get((ServerLevel) player.level())
-                    .getBalance(player.getUUID());
-                reply = "Your balance is " + CurrencyValue.format(balance)
-                        + " copper credits.";
-            }
-            case "bank_about" -> reply = "Deposit coins here to keep them safe. "
-                    + "Withdraw any time and I'll give you real coins back.";
-            case "bank_deposit" -> reply = deposit(player);
-            case "bank_withdraw" -> reply = withdraw(player);
+                 "buy_apples", "buy_leather_cap", "buy_iron_pickaxe" ->
+                    reply = NpcShopService.buy(player, action);
             case "guild_register" -> {
                 boolean success = invokeGuild(player, "registerHeldContract");
                 reply = success
@@ -209,10 +195,10 @@ public final class NpcDialogueController {
                 options.add(option("shop_about", "How do your prices work?"));
             }
             case BANKER -> {
-                options.add(option("bank_balance", "What's my account balance?"));
-                options.add(option("bank_deposit", "I'd like to deposit these coins."));
-                options.add(option("bank_withdraw", "I'd like to withdraw my coins."));
-                options.add(option("bank_about", "How does your bank work?"));
+                // Legacy banker NPCs may still exist in older saves.
+                // They now offer ordinary conversation, not bank services.
+                options.add(option("who", "Who are you?"));
+                options.add(option("rumours", "Have you heard any news?"));
             }
             case COURIER -> {
                 options.add(option("mail", "How can I send a letter?"));
@@ -245,7 +231,7 @@ public final class NpcDialogueController {
             case GUILD_RECEPTIONIST -> "Welcome to the Adventurers' Guild. "
                     + "Are you here to register a contract or collect payment?";
             case SHOPKEEPER -> "Welcome! Take a look at what I've got for sale.";
-            case BANKER -> "Welcome to the bank. What can I do for you?";
+            case BANKER -> "Greetings! The bank is no longer in service.";
             case COURIER -> "Letters, packages, deliveries. Can I help?";
             case GUARD -> "Halt a moment, traveller. Everything all right?";
             case POPE -> "Peace be with you. What troubles your heart?";
@@ -253,41 +239,6 @@ public final class NpcDialogueController {
                 ? "Well met. Don't mind the road dust."
                 : "Greetings, traveller. What can I do for you?";
         };
-    }
-
-    private static String deposit(ServerPlayer player) {
-        ItemStack held = player.getMainHandItem();
-        long value = CurrencyValue.valueOf(held);
-        if (value <= 0) return "Hold the coins you want to deposit in your main hand.";
-        held.setCount(0);
-        long balance = BankSavedData.get((ServerLevel) player.level())
-            .deposit(player.getUUID(), value);
-        player.playNotifySound(SoundEvents.EXPERIENCE_ORB_PICKUP,
-            SoundSource.PLAYERS, 0.55F, 1.1F);
-        return "Deposited " + CurrencyValue.format(value)
-            + " credits. Your balance is now " + CurrencyValue.format(balance) + ".";
-    }
-
-    private static String withdraw(ServerPlayer player) {
-        BankSavedData bank = BankSavedData.get((ServerLevel) player.level());
-        long available = bank.getBalance(player.getUUID());
-        if (available <= 0) return "Your bank account is empty.";
-        long amount = Math.min(available, 23_040_000L);
-        if (!bank.withdraw(player.getUUID(), amount)) {
-            return "I couldn't make that withdrawal.";
-        }
-        int dropped = 0;
-        for (ItemStack coins : CurrencyValue.makePayout(amount)) {
-            if (!player.getInventory().add(coins)) {
-                player.drop(coins, false);
-                dropped++;
-            }
-        }
-        player.playNotifySound(SoundEvents.EXPERIENCE_ORB_PICKUP,
-            SoundSource.PLAYERS, 0.55F, 0.95F);
-        return "Withdrew " + CurrencyValue.format(amount)
-            + " credits in coins." + (dropped > 0
-                ? " Some coins were dropped because your inventory is full." : "");
     }
 
     private static boolean invokeGuild(ServerPlayer player, String methodName) {

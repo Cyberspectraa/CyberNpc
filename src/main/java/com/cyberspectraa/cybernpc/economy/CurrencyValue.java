@@ -102,6 +102,26 @@ public final class CurrencyValue {
         return remaining;
     }
 
+    /**
+     * Format a copper-equivalent price in the actual coin denominations.
+     * All prices are physical item coins; there is no bank or virtual balance.
+     */
+    public static String formatCoins(long amount) {
+        if (amount <= 0L) return "0 copper";
+        long left = amount;
+        StringBuilder text = new StringBuilder();
+        long[] values = {DRAGON, PLATINUM, GOLD, SILVER, COPPER};
+        String[] names = {"dragon", "platinum", "gold", "silver", "copper"};
+        for (int i = 0; i < values.length; i++) {
+            long count = left / values[i];
+            left %= values[i];
+            if (count <= 0L) continue;
+            if (text.length() > 0) text.append(", ");
+            text.append(count).append(" ").append(names[i]);
+        }
+        return text.toString();
+    }
+
     public static boolean isCurrency(ItemStack stack) {
         return valueOf(stack) > 0L;
     }
