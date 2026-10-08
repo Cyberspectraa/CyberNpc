@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.44.19
+- Introduced a unified, bottom-of-screen NPC dialogue interface for ordinary citizens, quest NPCs, shopkeepers, bankers, couriers, guards, clergy and Guild Receptionists.
+- The dialogue features the NPC's actual live character portrait opposite the player's own live portrait, with a textured Minecraft GUI panel and readable conversation text.
+- Players choose first-person, prewritten responses; their selected line appears before the NPC's answer in the same conversation.
+- The server validates the specific conversation and offered choice, NPC identity, distance and lifetime before any gameplay action can execute.
+- Added dedicated Shopkeeper service role, spawn egg and a starter selection of coin-priced goods plus server-controlled material sales.
+- Existing banking functions are now available as conversation options rather than chat-only right-click responses.
+- CyberQuest's contract hand-in, rewards, membership card and quest NPC actions are reachable from the relevant dialogue choices when CyberQuest is installed.
+- Config/removal tools still retain interaction priority. No additional art assets or AI-generated portraits are needed; both character portraits use Minecraft's existing renderers.
+
 ## 0.44.18
 - Added the Guild Receptionist NPC service role and a dedicated Guild Receptionist spawn egg in the CyberNpc Spawn Eggs creative tab.
 - Guild Receptionists are stationary persistent service NPCs, compatible with the existing Guild Hall marker setup.
