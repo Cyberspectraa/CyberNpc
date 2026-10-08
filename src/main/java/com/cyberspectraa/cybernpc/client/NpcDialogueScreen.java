@@ -182,18 +182,30 @@ public final class NpcDialogueScreen extends Screen {
         // and skins. Portrait clipping keeps the panel tidy on GUI scales.
         if (npc instanceof LivingEntity living) {
             try {
-                InventoryScreen.renderEntityInInventoryFollowsMouse(
-                    g, npcX + 3, top + 3, npcX + 55, top + 73,
-                    29, 0.0F, mouseX, mouseY, living);
+                g.enableScissor(npcX + 3, top + 3, npcX + 55, top + 73);
+                try {
+                    InventoryScreen.renderEntityInInventoryFollowsMouse(
+                        g, npcX + 29, top + 101, 43,
+                        (float) (npcX + 29 - mouseX),
+                        (float) (top + 45 - mouseY), living);
+                } finally {
+                    g.disableScissor();
+                }
             } catch (RuntimeException ignored) {
                 g.drawCenteredString(font, "NPC", npcX + 29, top + 36, 0xFFDDBB8E);
             }
         }
         if (player != null) {
             try {
-                InventoryScreen.renderEntityInInventoryFollowsMouse(
-                    g, playerX + 3, top + 3, playerX + 55, top + 73,
-                    29, 0.0F, mouseX, mouseY, player);
+                g.enableScissor(playerX + 3, top + 3, playerX + 55, top + 73);
+                try {
+                    InventoryScreen.renderEntityInInventoryFollowsMouse(
+                        g, playerX + 29, top + 101, 43,
+                        (float) (playerX + 29 - mouseX),
+                        (float) (top + 45 - mouseY), player);
+                } finally {
+                    g.disableScissor();
+                }
             } catch (RuntimeException ignored) {
                 g.drawCenteredString(font, "You", playerX + 29, top + 36, 0xFFDDBB8E);
             }
