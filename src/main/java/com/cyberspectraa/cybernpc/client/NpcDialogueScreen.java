@@ -33,8 +33,7 @@ public final class NpcDialogueScreen extends Screen {
     private static final int MUTED = 0xFF785A3C;
     private static final long ENTRY_MS = 280L;
     private static final long SWITCH_MS = 180L;
-    private static final long LETTER_MS = 24L;
-    private static final long REPLY_HOLD_MS = 420L;
+    private static final long LETTER_MS = 52L;
 
     private final DialogueView view;
     private String pendingReply = "";
@@ -87,6 +86,7 @@ public final class NpcDialogueScreen extends Screen {
                 } else {
                     pendingReply = choice.label();
                     waitingForServer = true;
+                    messageLength = 0;
                     speakerChanged = System.currentTimeMillis();
                     CyberNpcNetwork.CHANNEL.sendToServer(
                             new DialogueChoicePacket(view.entityId(), choice.id()));
@@ -138,9 +138,11 @@ public final class NpcDialogueScreen extends Screen {
         boolean playerSpeaking = waitingForServer;
         String speaker = playerSpeaking ? playerName() : view.name();
         String speech = playerSpeaking ? pendingReply : view.speech();
-        int portraitX = x + 11;
+        // NPC faces remain on the left; the player's portrait and dialogue
+        // switch to opposite sides for a readable back-and-forth conversation.
+        int portraitX = playerSpeaking ? x + w - 69 : x + 11;
         int portraitY = y + 26;
-        int textX = x + 84;
+        int textX = playerSpeaking ? x + 11 : x + 84;
         int textWidth = Math.max(90, w - 96);
         int textY = y + 26;
 
@@ -148,7 +150,8 @@ public final class NpcDialogueScreen extends Screen {
         float transition = ease(Math.min(1.0F, (now - speakerChanged) / (float) SWITCH_MS));
         int slide = Math.round((1.0F - transition) * 9.0F);
         portraitFrame(g, portraitX, portraitY);
-        drawSpeakerPortrait(g, playerSpeaking, portraitX - slide, portraitY,
+        drawSpeakerPortrait(g, playerSpeaking,
+                portraitX + (playerSpeaking ? slide : -slide), portraitY,
                 mouseX, mouseY);
         g.drawString(font, font.plainSubstrByWidth(speaker, textWidth - 18),
                 textX + 6, y + 12, 0xFFFFDFA7, false);
@@ -161,6 +164,14 @@ public final class NpcDialogueScreen extends Screen {
             // Typewriter effect, restarted whenever the speaking character changes.
             int count = (int) Math.min(speech.length(),
                     Math.max(0L, (now - speakerChanged) / LETTER_MS));
+            // Short, quiet text blips, never one loud effect per letter or
+            // a burst of sounds when the player clicks to skip the animation.
+            if (count > messageLength && count < speech.length()
+                    && count % 3 == 0
+                    && !Character.isWhitespace(speech.charAt(count - 1))) {
+                Minecraft.getInstance().getSoundManager().play(
+                        SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.65F, 0.14F));
+            }
             messageLength = count;
             String visible = speech.substring(0, count);
             List<FormattedCharSequence> lines = font.split(Component.literal(visible),
@@ -179,8 +190,11 @@ public final class NpcDialogueScreen extends Screen {
             g.disableScissor();
         }
 
-        g.drawCenteredString(font, playerSpeaking ? "Your reply" : "Choose your reply",
-                x + w / 2, y + 108, 0xFFFFD79A);
+        String prompt = !playerSpeaking ? "Choose your reply"
+                : countDone(speech) ? (queuedNpcReply != null
+                    ? "Click to continue" : "Waiting for a response...")
+                    : "Your reply";
+        g.drawCenteredString(font, prompt, x + w / 2, y + 108, 0xFFFFD79A);
         for (Button button : replyButtons) {
             button.visible = !waitingForServer && messageLength >= view.speech().length();
             // Widgets use fixed positions; keep them in sync with entrance motion.
@@ -190,17 +204,8 @@ public final class NpcDialogueScreen extends Screen {
         super.render(g, mouseX, mouseY, partialTick);
     }
 
-    @Override
-    public void tick() {
-        super.tick();
-        if (!waitingForServer || queuedNpcReply == null) return;
-        long displayedFor = System.currentTimeMillis() - speakerChanged;
-        long completeAfter = pendingReply.length() * LETTER_MS + REPLY_HOLD_MS;
-        if (displayedFor >= completeAfter) {
-            DialogueView next = queuedNpcReply;
-            queuedNpcReply = null;
-            Minecraft.getInstance().setScreen(new NpcDialogueScreen(next));
-        }
+    private boolean countDone(String speech) {
+        return messageLength >= speech.length();
     }
 
     @Override
@@ -208,10 +213,21 @@ public final class NpcDialogueScreen extends Screen {
         if (button == 0) {
             String currentLine = waitingForServer ? pendingReply : view.speech();
             if (messageLength < currentLine.length()) {
-                // Clicking an unfinished line reveals it in full, without selecting a reply.
+                // First click completes the typewriter line; it never skips
+                // over the player's actual reply.
                 speakerChanged = System.currentTimeMillis()
                         - currentLine.length() * LETTER_MS;
                 messageLength = currentLine.length();
+                return true;
+            }
+            if (waitingForServer) {
+                // Only a second click after the full player line is visible
+                // reveals the already validated, server-provided NPC answer.
+                if (queuedNpcReply != null) {
+                    DialogueView next = queuedNpcReply;
+                    queuedNpcReply = null;
+                    Minecraft.getInstance().setScreen(new NpcDialogueScreen(next));
+                }
                 return true;
             }
         }
