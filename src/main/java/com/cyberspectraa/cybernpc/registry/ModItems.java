@@ -118,6 +118,18 @@ public final class ModItems {
                             new Item.Properties()
                     ));
 
+    public static final RegistryObject<Item> SHOPKEEPER_NPC_SPAWN_EGG =
+            ITEMS.register("shopkeeper_npc_spawn_egg", () ->
+                    new CyberNpcSpawnEggItem(
+                            ModEntities.CYBER_NPC,
+                            0x513A20,
+                            0xDBAD67,
+                            NpcType.MAIN,
+                            "Shopkeeper",
+                            false,
+                            new Item.Properties()
+                    ));
+
     public static final RegistryObject<Item> MASON_NPC_SPAWN_EGG =
             ITEMS.register("mason_npc_spawn_egg", () ->
                     new CyberNpcSpawnEggItem(
