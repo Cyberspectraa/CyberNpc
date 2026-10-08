@@ -48,7 +48,7 @@ public final class NpcDialogueController {
         SESSIONS.put(player.getUUID(),
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
         npc.getLookControl().setLookAt(player, 25.0F, 25.0F);
-        send(player, npc, page, greeting(npc));
+        send(player, npc, page, "", greeting(npc));
     }
 
     public static void choose(ServerPlayer player, int npcId, String action) {
@@ -75,6 +75,9 @@ public final class NpcDialogueController {
             return;
         }
 
+        String playerLine = validOptions.stream()
+            .filter(o -> o.id().equals(action))
+            .findFirst().orElseThrow().label();
         String page = session.page();
         String reply;
 
@@ -157,7 +160,7 @@ public final class NpcDialogueController {
         SESSIONS.put(player.getUUID(),
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
         npc.getLookControl().setLookAt(player, 25.0F, 25.0F);
-        send(player, npc, page, reply);
+        send(player, npc, page, playerLine, reply);
     }
 
     private static boolean valid(ServerPlayer player, CyberNpcEntity npc) {
@@ -167,12 +170,12 @@ public final class NpcDialogueController {
     }
 
     private static void send(ServerPlayer player, CyberNpcEntity npc,
-                             String page, String speech) {
+                             String page, String playerLine, String speech) {
         String role = npc.getRole().isBlank() ? "Citizen" : npc.getRole();
         CyberNpcNetwork.CHANNEL.send(
             PacketDistributor.PLAYER.with(() -> player),
             new DialogueOpenPacket(new DialogueView(npc.getId(),
-                npc.getName().getString(), role, speech, options(npc, page))));
+                npc.getName().getString(), role, playerLine, speech, options(npc, page))));
     }
 
     private static DialogueView.Option option(String id, String label) {
@@ -188,51 +191,51 @@ public final class NpcDialogueController {
                     options.add(option(item.action(), item.label()));
                 }
             }
-            options.add(option("back", "Back to conversation"));
+            options.add(option("back", "I'd like to ask something else."));
             return List.copyOf(options);
         }
 
         switch (role) {
             case GUILD_RECEPTIONIST -> {
-                options.add(option("guild_register", "Register held contract"));
-                options.add(option("guild_claim", "Collect contract rewards"));
-                options.add(option("guild_card", "Guild membership card"));
+                options.add(option("guild_register", "I'd like to register this contract."));
+                options.add(option("guild_claim", "I'd like to collect my rewards."));
+                options.add(option("guild_card", "May I see my guild card?"));
                 options.add(option("guild_info", "How does the guild work?"));
             }
             case SHOPKEEPER -> {
-                options.add(option("shop", "Browse supplies"));
-                options.add(option("shop_sell", "Sell held materials"));
-                options.add(option("shop_about", "About your prices"));
+                options.add(option("shop", "Show me what you have for sale."));
+                options.add(option("shop_sell", "I'd like to sell these materials."));
+                options.add(option("shop_about", "How do your prices work?"));
             }
             case BANKER -> {
-                options.add(option("bank_balance", "Check account balance"));
-                options.add(option("bank_deposit", "Deposit held coins"));
-                options.add(option("bank_withdraw", "Withdraw all coins"));
-                options.add(option("bank_about", "How does banking work?"));
+                options.add(option("bank_balance", "What's my account balance?"));
+                options.add(option("bank_deposit", "I'd like to deposit these coins."));
+                options.add(option("bank_withdraw", "I'd like to withdraw my coins."));
+                options.add(option("bank_about", "How does your bank work?"));
             }
             case COURIER -> {
-                options.add(option("mail", "How do I send a letter?"));
-                options.add(option("rumours", "Any news from the road?"));
+                options.add(option("mail", "How can I send a letter?"));
+                options.add(option("rumours", "Have you heard any news?"));
             }
             case GUARD -> {
                 options.add(option("guard", "Is the town safe?"));
-                options.add(option("rumours", "Any trouble nearby?"));
+                options.add(option("rumours", "Has there been any trouble?"));
             }
             case POPE -> {
-                options.add(option("church", "May I have a blessing?"));
-                options.add(option("rumours", "Heard any news?"));
+                options.add(option("church", "Could I have a blessing?"));
+                options.add(option("rumours", "Have you heard any news?"));
             }
             default -> {
                 options.add(option("who", "Who are you?"));
                 if (npc.getNpcType() == NpcType.QUEST || !npc.getStoryNpcId().isBlank()
                     || npc.getPersistentData().contains("CyberQuestBindings")) {
-                    options.add(option("work", "Do you have any work?"));
+                    options.add(option("work", "Do you have any work for me?"));
                 }
                 options.add(option("rumours", "Have you heard any rumours?"));
-                options.add(option("how_are_you", "How are things?"));
+                options.add(option("how_are_you", "How have you been?"));
             }
         }
-        options.add(option("leave", "Goodbye"));
+        options.add(option("leave", "Farewell."));
         return List.copyOf(options);
     }
 
