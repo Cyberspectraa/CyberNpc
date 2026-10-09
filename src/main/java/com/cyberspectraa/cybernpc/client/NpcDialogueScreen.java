@@ -20,9 +20,9 @@ import net.minecraft.world.entity.LivingEntity;
 import java.util.List;
 
 /**
- * Cinematic RPG conversation panel. Only the current speaker is rendered:
- * an NPC during dialogue, and the player while their selected reply types out.
- * The actual server-owned dialogue choices are kept intact.
+ * Compact, bottom-anchored RPG dialogue bar with detached reply buttons.
+ * The world stays visible while speaking, and only the current speaker
+ * has a portrait. All dialogue options and purchases remain server-owned.
  */
 public final class NpcDialogueScreen extends Screen {
     private static final ResourceLocation WOOD =
@@ -70,17 +70,19 @@ public final class NpcDialogueScreen extends Screen {
         speakerChanged = screenStarted;
         int w = panelWidth();
         int x = (width - w) / 2;
-        int y = panelTop();
         List<DialogueView.Option> options = view.options();
-        int buttonWidth = Math.max(80, (w - 29) / 2);
-        // The shop may show seven temporary offers plus Back. Keep the
-        // fourth row inside the panel instead of clipping it off-screen.
-        int rowSpacing = options.size() > 6 ? 16 : 20;
-        int buttonHeight = options.size() > 6 ? 15 : 18;
+        int cols = replyColumns();
+        int rows = (options.size() + cols - 1) / cols;
+        int spacing = 20;
+        int buttonGap = 6;
+        int buttonWidth = (w - 16 - (cols - 1) * buttonGap) / cols;
+        // Reply buttons float above the bottom dialogue bar. They do not
+        // enlarge the bar or cause an opaque panel to cover the gameplay.
+        int replyTop = panelTop() - 12 - rows * spacing;
         for (int i = 0; i < options.size(); i++) {
             DialogueView.Option choice = options.get(i);
-            int col = i % 2;
-            int row = i / 2;
+            int col = i % cols;
+            int row = i / cols;
             Button button = Button.builder(Component.literal(choice.label()), b -> {
                 if (waitingForServer) return;
                 if ("leave".equals(choice.id())) {
@@ -96,8 +98,8 @@ public final class NpcDialogueScreen extends Screen {
                             new DialogueChoicePacket(view.entityId(), choice.id()));
                     for (Button other : replyButtons) other.active = false;
                 }
-            }).pos(x + 9 + col * (buttonWidth + 9),
-                    y + 119 + row * rowSpacing).size(buttonWidth, buttonHeight).build();
+            }).pos(x + 8 + col * (buttonWidth + buttonGap),
+                    replyTop + row * spacing).size(buttonWidth, 18).build();
             replyButtons.add(addRenderableWidget(button));
         }
         Minecraft.getInstance().getSoundManager().play(
@@ -105,20 +107,32 @@ public final class NpcDialogueScreen extends Screen {
     }
 
     private int panelWidth() {
-        return Math.max(220, Math.min(width - 12, 568));
+        return Math.max(100, Math.min(width - 14, 520));
     }
 
     private int panelHeight() {
-        return Math.min(height - 8, 188);
+        return Math.min(height - 12, 96);
     }
 
     private int panelTop() {
-        return height - panelHeight() - 4;
+        return height - panelHeight() - 5;
+    }
+
+    private int replyColumns() {
+        // Small GUI scales can use a single column rather than placing
+        // two unreadably narrow buttons beside each other.
+        return panelWidth() < 330 ? 1 : 2;
+    }
+
+    private int replyTop() {
+        int cols = replyColumns();
+        int rows = (view.options().size() + cols - 1) / cols;
+        return panelTop() - 12 - rows * 20;
     }
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        renderBackground(g);
+        // Do not dim the whole world; the compact HUD occupies the bottom only.
         int w = panelWidth();
         int h = panelHeight();
         int x = (width - w) / 2;
@@ -128,7 +142,7 @@ public final class NpcDialogueScreen extends Screen {
         int rise = Math.round((1.0F - entry) * 18.0F);
         y += rise;
 
-        // Frame and parchment remain a single compact HUD; no full-screen opaque overlay.
+        // Narrow wooden dialogue bar anchored to the bottom of the screen.
         g.fill(x - 2, y - 2, x + w + 2, y + h + 2, 0xEF1F130D);
         for (int px = x; px < x + w; px += 16) {
             for (int py = y; py < y + h; py += 16) {
@@ -145,10 +159,10 @@ public final class NpcDialogueScreen extends Screen {
         // NPC faces remain on the left; the player's portrait and dialogue
         // switch to opposite sides for a readable back-and-forth conversation.
         int portraitX = playerSpeaking ? x + w - 69 : x + 11;
-        int portraitY = y + 26;
-        int textX = playerSpeaking ? x + 11 : x + 84;
-        int textWidth = Math.max(90, w - 96);
-        int textY = y + 26;
+        int portraitY = y + 10;
+        int textX = playerSpeaking ? x + 10 : x + 81;
+        int textWidth = Math.max(65, w - 91);
+        int textY = y + 25;
 
         // Only the active speaker receives a portrait or a nameplate.
         float transition = ease(Math.min(1.0F, (now - speakerChanged) / (float) SWITCH_MS));
@@ -157,10 +171,10 @@ public final class NpcDialogueScreen extends Screen {
         drawSpeakerPortrait(g, playerSpeaking,
                 portraitX + (playerSpeaking ? slide : -slide), portraitY,
                 mouseX, mouseY);
-        g.drawString(font, font.plainSubstrByWidth(speaker, textWidth - 18),
-                textX + 6, y + 12, 0xFFFFDFA7, false);
+        g.drawString(font, font.plainSubstrByWidth(speaker, Math.max(20, textWidth - 6)),
+                textX + 6, y + 11, 0xFFFFDFA7, false);
 
-        int paperHeight = 77;
+        int paperHeight = 62;
         paperPanel(g, textX, textY, textWidth, paperHeight);
         g.enableScissor(textX + 5, textY + 5, textX + textWidth - 5,
                 textY + paperHeight - 5);
@@ -181,29 +195,34 @@ public final class NpcDialogueScreen extends Screen {
             List<FormattedCharSequence> lines = font.split(Component.literal(visible),
                     Math.max(60, textWidth - 14));
             int lineY = textY + 7;
-            for (FormattedCharSequence line : lines) {
-                if (lineY + 9 > textY + paperHeight - 4) break;
-                g.drawString(font, line, textX + 7, lineY, INK, false);
+            int maxVisibleLines = Math.max(1, (paperHeight - 14) / 11);
+            // Reveal the newest text as it types even if a long speech wraps
+            // beyond the available height of the compact dialogue bar.
+            int firstLine = Math.max(0, lines.size() - maxVisibleLines);
+            for (int i = firstLine; i < lines.size(); i++) {
+                g.drawString(font, lines.get(i), textX + 7, lineY, INK, false);
                 lineY += 11;
-            }
-            if (playerSpeaking && count >= speech.length() && queuedNpcReply == null) {
-                g.drawString(font, "Waiting for a response...",
-                        textX + 7, textY + paperHeight - 14, MUTED, false);
             }
         } finally {
             g.disableScissor();
         }
 
-        String prompt = !playerSpeaking ? "Choose your reply"
-                : countDone(speech) ? (queuedNpcReply != null
-                    ? "Click to continue" : "Waiting for a response...")
+        boolean showReplies = !waitingForServer
+                && messageLength >= view.speech().length() && entry >= 1.0F;
+        // The reply header is separated from the main dialogue bar. While
+        // the player is talking, this area becomes a click-to-continue hint.
+        if (playerSpeaking) {
+            String hint = countDone(speech)
+                    ? (queuedNpcReply != null ? "Click to continue"
+                        : "Waiting for a response...")
                     : "Your reply";
-        g.drawCenteredString(font, prompt, x + w / 2, y + 108, 0xFFFFD79A);
+            g.drawCenteredString(font, hint, x + w / 2, panelTop() - 13, 0xFFFFD79A);
+        } else if (showReplies && !replyButtons.isEmpty()) {
+            g.drawCenteredString(font, "Choose your reply",
+                    x + w / 2, replyTop() - 13, 0xFFFFD79A);
+        }
         for (Button button : replyButtons) {
-            button.visible = !waitingForServer && messageLength >= view.speech().length();
-            // Widgets use fixed positions; keep them in sync with entrance motion.
-            // They become visible after the entrance and the spoken line finish.
-            if (entry < 1.0F) button.visible = false;
+            button.visible = showReplies;
         }
         super.render(g, mouseX, mouseY, partialTick);
     }
