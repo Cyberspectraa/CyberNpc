@@ -86,10 +86,16 @@ public final class NpcDialogueScreen extends Screen {
             int row = i / cols;
             Button button = Button.builder(Component.literal(choice.label()), b -> {
                 if (waitingForServer) return;
-                if ("leave".equals(choice.id())) {
+                if ("leave".equals(choice.id())
+                        || "intro_finish".equals(choice.id())
+                        || "intro_skip".equals(choice.id())) {
                     CyberNpcNetwork.CHANNEL.sendToServer(
-                            new DialogueChoicePacket(view.entityId(), "leave"));
-                    onClose();
+                            new DialogueChoicePacket(view.entityId(), choice.id()));
+                    // Ending a scripted welcome must close the client screen,
+                    // not leave it waiting for another NPC response. Do not
+                    // send a second skip command for the same click.
+                    if (isIntro()) Minecraft.getInstance().setScreen(null);
+                    else onClose();
                 } else {
                     pendingReply = choice.label();
                     waitingForServer = true;
