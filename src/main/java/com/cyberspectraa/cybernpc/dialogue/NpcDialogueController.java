@@ -1,5 +1,7 @@
 package com.cyberspectraa.cybernpc.dialogue;
 
+import net.minecraft.commands.arguments.EntityAnchorArgument;
+
 import com.cyberspectraa.cybernpc.compat.CyberServerCompat;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.entity.NpcType;
@@ -50,6 +52,11 @@ public final class NpcDialogueController {
 
     public static void openIntro(ServerPlayer player, CyberNpcEntity npc) {
         if (!CyberIntroService.isGreeting(player) || !valid(player, npc)) return;
+        // Restore normal first-person gameplay looking toward the Pope.
+        // ServerPlayer.lookAt synchronises the orientation to the client;
+        // it does not move the player's spawn position or camera entity.
+        player.lookAt(EntityAnchorArgument.Anchor.EYES,
+                npc, EntityAnchorArgument.Anchor.EYES);
         String page = "intro_0";
         SESSIONS.put(player.getUUID(),
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
