@@ -10,6 +10,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.ArmorStand;
@@ -44,8 +45,12 @@ public final class SummoningCinematicScreen extends Screen {
     private static final int REVEAL_TICKS = CyberIntroService.REVEAL_TICKS;
     private static final int FADE_TICKS = 19;
 
-    private static final String PACK_TITLE = "CYBERSPECTRA";
-    private static final String PACK_SUBTITLE = "SEASON II";
+    // Temporary Blockbench artwork. Replace this one PNG when the final
+    // pack name and title model are approved.
+    private static final ResourceLocation TITLE_ART = new ResourceLocation(
+            CyberNpc.MOD_ID, "textures/gui/testing_version_title.png");
+    private static final int TITLE_ART_WIDTH = 861;
+    private static final int TITLE_ART_HEIGHT = 126;
     private static final double SHOT_DISTANCE = 5.2D;
     private static final double SHOT_ELEVATION = 2.25D;
     private static final double ARC_DEGREES = 12.0D;
@@ -282,31 +287,38 @@ public final class SummoningCinematicScreen extends Screen {
     }
 
     private void renderTitle(GuiGraphics graphics, double titleTime) {
-        // A deliberately clean pack title, not a replacement for the pack's
-        // existing summoning art or animations.
+        // The placeholder uses the actual Blockbench wooden lettering,
+        // rasterised once as a lightweight transparent image. No model
+        // loader, offscreen 3D renderer or ongoing texture generation.
         graphics.fill(0, 0, width, height, 0xFF101016);
         double opacity = Math.min(1D,
                 Math.min(titleTime / 12D, (TITLE_TICKS - titleTime) / 13D));
-        int alpha = (int) Math.round(Math.max(0D, opacity) * 255D);
-        int titleColor = (alpha << 24) | 0x00F5E6CD;
-        int subColor = (alpha << 24) | 0x00A999BB;
+        float alpha = (float) Math.max(0D, opacity);
+
+        // Very gentle title push without altering the already-stable
+        // world-camera movement or server-owned summoning timings.
+        float progress = (float) Math.max(0D,
+                Math.min(1D, titleTime / TITLE_TICKS));
+        float smooth = progress * progress * (3F - 2F * progress);
+        float fitWidth = Math.min(width - 24F, 700F);
+        float fitHeight = height * 0.34F;
+        float baseScale = Math.min(
+                fitWidth / TITLE_ART_WIDTH,
+                fitHeight / TITLE_ART_HEIGHT);
+        float scale = Math.max(0.01F, baseScale)
+                * (0.965F + 0.035F * smooth);
 
         graphics.pose().pushPose();
-        graphics.pose().translate(width / 2.0F, height / 2.0F - 11.0F, 0.0F);
-        float scale = Math.min(2.2F,
-                Math.max(1F, (width - 44F) / Math.max(1F, font.width(PACK_TITLE))));
+        graphics.pose().translate(width / 2.0F, height / 2.0F - 8.0F, 0.0F);
         graphics.pose().scale(scale, scale, 1.0F);
-        graphics.drawCenteredString(font, PACK_TITLE, 0, -9, titleColor);
+        graphics.setColor(1F, 1F, 1F, alpha);
+        graphics.blit(TITLE_ART,
+                -TITLE_ART_WIDTH / 2, -TITLE_ART_HEIGHT / 2,
+                0, 0,
+                TITLE_ART_WIDTH, TITLE_ART_HEIGHT,
+                TITLE_ART_WIDTH, TITLE_ART_HEIGHT);
+        graphics.setColor(1F, 1F, 1F, 1F);
         graphics.pose().popPose();
-
-        graphics.drawCenteredString(font, PACK_SUBTITLE,
-                width / 2, height / 2 + 24, subColor);
-        int lineWidth = Math.min(106, width / 2 - 20);
-        if (lineWidth > 0) {
-            graphics.fill(width / 2 - lineWidth, height / 2 + 15,
-                    width / 2 + lineWidth, height / 2 + 16,
-                    (alpha << 24) | 0x007E6A93);
-        }
     }
 
     private void renderSummoningOverlay(GuiGraphics graphics, double elapsed) {
