@@ -31,6 +31,7 @@ public final class CyberNpcCommands {
                                                 context.getSource(),
                                                 StringArgumentType.getString(context, "name")
                                         ))))
+                        .then(Commands.literal("admin")
                         .then(Commands.literal("role")
                                 .then(Commands.argument("target", EntityArgument.entity())
                                         .then(Commands.argument("role", StringArgumentType.greedyString())
@@ -55,6 +56,7 @@ public final class CyberNpcCommands {
                                                         EntityArgument.getEntity(context, "target"),
                                                         IntegerArgumentType.getInteger(context, "value")
                                                 )))))
+                        )
                         .then(Commands.literal("remove")
                                 .then(Commands.argument("target", EntityArgument.entity())
                                         .executes(context -> remove(
