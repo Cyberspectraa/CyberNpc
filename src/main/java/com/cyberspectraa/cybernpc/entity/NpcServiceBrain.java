@@ -188,6 +188,9 @@ final class NpcServiceBrain {
         }
 
         if (role == NpcServiceRole.POPE && CyberIntroService.tickPope(npc, level)) {
+            // A scheduled welcome overrides bedtime. Clear any occupied-bed
+            // claim before the Pope walks to the summoning area.
+            wakePope(level);
             return;
         }
 
