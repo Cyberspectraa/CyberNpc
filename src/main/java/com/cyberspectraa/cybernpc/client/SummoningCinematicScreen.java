@@ -16,6 +16,7 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.RenderHandEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -88,6 +89,14 @@ public final class SummoningCinematicScreen extends Screen {
         }
     }
 
+    /** Rendering must stay cinematic even on a frame that still uses the player's view. */
+    @SubscribeEvent
+    public static void onRenderHand(RenderHandEvent event) {
+        if (Minecraft.getInstance().screen instanceof SummoningCinematicScreen) {
+            event.setCanceled(true);
+        }
+    }
+
     private void positionCamera(double timeTicks) {
         Minecraft client = Minecraft.getInstance();
         if (camera == null || client.level == null || client.player == null) return;
@@ -97,7 +106,11 @@ public final class SummoningCinematicScreen extends Screen {
         double eased = u * u * (3D - 2D * u);
         double radians = Math.toRadians(direction + 140D - 115D * eased);
         double radius = 4.6D - 1.9D * eased;
-        Vec3 focus = Vec3.atBottomCenterOf(arrival).add(0D, 1.05D, 0D);
+        // Frame the character at the configured arrival block. The target
+        // adapts to shorter/taller races, including Pehkui-scaled players.
+        double focusHeight = Math.max(0.4D,
+                Math.min(1.5D, client.player.getBbHeight() * 0.58D));
+        Vec3 focus = Vec3.atBottomCenterOf(arrival).add(0D, focusHeight, 0D);
 
         double x = focus.x + Math.sin(radians) * radius;
         double z = focus.z + Math.cos(radians) * radius;
@@ -122,9 +135,13 @@ public final class SummoningCinematicScreen extends Screen {
         double dy = focus.y - actual.y;
         float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
         float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
-        camera.setPos(actual.x, actual.y, actual.z);
+        // Minecraft renders from the camera entity's EYES, not its feet.
+        // Treat 'actual' as the intended viewpoint and offset the armor stand
+        // by its eye height; otherwise the shot looks over the arrival spot.
+        double feetY = actual.y - camera.getEyeHeight();
+        camera.setPos(actual.x, feetY, actual.z);
         camera.xo = actual.x;
-        camera.yo = actual.y;
+        camera.yo = feetY;
         camera.zo = actual.z;
         camera.setYRot(yaw);
         camera.setXRot(pitch);
