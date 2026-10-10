@@ -22,7 +22,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
-import net.minecraftforge.event.entity.LivingExperienceDropEvent;
+import net.minecraftforge.event.entity.living.LivingExperienceDropEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModList;
@@ -329,7 +329,7 @@ public final class CyberIntroService {
         session.stage = Stage.DEAD;
         session.stageTick = player.getServer().overworld().getGameTime();
         player.setInvulnerable(false);
-        player.hurt(player.damageSources().outOfWorld(), Float.MAX_VALUE);
+        player.hurt(player.damageSources().fellOutOfWorld(), Float.MAX_VALUE);
         // Vanilla death must occur. Cinematic Respawn (client-only) handles
         // the camera and automatic respawn; without it the normal death screen
         // remains available, and players can respawn manually.
