@@ -149,9 +149,17 @@ public final class CyberIntroService {
             if (player == null) continue;
             if (session.stage == Stage.CUSTOMISING && created(player))
                 session.stage = Stage.READY;
-            hide(player);
-            if (session.stage == Stage.READY && active != null && !session.player.equals(active))
+            // Keep creators and queued players hidden, but NEVER re-hide
+            // someone after the scripted summoning reveal has occurred.
+            if (session.stage == Stage.CUSTOMISING || session.stage == Stage.READY
+                    || (session.stage == Stage.CINEMATIC && !session.revealed)) {
+                hide(player);
+            } else {
+                player.setInvulnerable(true);
+                player.setNoGravity(true);
                 player.setDeltaMovement(Vec3.ZERO);
+                player.fallDistance = 0F;
+            }
         }
 
         if (active == null) {
