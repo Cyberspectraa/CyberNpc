@@ -1,6 +1,7 @@
 package com.cyberspectraa.cybernpc.command;
 
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
+import com.cyberspectraa.cybernpc.intro.CyberIntroService;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.mojang.brigadier.arguments.BoolArgumentType;
@@ -31,6 +32,11 @@ public final class CyberNpcCommands {
                                                 context.getSource(),
                                                 StringArgumentType.getString(context, "name")
                                         ))))
+                        .then(Commands.literal("intro")
+                                .then(Commands.literal("setarrival")
+                                        .executes(ctx -> CyberIntroService.setArrival(ctx.getSource())))
+                                .then(Commands.literal("setpopewait")
+                                        .executes(ctx -> CyberIntroService.setPopeWait(ctx.getSource()))))
                         .then(Commands.literal("admin")
                         .then(Commands.literal("role")
                                 .then(Commands.argument("target", EntityArgument.entity())
