@@ -80,7 +80,7 @@ public final class CyberIntroService {
         IntroSettings data = IntroSettings.get(source.getServer());
         data.setArrival(source.getLevel(), BlockPos.containing(source.getPosition()), source.getRotation().y);
         source.sendSuccess(() -> Component.literal("Summoning arrival saved. "
-                + (data.ready() ? "The introduction is ready." : "Now set /cyberintro setpopewait.")), true);
+                + (data.ready() ? "The introduction is ready." : "Now set /cybernpc intro setpopewait.")), true);
         return 1;
     }
 
@@ -88,7 +88,7 @@ public final class CyberIntroService {
         IntroSettings data = IntroSettings.get(source.getServer());
         data.setPopeWait(source.getLevel(), BlockPos.containing(source.getPosition()), source.getRotation().y);
         source.sendSuccess(() -> Component.literal("Pope waiting point saved. "
-                + (data.ready() ? "The introduction is ready." : "Now set /cyberintro setarrival.")), true);
+                + (data.ready() ? "The introduction is ready." : "Now set /cybernpc intro setarrival.")), true);
         return 1;
     }
 
