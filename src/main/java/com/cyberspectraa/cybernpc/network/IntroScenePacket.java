@@ -21,10 +21,10 @@ public record IntroScenePacket(boolean begin, BlockPos arrival, float yaw) {
     public static void handle(IntroScenePacket p,
                               Supplier<NetworkEvent.Context> supplier) {
         NetworkEvent.Context context = supplier.get();
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+        context.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
             if (p.begin()) SummoningCinematicScreen.open(p.arrival(), p.yaw());
             else SummoningCinematicScreen.closeFromServer();
-        });
+        }));
         context.setPacketHandled(true);
     }
 }
