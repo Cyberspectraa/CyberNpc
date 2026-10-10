@@ -12,11 +12,13 @@ public record IntroControlPacket(boolean skip) {
     public static IntroControlPacket decode(FriendlyByteBuf buf) { return new IntroControlPacket(buf.readBoolean()); }
     public static void handle(IntroControlPacket p, Supplier<NetworkEvent.Context> supplier) {
         NetworkEvent.Context ctx = supplier.get();
-        ServerPlayer player = ctx.getSender();
-        if (player != null) {
-            if (p.skip()) CyberIntroService.skip(player);
-            else CyberIntroService.advanceFromScene(player);
-        }
+        ctx.enqueueWork(() -> {
+            ServerPlayer player = ctx.getSender();
+            if (player != null) {
+                if (p.skip()) CyberIntroService.skip(player);
+                else CyberIntroService.advanceFromScene(player);
+            }
+        });
         ctx.setPacketHandled(true);
     }
 }
