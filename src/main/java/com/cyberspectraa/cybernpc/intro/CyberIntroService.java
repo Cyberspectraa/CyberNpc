@@ -4,12 +4,13 @@ import com.cyberspectraa.cybernpc.dialogue.NpcDialogueController;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
+import com.cyberspectraa.cybernpc.network.IntroQueuePacket;
 import com.cyberspectraa.cybernpc.network.IntroScenePacket;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -17,50 +18,62 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.entity.living.LivingDropsEvent;
-import net.minecraftforge.event.entity.living.LivingExperienceDropEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.network.PacketDistributor;
+
 import javax.annotation.Nullable;
-import java.util.*;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
 
 /**
- * One-at-a-time first arrivals. An ordinary server death deliberately triggers
- * the optional client-side Cinematic Respawn mod. CyberNpc does not fake a
- * death screen and does not replace that mod's cinematics.
+ * One-at-a-time, death-free first arrival. The camera is wholly client-side,
+ * while the server controls player concealment, the reveal, the queue,
+ * the Pope's priority navigation, and conversation.
  *
- * The death is special: inventories and XP are snapshotted and restored after
- * respawn. This cannot suppress every third-party mod's death side effects.
+ * No NPC dialogue lines are authored here; all existing Pope dialogue remains
+ * in NpcDialogueController and must be approved separately by the mod owner.
  */
 @Mod.EventBusSubscriber(modid = "cybernpc")
 public final class CyberIntroService {
     private static final String ROOT = "CyberIntro";
     private static final String PENDING = "Pending";
     private static final String DONE = "Completed";
-    private static final String SCRIPTED_DEATH = "SummoningDeath";
-    private static final int REVEAL_DELAY_TICKS = 80;
+    private static final String LEGACY_DEATH = "SummoningDeath";
+
+    /** 130 server ticks = 6.5 seconds at 20 TPS (minimum requested: 5 seconds). */
+    public static final int SCENE_TICKS = 130;
+    public static final int REVEAL_TICKS = 62;
+    private static final int SCENE_GRACE_TICKS = 35;
     private static final int POPE_TIMEOUT_TICKS = 800;
+
     private static final Map<UUID, Session> QUEUE = new LinkedHashMap<>();
     @Nullable private static UUID active;
     @Nullable private static UUID chosenPope;
     @Nullable private static UUID dialogueOpen;
 
-    private enum Stage { CUSTOMISING, WAITING, DEAD, RESPAWNING, GREETING }
+    private enum Stage { CUSTOMISING, WAITING, CINEMATIC, GREETING }
 
     private static final class Session {
         final UUID id;
         Stage stage;
         long stageTick;
         boolean queueScreenSent;
+        boolean revealed;
         Session(UUID id, Stage stage) { this.id = id; this.stage = stage; }
     }
+
     private CyberIntroService() {}
 
     public static int setArrival(net.minecraft.commands.CommandSourceStack source) {
@@ -89,8 +102,6 @@ public final class CyberIntroService {
 
     private static boolean customised(ServerPlayer player) {
         if (!created(player)) return false;
-        // CyberClasses is optional, but when installed class selection
-        // must finish before anyone enters the summon queue.
         return !ModList.get().isLoaded("cyberclasses")
                 || player.getPersistentData().getCompound("CyberClasses").getBoolean("ClassChosen");
     }
@@ -110,51 +121,42 @@ public final class CyberIntroService {
                 && player.getServer().getLevel(settings.arrival().dimension()) != null;
     }
 
-    /** Optional reflection hook from CyberRaces and CyberClasses. */
+    /** Optional reflection hook from CyberRaces/CyberClasses. */
     public static boolean beginSummoning(ServerPlayer player) {
         if (!configured(player) || state(player).getBoolean(DONE)) return false;
         mark(player, true, false);
         Session session = QUEUE.computeIfAbsent(player.getUUID(),
                 id -> new Session(id, Stage.CUSTOMISING));
-        if (session.stage == Stage.CUSTOMISING && customised(player))
-            session.stage = Stage.WAITING;
-        hide(player);
+        if (session.stage == Stage.CUSTOMISING && customised(player)) session.stage = Stage.WAITING;
+        hold(player, true);
         return true;
     }
 
+    /** Returning players with interrupted introductions must stay hidden. */
     public static boolean resumeIfPending(ServerPlayer player) {
         if (!configured(player) || !state(player).getBoolean(PENDING)
                 || state(player).getBoolean(DONE)) return false;
         QUEUE.put(player.getUUID(), new Session(player.getUUID(),
                 customised(player) ? Stage.WAITING : Stage.CUSTOMISING));
-        hide(player);
+        hold(player, true);
         return true;
     }
 
     @SubscribeEvent
     public static void onLogin(PlayerEvent.PlayerLoggedInEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer player) || !configured(player)) return;
-        if (state(player).getBoolean(DONE)) return;
-        // If someone disconnected between the scripted death and respawn,
-        // recover their inventory/checkpoint before retrying the queue.
-        if (state(player).getBoolean(SCRIPTED_DEATH)) {
-            CompoundTag previous = state(player);
-            if (previous.contains("Inventory")) {
-                player.getInventory().load(previous.getList("Inventory", 10));
-            }
-            player.experienceLevel = previous.getInt("VanillaLevel");
-            player.totalExperience = previous.getInt("VanillaXp");
-            player.experienceProgress = previous.getFloat("VanillaProgress");
-            restoreCheckpoint(player);
-        }
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        // Migrate anyone who disconnected during the previous real-death
+        // implementation, without causing another death or changing their XP.
+        restoreOldScriptedDeath(player);
+        if (!configured(player) || state(player).getBoolean(DONE)) return;
         if (state(player).getBoolean(PENDING)) {
             resumeIfPending(player);
         } else if (!created(player)) {
             mark(player, true, false);
             QUEUE.put(player.getUUID(), new Session(player.getUUID(), Stage.CUSTOMISING));
-            hide(player);
+            hold(player, true);
         } else {
-            // Previously existing characters aren't forcibly killed on upgrade.
+            // Existing characters on upgrade never become new arrivals.
             mark(player, false, true);
         }
     }
@@ -174,55 +176,17 @@ public final class CyberIntroService {
     public static void onClone(PlayerEvent.Clone event) {
         if (!(event.getEntity() instanceof ServerPlayer fresh)
                 || !(event.getOriginal() instanceof ServerPlayer old)) return;
-        CompoundTag previous = old.getPersistentData().getCompound(ROOT);
-        if (previous.isEmpty()) return;
-        fresh.getPersistentData().put(ROOT, previous.copy());
-        if (!event.isWasDeath() || !previous.getBoolean(SCRIPTED_DEATH)) return;
-
-        // Item drops are cancelled only for this one scripted death. Restore
-        // the original inventory and XP from a snapshot taken before death.
-        if (previous.contains("Inventory"))
-            fresh.getInventory().load(previous.getList("Inventory", 10));
-        fresh.experienceLevel = previous.getInt("VanillaLevel");
-        fresh.totalExperience = previous.getInt("VanillaXp");
-        fresh.experienceProgress = previous.getFloat("VanillaProgress");
-        fresh.setHealth(fresh.getMaxHealth());
+        CompoundTag oldTag = old.getPersistentData().getCompound(ROOT);
+        if (!oldTag.isEmpty()) fresh.getPersistentData().put(ROOT, oldTag.copy());
+        // Actual gameplay death is no longer part of a summoning.
     }
 
     @SubscribeEvent
-    public static void onDrops(LivingDropsEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player
-                && state(player).getBoolean(SCRIPTED_DEATH)) event.setCanceled(true);
-    }
-
-    @SubscribeEvent
-    public static void onXpDrop(LivingExperienceDropEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player
-                && state(player).getBoolean(SCRIPTED_DEATH)) event.setDroppedExperience(0);
-    }
-
-    @SubscribeEvent
-    public static void onRespawn(PlayerEvent.PlayerRespawnEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) return;
-        Session session = QUEUE.get(player.getUUID());
-        if (session == null || session.stage != Stage.DEAD
-                || !state(player).getBoolean(SCRIPTED_DEATH)) return;
-
-        IntroSettings.Point arrival = IntroSettings.get(player.getServer()).arrival();
-        if (arrival == null || player.getServer().getLevel(arrival.dimension()) == null) {
-            finish(player);
-            return;
-        }
-        ServerLevel level = player.getServer().getLevel(arrival.dimension());
-        player.teleportTo(level, arrival.pos().getX() + 0.5D, arrival.pos().getY(),
-                arrival.pos().getZ() + 0.5D, arrival.yaw(), 0F);
-        player.setHealth(player.getMaxHealth());
-        restoreCheckpoint(player);
-        // Do not show the player during the respawn cinematic: the server
-        // reveals them after the transition, at the summoning point.
-        hide(player);
-        session.stage = Stage.RESPAWNING;
-        session.stageTick = player.getServer().overworld().getGameTime();
+    public static void onServerStopped(ServerStoppedEvent event) {
+        QUEUE.clear();
+        active = null;
+        chosenPope = null;
+        dialogueOpen = null;
     }
 
     @SubscribeEvent
@@ -230,35 +194,35 @@ public final class CyberIntroService {
         if (event.phase != TickEvent.Phase.END) return;
         MinecraftServer server = event.getServer();
         if (server == null) return;
+
         QUEUE.entrySet().removeIf(e -> server.getPlayerList().getPlayer(e.getKey()) == null);
         if (active != null && !QUEUE.containsKey(active)) {
             active = null;
             chosenPope = null;
             dialogueOpen = null;
         }
-        long now = server.overworld().getGameTime();
+
         for (Session session : QUEUE.values()) {
             ServerPlayer player = server.getPlayerList().getPlayer(session.id);
             if (player == null) continue;
-            if (session.stage == Stage.CUSTOMISING && customised(player))
+            if (session.stage == Stage.CUSTOMISING && customised(player)) {
                 session.stage = Stage.WAITING;
+            }
             if (session.stage == Stage.CUSTOMISING || session.stage == Stage.WAITING) {
-                hide(player);
+                hold(player, true);
                 if (session.stage == Stage.WAITING && !session.queueScreenSent) {
                     session.queueScreenSent = true;
-                    CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                            new IntroScenePacket(true, BlockPos.ZERO, 0F));
+                    sendQueue(player, true);
                 }
-            } else if (session.stage == Stage.RESPAWNING) {
-                hide(player);
+            } else if (session.stage == Stage.CINEMATIC) {
+                // This is essential: do not re-hide a player after the reveal.
+                hold(player, !session.revealed);
             } else if (session.stage == Stage.GREETING) {
-                player.setInvulnerable(true);
-                player.setNoGravity(true);
-                player.setDeltaMovement(Vec3.ZERO);
+                hold(player, false);
             }
         }
 
-        // Pope is called to the waiting position as soon as someone joins.
+        long now = server.overworld().getGameTime();
         if (active == null) {
             ensurePopeReady(server);
             for (Session session : QUEUE.values()) {
@@ -267,35 +231,29 @@ public final class CyberIntroService {
                     if (player != null) {
                         active = session.id;
                         chosenPope = null;
-                        startDeath(player, session);
+                        startCinematic(player, session);
                     }
                     break;
                 }
             }
         }
+
         if (active == null) return;
         Session session = QUEUE.get(active);
         ServerPlayer player = server.getPlayerList().getPlayer(active);
         if (session == null || player == null) return;
 
-        if (session.stage == Stage.RESPAWNING
-                && now - session.stageTick >= REVEAL_DELAY_TICKS) {
-            player.setInvisible(false);
-            player.level().playSound(null, player.blockPosition(),
-                    net.minecraft.sounds.SoundEvents.BEACON_ACTIVATE,
-                    net.minecraft.sounds.SoundSource.PLAYERS, 1F, 1.15F);
-            player.serverLevel().sendParticles(net.minecraft.core.particles.ParticleTypes.END_ROD,
-                    player.getX(), player.getY() + 1D, player.getZ(),
-                    80, 0.6D, 0.9D, 0.6D, 0.055D);
-            session.stage = Stage.GREETING;
-            session.stageTick = now;
+        if (session.stage == Stage.CINEMATIC) {
+            long elapsed = now - session.stageTick;
+            if (elapsed >= REVEAL_TICKS && !session.revealed) reveal(player, session);
+            if (elapsed >= SCENE_TICKS + SCENE_GRACE_TICKS) advanceFromScene(player);
         }
         if (session.stage == Stage.GREETING) {
             ensurePopeReady(server);
             if (!active.equals(dialogueOpen)) {
                 CyberNpcEntity pope = getPope(server);
                 if (pope != null && pope.level() == player.level()
-                        && pope.distanceToSqr(player) <= 23.0D) {
+                        && pope.distanceToSqr(player) <= 23D) {
                     NpcDialogueController.openIntro(player, pope);
                     dialogueOpen = active;
                 } else if (now - session.stageTick >= POPE_TIMEOUT_TICKS) {
@@ -304,60 +262,137 @@ public final class CyberIntroService {
                                 player.getZ() + 1.5D);
                         NpcDialogueController.openIntro(player, pope);
                         dialogueOpen = active;
-                    } else finish(player);  // Never strand the player.
+                    } else {
+                        finish(player); // Never strand someone without a Pope.
+                    }
                 }
             }
         }
     }
 
-    private static void startDeath(ServerPlayer player, Session session) {
-        if (!configured(player)) { finish(player); return; }
-        IntroSettings.Point point = IntroSettings.get(player.getServer()).arrival();
-        ServerLevel level = player.getServer().getLevel(point.dimension());
-        if (level == null) { finish(player); return; }
-
-        CompoundTag data = state(player);
-        data.put("Inventory", player.getInventory().save(new ListTag()));
-        data.putInt("VanillaLevel", player.experienceLevel);
-        data.putInt("VanillaXp", player.totalExperience);
-        data.putFloat("VanillaProgress", player.experienceProgress);
-        data.putBoolean("HadRespawnPoint", player.getRespawnPosition() != null);
-        if (player.getRespawnPosition() != null) {
-            data.putString("OldRespawnDimension", player.getRespawnDimension().location().toString());
-            data.putLong("OldRespawnPosition", player.getRespawnPosition().asLong());
-            data.putFloat("OldRespawnAngle", player.getRespawnAngle());
-            data.putBoolean("OldRespawnForced", player.isRespawnForced());
-        }
-        data.putBoolean(SCRIPTED_DEATH, true);
-        player.getPersistentData().put(ROOT, data);
-
-        // Close the waiting UI before the external death cinematic takes over.
+    private static void sendQueue(ServerPlayer player, boolean waiting) {
         CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new IntroScenePacket(false, BlockPos.ZERO, 0F));
-        hide(player);
-        player.teleportTo(level, point.pos().getX() + 0.5D, point.pos().getY(),
-                point.pos().getZ() + 0.5D, point.yaw(), 0F);
-        player.setRespawnPosition(point.dimension(), point.pos(), point.yaw(), true, false);
-        session.stage = Stage.DEAD;
-        session.stageTick = player.getServer().overworld().getGameTime();
-        player.setInvulnerable(false);
-        player.hurt(player.damageSources().fellOutOfWorld(), Float.MAX_VALUE);
-        if (!player.isDeadOrDying()) {
-            // Creative-mode overrides or third-party damage hooks can reject
-            // even scripted damage. Never strand the player awaiting respawn.
-            restoreCheckpoint(player);
-            player.setInvulnerable(true);
-            session.stage = Stage.RESPAWNING;
-            session.stageTick = player.getServer().overworld().getGameTime();
-        }
-        // Vanilla death must occur. Cinematic Respawn (client-only) handles
-        // the camera and automatic respawn; without it the normal death screen
-        // remains available, and players can respawn manually.
+                new IntroQueuePacket(waiting));
     }
 
-    private static void restoreCheckpoint(ServerPlayer player) {
+    private static void startCinematic(ServerPlayer player, Session session) {
+        IntroSettings.Point arrival = IntroSettings.get(player.getServer()).arrival();
+        if (arrival == null) { finish(player); return; }
+        ServerLevel level = player.getServer().getLevel(arrival.dimension());
+        if (level == null) { finish(player); return; }
+        hold(player, true);
+        // The queue screen closes, then the world camera takes over.
+        sendQueue(player, false);
+        player.teleportTo(level, arrival.pos().getX() + 0.5D,
+                arrival.pos().getY(), arrival.pos().getZ() + 0.5D,
+                arrival.yaw(), 0F);
+        session.stage = Stage.CINEMATIC;
+        session.stageTick = player.getServer().overworld().getGameTime();
+        session.revealed = false;
+        CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new IntroScenePacket(true, arrival.pos(), arrival.yaw()));
+        ensurePopeReady(player.getServer());
+    }
+
+    private static void reveal(ServerPlayer player, Session session) {
+        if (session.revealed) return;
+        session.revealed = true;
+        player.setInvisible(false);
+        ServerLevel level = player.serverLevel();
+        level.sendParticles(ParticleTypes.END_ROD, player.getX(), player.getY() + 1D,
+                player.getZ(), 95, 0.6D, 0.9D, 0.6D, 0.07D);
+        level.sendParticles(ParticleTypes.ENCHANT, player.getX(), player.getY() + 1D,
+                player.getZ(), 105, 0.65D, 1.0D, 0.65D, 0.28D);
+        level.playSound(null, player.blockPosition(),
+                SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 0.85F, 1.24F);
+    }
+
+    /**
+     * A valid client completion is accepted only after the full 6.5-second
+     * scene has elapsed on the server. Slow clients get a 35-tick grace
+     * period before the server advances them to avoid an indefinite freeze.
+     */
+    public static void advanceFromScene(ServerPlayer player) {
+        Session session = QUEUE.get(player.getUUID());
+        if (session == null || session.stage != Stage.CINEMATIC
+                || !player.getUUID().equals(active)) return;
+        long elapsed = player.getServer().overworld().getGameTime() - session.stageTick;
+        if (elapsed < SCENE_TICKS) return;
+        reveal(player, session);
+        session.stage = Stage.GREETING;
+        session.stageTick = player.getServer().overworld().getGameTime();
+        CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new IntroScenePacket(false, BlockPos.ZERO, 0F));
+    }
+
+    private static void hold(ServerPlayer player, boolean concealed) {
+        player.setInvisible(concealed);
+        player.setInvulnerable(true);
+        player.setNoGravity(true);
+        player.setDeltaMovement(Vec3.ZERO);
+        player.fallDistance = 0F;
+    }
+
+    public static boolean isGreeting(ServerPlayer player) {
+        Session session = QUEUE.get(player.getUUID());
+        return session != null && session.stage == Stage.GREETING
+                && player.getUUID().equals(active);
+    }
+
+    public static void finish(ServerPlayer player) {
+        QUEUE.remove(player.getUUID());
+        mark(player, false, true);
+        player.setInvisible(false);
+        player.setInvulnerable(false);
+        player.setNoGravity(false);
+        player.setDeltaMovement(Vec3.ZERO);
+        player.fallDistance = 0F;
+        sendQueue(player, false);
+        CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new IntroScenePacket(false, BlockPos.ZERO, 0F));
+        if (player.getUUID().equals(active)) {
+            active = null;
+            chosenPope = null;
+        }
+        dialogueOpen = null;
+    }
+
+    /** Admin testing reset hook; CyberRaces still owns /cyberresetall. */
+    public static void resetForRetest(ServerPlayer player) {
+        QUEUE.remove(player.getUUID());
+        player.getPersistentData().remove(ROOT);
+        if (player.getUUID().equals(active)) {
+            active = null;
+            chosenPope = null;
+            dialogueOpen = null;
+        }
+        if (configured(player)) {
+            mark(player, true, false);
+            QUEUE.put(player.getUUID(), new Session(player.getUUID(), Stage.CUSTOMISING));
+            hold(player, true);
+        }
+        sendQueue(player, false);
+        CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new IntroScenePacket(false, BlockPos.ZERO, 0F));
+    }
+
+    /** Skipping the cinematic skips the optional welcome as well. */
+    public static void skip(ServerPlayer player) {
+        if (QUEUE.containsKey(player.getUUID())) finish(player);
+    }
+
+    /**
+     * Recovery for saves produced by the previous Cinematic Respawn version.
+     * These snapshots no longer get created after this update.
+     */
+    private static void restoreOldScriptedDeath(ServerPlayer player) {
         CompoundTag tag = state(player);
-        if (!tag.getBoolean(SCRIPTED_DEATH)) return;
+        if (!tag.getBoolean(LEGACY_DEATH)) return;
+        if (tag.contains("Inventory"))
+            player.getInventory().load(tag.getList("Inventory", 10));
+        player.experienceLevel = tag.getInt("VanillaLevel");
+        player.totalExperience = tag.getInt("VanillaXp");
+        player.experienceProgress = tag.getFloat("VanillaProgress");
         if (tag.getBoolean("HadRespawnPoint")) {
             ResourceLocation id = ResourceLocation.tryParse(tag.getString("OldRespawnDimension"));
             if (id != null) {
@@ -368,79 +403,12 @@ public final class CyberIntroService {
         } else {
             player.setRespawnPosition(Level.OVERWORLD, null, 0F, false, false);
         }
-        tag.remove(SCRIPTED_DEATH);
-        tag.remove("Inventory");
-        tag.remove("VanillaLevel");
-        tag.remove("VanillaXp");
-        tag.remove("VanillaProgress");
-        tag.remove("HadRespawnPoint");
-        tag.remove("OldRespawnDimension");
-        tag.remove("OldRespawnPosition");
-        tag.remove("OldRespawnAngle");
-        tag.remove("OldRespawnForced");
+        for (String key : new String[]{LEGACY_DEATH, "Inventory", "VanillaLevel",
+                "VanillaXp", "VanillaProgress", "HadRespawnPoint", "OldRespawnDimension",
+                "OldRespawnPosition", "OldRespawnAngle", "OldRespawnForced"}) {
+            tag.remove(key);
+        }
         player.getPersistentData().put(ROOT, tag);
-    }
-
-    private static void hide(ServerPlayer player) {
-        if (player.isDeadOrDying()) return;
-        player.setInvisible(true);
-        player.setInvulnerable(true);
-        player.setNoGravity(true);
-        player.setDeltaMovement(Vec3.ZERO);
-        player.fallDistance = 0F;
-    }
-
-    public static boolean isGreeting(ServerPlayer player) {
-        Session s = QUEUE.get(player.getUUID());
-        return s != null && s.stage == Stage.GREETING
-                && player.getUUID().equals(active);
-    }
-
-    public static void advanceFromScene(ServerPlayer player) {
-        // Legacy custom cinematic packet: intentionally ignored.
-        // The death/respawn animation is now owned by Cinematic Respawn.
-    }
-
-    public static void finish(ServerPlayer player) {
-        QUEUE.remove(player.getUUID());
-        if (state(player).getBoolean(SCRIPTED_DEATH)) restoreCheckpoint(player);
-        mark(player, false, true);
-        if (!player.isDeadOrDying()) {
-            player.setInvisible(false);
-            player.setInvulnerable(false);
-            player.setNoGravity(false);
-            player.setDeltaMovement(Vec3.ZERO);
-        }
-        CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new IntroScenePacket(false, BlockPos.ZERO, 0F));
-        if (player.getUUID().equals(active)) {
-            active = null;
-            chosenPope = null;
-        }
-        dialogueOpen = null;
-    }
-
-    /** Admin reset hook used by CyberRaces /cyberresetall. */
-    public static void resetForRetest(ServerPlayer player) {
-        QUEUE.remove(player.getUUID());
-        if (state(player).getBoolean(SCRIPTED_DEATH)) restoreCheckpoint(player);
-        player.getPersistentData().remove(ROOT);
-        if (player.getUUID().equals(active)) {
-            active = null;
-            chosenPope = null;
-            dialogueOpen = null;
-        }
-        if (configured(player)) {
-            mark(player, true, false);
-            QUEUE.put(player.getUUID(), new Session(player.getUUID(), Stage.CUSTOMISING));
-            hide(player);
-        }
-        CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new IntroScenePacket(false, BlockPos.ZERO, 0F));
-    }
-
-    public static void skip(ServerPlayer player) {
-        if (QUEUE.containsKey(player.getUUID())) finish(player);
     }
 
     private static void ensurePopeReady(MinecraftServer server) {
@@ -460,8 +428,7 @@ public final class CyberIntroService {
         }
         var nearby = level.getEntitiesOfClass(CyberNpcEntity.class,
                 new AABB(wait.pos()).inflate(96, 25, 96),
-                npc -> npc.isAlive()
-                        && NpcServiceRole.fromRole(npc.getRole()) == NpcServiceRole.POPE);
+                npc -> npc.isAlive() && NpcServiceRole.fromRole(npc.getRole()) == NpcServiceRole.POPE);
         CyberNpcEntity pope = nearby.stream().min(
                 Comparator.comparingDouble(n -> n.blockPosition().distSqr(wait.pos())))
                 .orElse(null);
@@ -480,7 +447,7 @@ public final class CyberIntroService {
         return pope;
     }
 
-    /** Pope AI override, before normal altar/bed behaviour. */
+    /** Priority Pope duty, before normal church/altar/bed behaviour. */
     public static boolean tickPope(CyberNpcEntity pope, ServerLevel level) {
         if (QUEUE.isEmpty() || !IntroSettings.get(level.getServer()).ready()) return false;
         CyberNpcEntity selected = getPope(level.getServer());
@@ -494,9 +461,9 @@ public final class CyberIntroService {
                 && session != null && session.stage == Stage.GREETING;
         Vec3 target = approach ? player.position() : Vec3.atBottomCenterOf(wait.pos());
         double distance = pope.position().distanceToSqr(target);
-        if (distance > (approach ? 9D : 3D))
+        if (distance > (approach ? 9D : 3D)) {
             pope.getNavigation().moveTo(target.x, target.y, target.z, 0.95D);
-        else {
+        } else {
             pope.getNavigation().stop();
             pope.setSprinting(false);
             if (player != null && player.level() == level)

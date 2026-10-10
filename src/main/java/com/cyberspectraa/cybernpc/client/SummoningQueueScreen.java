@@ -8,8 +8,7 @@ import net.minecraft.network.chat.Component;
 /**
  * Players who have completed race and class selection remain concealed
  * while another newcomer is being welcomed by the Pope.
- * No user action is required. The server closes this before death and the
- * client-side Cinematic Respawn mod then controls the transition.
+ * The server closes this screen before starting the built-in camera scene.
  */
 public final class SummoningQueueScreen extends Screen {
     private long start = System.currentTimeMillis();

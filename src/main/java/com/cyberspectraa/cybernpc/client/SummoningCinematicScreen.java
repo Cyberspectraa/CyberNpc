@@ -1,5 +1,6 @@
 package com.cyberspectraa.cybernpc.client;
 
+import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.network.IntroControlPacket;
 import net.minecraft.client.Minecraft;
@@ -10,110 +11,179 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.ClipContext;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+
+import javax.annotation.Nullable;
 
 /**
- * Client-only smooth orbit / approach sequence. The server owns the reveal
- * and the Pope's arrival; this transient camera never exists on the server.
+ * Smooth 6.5-second camera orbit. RenderTickEvent.START positions the
+ * temporary client-only camera BEFORE world rendering, so movement
+ * interpolates every rendered frame instead of stepping at 20 TPS.
  */
+@Mod.EventBusSubscriber(modid = CyberNpc.MOD_ID, value = Dist.CLIENT)
 public final class SummoningCinematicScreen extends Screen {
-    private static final int DURATION_TICKS = 150;
+    private static final int DURATION_TICKS = 130;
+    private static final int REVEAL_TICKS = 62;
+    private static final int FADE_TICKS = 19;
+
     private final BlockPos arrival;
     private final float direction;
-    private Entity oldCamera;
-    private ArmorStand camera;
+    @Nullable private Entity previousCamera;
+    @Nullable private ArmorStand camera;
     private int ticks;
-    private boolean finishing;
+    private boolean completionSent;
+    private boolean closingFromServer;
 
     private SummoningCinematicScreen(BlockPos arrival, float direction) {
-        super(Component.literal("The Summoning"));
+        super(Component.literal("Summoning"));
         this.arrival = arrival;
         this.direction = direction;
     }
 
     public static void open(BlockPos arrival, float direction) {
-        Minecraft.getInstance().setScreen(new SummoningCinematicScreen(arrival, direction));
+        Minecraft client = Minecraft.getInstance();
+        if (client.screen instanceof SummoningCinematicScreen) return;
+        client.setScreen(new SummoningCinematicScreen(arrival, direction));
     }
 
     public static void closeFromServer() {
         Minecraft client = Minecraft.getInstance();
-        if (client.screen instanceof SummoningCinematicScreen screen) {
-            screen.finishing = true;
-            client.setScreen(null);
-        } else if (client.screen instanceof NpcDialogueScreen) {
+        if (client.screen instanceof SummoningCinematicScreen scene) {
+            scene.closingFromServer = true;
             client.setScreen(null);
         }
+        // Do not close NpcDialogueScreen here; it belongs to a separate
+        // server-authoritative conversation and may have opened already.
     }
 
     @Override
     protected void init() {
         super.init();
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null) return;
-        oldCamera = mc.getCameraEntity();
-        camera = new ArmorStand(EntityType.ARMOR_STAND, mc.level);
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null || client.player == null) return;
+        previousCamera = client.getCameraEntity();
+        camera = new ArmorStand(EntityType.ARMOR_STAND, client.level);
         camera.setInvisible(true);
-        updateCamera();
-        mc.setCameraEntity(camera);
+        positionCamera(0D);
+        client.setCameraEntity(camera);
     }
 
-    private void updateCamera() {
-        if (camera == null) return;
-        double t = Math.min(1D, ticks / (double) DURATION_TICKS);
-        double sweep = Math.toRadians(direction + 205D - t * 125D);
-        double radius = 6.4D - 2.4D * t;
-        Vec3 center = Vec3.atBottomCenterOf(arrival).add(0, 1.15D, 0);
-        double x = center.x + Math.sin(sweep) * radius;
-        double z = center.z + Math.cos(sweep) * radius;
-        double y = center.y + 2.8D - t * 1.6D;
-        camera.setPos(x, y, z);
-        double dx = center.x - x, dz = center.z - z, dy = center.y - y;
-        float yaw = (float)Math.toDegrees(Math.atan2(-dx, dz));
-        float pitch = (float)-Math.toDegrees(Math.atan2(dy, Math.sqrt(dx*dx + dz*dz)));
+    /**
+     * Called before the 3D world is drawn. The camera's old/current positions
+     * are kept equal to avoid a second layer of Minecraft tick interpolation.
+     */
+    @SubscribeEvent
+    public static void onRenderTick(TickEvent.RenderTickEvent event) {
+        if (event.phase != TickEvent.Phase.START) return;
+        Minecraft client = Minecraft.getInstance();
+        if (client.screen instanceof SummoningCinematicScreen scene) {
+            scene.positionCamera(scene.ticks + Math.min(1F, event.renderTickTime));
+        }
+    }
+
+    private void positionCamera(double timeTicks) {
+        Minecraft client = Minecraft.getInstance();
+        if (camera == null || client.level == null || client.player == null) return;
+
+        double u = Math.min(1D, Math.max(0D, timeTicks / DURATION_TICKS));
+        // Cubic smoothstep gives zero acceleration jumps at the ends.
+        double eased = u * u * (3D - 2D * u);
+        double radians = Math.toRadians(direction + 140D - 115D * eased);
+        double radius = 4.6D - 1.9D * eased;
+        Vec3 focus = Vec3.atBottomCenterOf(arrival).add(0D, 1.05D, 0D);
+
+        double x = focus.x + Math.sin(radians) * radius;
+        double z = focus.z + Math.cos(radians) * radius;
+        double y = focus.y + 2.15D - 0.85D * eased;
+        Vec3 desired = new Vec3(x, y, z);
+
+        // The scene needs no extra admin camera markers. Clip the camera
+        // closer when an indoor summoning room has walls in the orbit path.
+        BlockHitResult hit = client.level.clip(new ClipContext(
+                focus, desired, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE,
+                client.player));
+        Vec3 actual = desired;
+        if (hit.getType() == HitResult.Type.BLOCK) {
+            Vec3 ray = desired.subtract(focus);
+            double available = Math.max(0.4D, focus.distanceTo(hit.getLocation()) - 0.30D);
+            actual = focus.add(ray.normalize().scale(
+                    Math.min(available, ray.length())));
+        }
+
+        double dx = focus.x - actual.x;
+        double dz = focus.z - actual.z;
+        double dy = focus.y - actual.y;
+        float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+        float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
+        camera.setPos(actual.x, actual.y, actual.z);
+        camera.xo = actual.x;
+        camera.yo = actual.y;
+        camera.zo = actual.z;
         camera.setYRot(yaw);
         camera.setXRot(pitch);
         camera.yRotO = yaw;
         camera.xRotO = pitch;
-        camera.xo = x; camera.yo = y; camera.zo = z;
     }
 
-    @Override public void tick() {
-        if (finishing) return;
+    @Override
+    public void tick() {
+        if (closingFromServer) return;
         ticks++;
-        updateCamera();
-        if (ticks >= DURATION_TICKS) {
-            finishing = true;
+        if (ticks >= DURATION_TICKS && !completionSent) {
+            completionSent = true;
             CyberNpcNetwork.CHANNEL.sendToServer(new IntroControlPacket(false));
-            // Keep the world visible while waiting for the server-owned transition.
         }
     }
 
-    @Override public void render(GuiGraphics g, int mouseX, int mouseY, float delta) {
-        int fade = ticks < 18 ? 255 - ticks * 14 :
-                ticks > 127 ? Math.min(230, (ticks - 127) * 9) : 0;
-        if (fade > 0) g.fill(0, 0, width, height, (fade << 24));
-        g.fill(0, 0, width, 12, 0xCC080808);
-        g.fill(0, height - 12, width, height, 0xCC080808);
-        String caption = ticks < 65 ? "The summoning begins..." :
-                ticks < 125 ? "A new adventurer has arrived." : "A new story awaits.";
-        g.drawString(font, caption, (width - font.width(caption)) / 2,
-                height - 32, 0xFFF8E5B6, false);
-        g.drawString(font, "Press ESC to skip", width - 110, 17, 0xFFD8C8AC, false);
-        super.render(g, mouseX, mouseY, delta);
+    @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
+        double t = Math.max(0D, Math.min(DURATION_TICKS, ticks + delta));
+        int fade = t < FADE_TICKS
+                ? (int) Math.round(255D * (1D - t / FADE_TICKS))
+                : t > DURATION_TICKS - FADE_TICKS
+                ? (int) Math.round(200D * (t - (DURATION_TICKS - FADE_TICKS)) / FADE_TICKS)
+                : 0;
+        if (fade > 0) {
+            graphics.fill(0, 0, width, height, (fade << 24));
+        }
+        // A subtle summoning flash coincides with the server-owned reveal;
+        // this is a visual effect, not NPC speech or dialogue.
+        double offset = Math.abs(t - REVEAL_TICKS);
+        int flash = offset < 7D ? (int) (110D * (1D - offset / 7D)) : 0;
+        if (flash > 0) {
+            graphics.fill(0, 0, width, height, (flash << 24) | 0x00E8D8F6);
+        }
+        graphics.fill(0, 0, width, 10, 0xCE090811);
+        graphics.fill(0, height - 10, width, height, 0xCE090811);
+        String hint = "ESC - Skip intro";
+        graphics.drawString(font, hint, width - font.width(hint) - 12, 17,
+                0xFFD8C8AC, false);
+        super.render(graphics, mouseX, mouseY, delta);
     }
 
-    @Override public void onClose() {
-        if (!finishing) {
-            finishing = true;
+    @Override
+    public void onClose() {
+        if (!closingFromServer) {
+            closingFromServer = true;
             CyberNpcNetwork.CHANNEL.sendToServer(new IntroControlPacket(true));
         }
         Minecraft.getInstance().setScreen(null);
     }
 
-    @Override public void removed() {
-        Minecraft mc = Minecraft.getInstance();
-        if (camera != null && mc.getCameraEntity() == camera)
-            mc.setCameraEntity(mc.player != null ? mc.player : oldCamera);
+    @Override
+    public void removed() {
+        Minecraft client = Minecraft.getInstance();
+        if (camera != null && client.getCameraEntity() == camera) {
+            client.setCameraEntity(client.player != null
+                    ? client.player : previousCamera);
+        }
         camera = null;
     }
 
