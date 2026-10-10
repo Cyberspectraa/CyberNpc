@@ -82,6 +82,25 @@ public final class SpecialNpcSavedData extends SavedData {
         }
 
         SpecialNpcRecord record = records.get(specialId);
+        String name = npc.getCustomName() == null
+                ? npc.getRole()
+                : npc.getCustomName().getString();
+
+        // Called from entity ticks: existing live records need no repeated
+        // NBT-dirty marks, anchor allocations or temporary-state writes.
+        // Refresh only if identity, role or name actually changed.
+        if (record != null
+                && npc.getUUID().equals(record.entityId)
+                && npc.getRole().equals(record.role)
+                && name.equals(record.name)
+                && !record.awaitingRespawn
+                && !record.beamStarted
+                && record.respawnAt == 0L
+                && record.materializeAt == 0L
+                && !record.template.isEmpty()) {
+            return specialId;
+        }
+
         Anchor here = new Anchor(
                 level.dimension(),
                 npc.blockPosition(),
@@ -96,9 +115,7 @@ public final class SpecialNpcSavedData extends SavedData {
         }
 
         record.role = npc.getRole();
-        record.name = npc.getCustomName() == null
-                ? npc.getRole()
-                : npc.getCustomName().getString();
+        record.name = name;
         record.entityId = npc.getUUID();
         record.awaitingRespawn = false;
         record.beamStarted = false;
