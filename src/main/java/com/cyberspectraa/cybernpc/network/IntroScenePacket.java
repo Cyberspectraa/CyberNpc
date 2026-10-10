@@ -1,6 +1,6 @@
 package com.cyberspectraa.cybernpc.network;
 
-import com.cyberspectraa.cybernpc.client.SummoningCinematicScreen;
+import com.cyberspectraa.cybernpc.client.SummoningQueueScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.api.distmarker.Dist;
@@ -20,8 +20,8 @@ public record IntroScenePacket(boolean begin, BlockPos arrival, float yaw) {
     public static void handle(IntroScenePacket p, Supplier<NetworkEvent.Context> supplier) {
         NetworkEvent.Context ctx = supplier.get();
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-            if (p.begin()) SummoningCinematicScreen.open(p.arrival(), p.yaw());
-            else SummoningCinematicScreen.closeFromServer();
+            if (p.begin()) SummoningQueueScreen.open();
+            else SummoningQueueScreen.closeFromServer();
         });
         ctx.setPacketHandled(true);
     }
