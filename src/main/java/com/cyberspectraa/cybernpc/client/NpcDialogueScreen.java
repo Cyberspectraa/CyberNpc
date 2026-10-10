@@ -3,6 +3,7 @@ package com.cyberspectraa.cybernpc.client;
 import com.cyberspectraa.cybernpc.dialogue.DialogueView;
 import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.network.DialogueChoicePacket;
+import com.cyberspectraa.cybernpc.network.IntroControlPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -311,6 +312,17 @@ public final class NpcDialogueScreen extends Screen {
         }
         g.fill(x, y, x + w, y + 1, 0xFFC8A575);
         g.fill(x, y + h - 1, x + w, y + h, 0xFF8D693F);
+    }
+
+    private boolean isIntro() {
+        return view.options().stream().anyMatch(o -> o.id().equals("intro_skip"));
+    }
+
+    @Override
+    public void onClose() {
+        // The player can always exit a stuck cinematic or conversation safely.
+        if (isIntro()) CyberNpcNetwork.CHANNEL.sendToServer(new IntroControlPacket(true));
+        super.onClose();
     }
 
     @Override

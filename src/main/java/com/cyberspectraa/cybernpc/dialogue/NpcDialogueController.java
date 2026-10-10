@@ -3,6 +3,7 @@ package com.cyberspectraa.cybernpc.dialogue;
 import com.cyberspectraa.cybernpc.compat.CyberServerCompat;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.entity.NpcType;
+import com.cyberspectraa.cybernpc.intro.CyberIntroService;
 import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.network.DialogueOpenPacket;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
@@ -47,6 +48,16 @@ public final class NpcDialogueController {
         send(player, npc, page, "", greeting(npc));
     }
 
+    public static void openIntro(ServerPlayer player, CyberNpcEntity npc) {
+        if (!CyberIntroService.isGreeting(player) || !valid(player, npc)) return;
+        String page = "intro_0";
+        SESSIONS.put(player.getUUID(),
+            new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
+        npc.getLookControl().setLookAt(player, 25.0F, 25.0F);
+        send(player, npc, page, "", "Welcome, summoned one. The world has called you here. "
+                + "I am the Pope, and I'll help you find your place in our town.");
+    }
+
     public static void choose(ServerPlayer player, int npcId, String action) {
         Session session = SESSIONS.get(player.getUUID());
         if (session == null || player.level().getGameTime() > session.expiresAt()) {
@@ -65,6 +76,38 @@ public final class NpcDialogueController {
         // currently active, server-generated page actually offered it.
         List<DialogueView.Option> validOptions = options(npc, session.page());
         if (validOptions.stream().noneMatch(o -> o.id().equals(action))) return;
+
+        if (session.page().startsWith("intro_")) {
+            if (!CyberIntroService.isGreeting(player)) return;
+            if ("intro_skip".equals(action) || "intro_finish".equals(action)) {
+                SESSIONS.remove(player.getUUID());
+                CyberIntroService.finish(player);
+                return;
+            }
+            String next = switch (action) {
+                case "intro_town" -> "intro_1";
+                case "intro_guild" -> "intro_2";
+                case "intro_trade" -> "intro_3";
+                default -> null;
+            };
+            if (next == null) return;
+            String response = switch (next) {
+                case "intro_1" -> "You stand in a town built to shelter travellers. "
+                    + "The church offers guidance, the square leads to its markets, "
+                    + "and our guards protect the people.";
+                case "intro_2" -> "At the Adventurers' Guild, speak to the receptionist "
+                    + "and check their notice board for contracts. Your journal "
+                    + "records the leads you discover.";
+                default -> "The shopkeeper trades for physical copper, silver and "
+                    + "gold coins. Earn coins by trading and completing tasks. "
+                    + "Now go, and write your own story.";
+            };
+            SESSIONS.put(player.getUUID(),
+                new Session(npc.getUUID(), next, player.level().getGameTime() + SESSION_LIFETIME));
+            send(player, npc, next, validOptions.stream()
+                    .filter(o -> o.id().equals(action)).findFirst().orElseThrow().label(), response);
+            return;
+        }
 
         if ("leave".equals(action)) {
             SESSIONS.remove(player.getUUID());
@@ -172,6 +215,24 @@ public final class NpcDialogueController {
     private static List<DialogueView.Option> options(CyberNpcEntity npc, String page) {
         NpcServiceRole role = NpcServiceRole.fromRole(npc.getRole());
         List<DialogueView.Option> options = new ArrayList<>();
+        if (page.startsWith("intro_")) {
+            String next = switch (page) {
+                case "intro_0" -> "intro_town";
+                case "intro_1" -> "intro_guild";
+                case "intro_2" -> "intro_trade";
+                case "intro_3" -> "intro_finish";
+                default -> "intro_finish";
+            };
+            String label = switch (next) {
+                case "intro_town" -> "Where have I been summoned?";
+                case "intro_guild" -> "How do I find work?";
+                case "intro_trade" -> "How do shops and coins work?";
+                default -> "I'm ready to begin.";
+            };
+            options.add(option(next, label));
+            options.add(option("intro_skip", "Skip introduction"));
+            return List.copyOf(options);
+        }
         if ("shop".equals(page)) {
             if (role == NpcServiceRole.SHOPKEEPER) {
                 for (NpcShopService.Stock item : NpcShopService.stock()) {

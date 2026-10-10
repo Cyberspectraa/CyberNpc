@@ -9,6 +9,7 @@ import com.cyberspectraa.cybernpc.mail.MailState;
 import com.cyberspectraa.cybernpc.registry.ModItems;
 import com.cyberspectraa.cybernpc.registry.ModSounds;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
+import com.cyberspectraa.cybernpc.intro.CyberIntroService;
 import com.cyberspectraa.cybernpc.service.GuardPostSavedData;
 import com.cyberspectraa.cybernpc.service.SpecialNpcSavedData;
 import net.minecraft.core.BlockPos;
@@ -183,6 +184,10 @@ final class NpcServiceBrain {
             if (role == NpcServiceRole.POPE) {
                 wakePope(level);
             }
+            return;
+        }
+
+        if (role == NpcServiceRole.POPE && CyberIntroService.tickPope(npc, level)) {
             return;
         }
 

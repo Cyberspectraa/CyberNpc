@@ -41,6 +41,19 @@ public final class CyberNpcNetwork {
                 .add();
 
         CHANNEL.messageBuilder(
+                IntroScenePacket.class, nextId++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(IntroScenePacket::encode)
+                .decoder(IntroScenePacket::decode)
+                .consumerMainThread(IntroScenePacket::handle)
+                .add();
+        CHANNEL.messageBuilder(
+                IntroControlPacket.class, nextId++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(IntroControlPacket::encode)
+                .decoder(IntroControlPacket::decode)
+                .consumerMainThread(IntroControlPacket::handle)
+                .add();
+
+        CHANNEL.messageBuilder(
                         LetterSubmitPacket.class,
                         nextId++
                 )
