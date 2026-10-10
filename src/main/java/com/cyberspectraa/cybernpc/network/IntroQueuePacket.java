@@ -18,10 +18,10 @@ public record IntroQueuePacket(boolean waiting) {
     public static void handle(IntroQueuePacket p,
                               Supplier<NetworkEvent.Context> supplier) {
         NetworkEvent.Context context = supplier.get();
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+        context.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
             if (p.waiting()) SummoningQueueScreen.open();
             else SummoningQueueScreen.closeFromServer();
-        });
+        }));
         context.setPacketHandled(true);
     }
 }
