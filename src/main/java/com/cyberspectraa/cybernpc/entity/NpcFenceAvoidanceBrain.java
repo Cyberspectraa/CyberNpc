@@ -28,6 +28,7 @@ final class NpcFenceAvoidanceBrain {
     private static final int RECOVERY_TICKS = 30;
     private static final int BLOCKED_PATH_COOLDOWN_TICKS = 80;
     private static final int RECOVERY_REPATH_INTERVAL = 5;
+    private static final int[] ESCAPE_HEIGHT_OFFSETS = {0, 1, -1, 2, -2};
 
     private static final double MOVEMENT_EPSILON_SQR = 0.0009D;
     private static final double FENCE_DETECT_INFLATE = 0.42D;
@@ -82,7 +83,6 @@ final class NpcFenceAvoidanceBrain {
             }
         }
 
-        BlockPos nearbyFence = findNearestBlockingFence(level);
         boolean navigating = path != null
                 && !path.isDone()
                 && !navigation.isDone();
@@ -90,7 +90,21 @@ final class NpcFenceAvoidanceBrain {
         double movedSqr = horizontalMovementSinceLastSample();
         samplePosition();
 
-        if (!navigating || nearbyFence == null) {
+        // Most NPCs are stationary or already following a reachable path.
+        // Do not scan the blocks around every one of them every tick.
+        if (!navigating) {
+            stallTicks = Math.max(0, stallTicks - 2);
+            return false;
+        }
+        if (path.canReach()
+                && !npc.horizontalCollision
+                && movedSqr >= MOVEMENT_EPSILON_SQR
+                && stallTicks == 0) {
+            return false;
+        }
+
+        BlockPos nearbyFence = findNearestBlockingFence(level);
+        if (nearbyFence == null) {
             stallTicks = Math.max(0, stallTicks - 2);
             return false;
         }
@@ -244,9 +258,7 @@ final class NpcFenceAvoidanceBrain {
             int originY,
             int z
     ) {
-        int[] offsets = new int[]{0, 1, -1, 2, -2};
-
-        for (int yOffset : offsets) {
+        for (int yOffset : ESCAPE_HEIGHT_OFFSETS) {
             BlockPos feet = new BlockPos(
                     x,
                     originY + yOffset,
