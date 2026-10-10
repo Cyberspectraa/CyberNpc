@@ -121,6 +121,11 @@ public final class CyberIntroService {
                 && player.getServer().getLevel(settings.arrival().dimension()) != null;
     }
 
+    /** CyberServer may defer its legacy arrival teleport when we own the scene. */
+    public static boolean usesIntroArrival(ServerPlayer player) {
+        return configured(player);
+    }
+
     /** Optional reflection hook from CyberRaces/CyberClasses. */
     public static boolean beginSummoning(ServerPlayer player) {
         if (!configured(player) || state(player).getBoolean(DONE)) return false;
@@ -310,6 +315,19 @@ public final class CyberIntroService {
         session.revealed = false;
         CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new IntroScenePacket(true, arrival.pos(), arrival.yaw()));
+        // Reuse CyberServer's existing Photon/vanilla summoning effect, if
+        // present, so the standalone cinematic and /arrival test look alike.
+        if (ModList.get().isLoaded("cyberserver")) {
+            try {
+                Class<?> fx = Class.forName(
+                        "com.cyberspectraa.cyberserver.CyberServerEvents");
+                fx.getMethod("startArrival", ServerLevel.class,
+                        double.class, double.class, double.class)
+                        .invoke(null, level, player.getX(), player.getY(), player.getZ());
+            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                // Without the optional CyberServer FX, our own reveal remains.
+            }
+        }
         ensurePopeReady(player.getServer());
     }
 
