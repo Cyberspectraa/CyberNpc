@@ -52,9 +52,11 @@ public final class CyberIntroService {
     private static final String DONE = "Completed";
     private static final String LEGACY_DEATH = "SummoningDeath";
 
-    /** 130 server ticks = 6.5 seconds at 20 TPS (minimum requested: 5 seconds). */
-    public static final int SCENE_TICKS = 130;
-    public static final int REVEAL_TICKS = 62;
+    /** 2.25-second title prelude; then preserve the original 6.5-second summoning. */
+    public static final int TITLE_TICKS = 45;
+    public static final int SUMMON_TICKS = 130;
+    public static final int SCENE_TICKS = TITLE_TICKS + SUMMON_TICKS;
+    public static final int REVEAL_TICKS = TITLE_TICKS + 62;
     private static final int SCENE_GRACE_TICKS = 35;
     private static final int POPE_TIMEOUT_TICKS = 800;
 
@@ -71,6 +73,7 @@ public final class CyberIntroService {
         long stageTick;
         boolean queueScreenSent;
         boolean revealed;
+        boolean effectsStarted;
         Session(UUID id, Stage stage) { this.id = id; this.stage = stage; }
     }
 
@@ -269,6 +272,10 @@ public final class CyberIntroService {
 
         if (session.stage == Stage.CINEMATIC) {
             long elapsed = now - session.stageTick;
+            if (elapsed >= TITLE_TICKS && !session.effectsStarted) {
+                session.effectsStarted = true;
+                startSummoningEffects(player);
+            }
             if (elapsed >= REVEAL_TICKS && !session.revealed) reveal(player, session);
             if (elapsed >= SCENE_TICKS + SCENE_GRACE_TICKS) advanceFromScene(player);
         }
@@ -313,10 +320,17 @@ public final class CyberIntroService {
         session.stage = Stage.CINEMATIC;
         session.stageTick = player.getServer().overworld().getGameTime();
         session.revealed = false;
+        session.effectsStarted = false;
         CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new IntroScenePacket(true, arrival.pos(), arrival.yaw()));
-        // Reuse CyberServer's existing Photon/vanilla summoning effect, if
-        // present, so the standalone cinematic and /arrival test look alike.
+        // Summoning particles and sounds begin AFTER the title card, so the
+        // existing 6.5-second effect is not hidden behind the opening text.
+        ensurePopeReady(player.getServer());
+    }
+
+    private static void startSummoningEffects(ServerPlayer player) {
+        ServerLevel level = player.serverLevel();
+        // Reuse the optional CyberServer visual system without changing it.
         if (ModList.get().isLoaded("cyberserver")) {
             try {
                 Class<?> fx = Class.forName(
@@ -328,7 +342,6 @@ public final class CyberIntroService {
                 // Without the optional CyberServer FX, our own reveal remains.
             }
         }
-        ensurePopeReady(player.getServer());
     }
 
     private static void reveal(ServerPlayer player, Session session) {
@@ -345,8 +358,8 @@ public final class CyberIntroService {
     }
 
     /**
-     * A valid client completion is accepted only after the full 6.5-second
-     * scene has elapsed on the server. Slow clients get a 35-tick grace
+     * A valid client completion is accepted only after the title prelude
+     * and complete 6.5-second summoning. Slow clients get a grace
      * period before the server advances them to avoid an indefinite freeze.
      */
     public static void advanceFromScene(ServerPlayer player) {
