@@ -1,6 +1,7 @@
 package com.cyberspectraa.cybernpc.client;
 
 import com.cyberspectraa.cybernpc.CyberNpc;
+import com.cyberspectraa.cybernpc.intro.CyberIntroService;
 import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.network.IntroControlPacket;
 import net.minecraft.client.CameraType;
@@ -27,28 +28,31 @@ import net.minecraftforge.fml.common.Mod;
 import javax.annotation.Nullable;
 
 /**
- * The entire cinematic uses ONE static, world-space camera target:
- * the exact centre of the configured spawn block, at its saved Y.
+ * Two-part intro: a quiet pack title on black followed by the original
+ * summoning effects with a small, deterministic cinematic camera arc.
  *
- * Minecraft can replace the active camera during dimension teleport or
- * recalculate yaw/pitch at world render time. Keep the camera entity attached,
- * lock its previous/current transforms, and override render-time angles.
- *
- * No moving/orbiting camera, per-frame raycasting, dynamic player tracking
- * or interpolation. Scene duration, reveal, and server-owned progression
- * remain identical to previous versions.
+ * The focus never moves: it is the saved arrival location used by the server
+ * teleport (X + 0.5, Y, Z + 0.5). The camera curve depends only on elapsed
+ * time, not previous frames, mouse movement, race scale or player location.
+ * Forge viewport angle locking remains in place to avoid renderer drift.
  */
 @Mod.EventBusSubscriber(modid = CyberNpc.MOD_ID, value = Dist.CLIENT)
 public final class SummoningCinematicScreen extends Screen {
-    private static final int DURATION_TICKS = 130;
-    private static final int REVEAL_TICKS = 62;
+    private static final int TITLE_TICKS = CyberIntroService.TITLE_TICKS;
+    private static final int SUMMON_TICKS = CyberIntroService.SUMMON_TICKS;
+    private static final int DURATION_TICKS = CyberIntroService.SCENE_TICKS;
+    private static final int REVEAL_TICKS = CyberIntroService.REVEAL_TICKS;
     private static final int FADE_TICKS = 19;
 
+    private static final String PACK_TITLE = "CYBERSPECTRA";
+    private static final String PACK_SUBTITLE = "SEASON II";
     private static final double SHOT_DISTANCE = 5.2D;
     private static final double SHOT_ELEVATION = 2.25D;
+    private static final double ARC_DEGREES = 12.0D;
+    private static final double PUSH_IN = 0.95D;
+    private static final double LOWER_BY = 0.22D;
     private static final double[] VIEW_ANGLES = {155D, 205D, 110D, 250D, 70D, 290D};
 
-    private final BlockPos arrival;
     private final float direction;
     private final Vec3 exactSpawn;
 
@@ -58,6 +62,12 @@ public final class SummoningCinematicScreen extends Screen {
     @Nullable private ArmorStand camera;
     @Nullable private Vec3 cameraEye;
 
+    // Chosen once per client level. If the arc crosses walls, use the
+    // already-proven fixed camera instead of clipping mid-cutscene.
+    private boolean allowArc;
+    private double baseAngle;
+    @Nullable private Vec3 staticShot;
+
     private float shotYaw;
     private float shotPitch;
     private int ticks;
@@ -66,9 +76,7 @@ public final class SummoningCinematicScreen extends Screen {
 
     private SummoningCinematicScreen(BlockPos arrival, float direction) {
         super(Component.literal("Summoning"));
-        this.arrival = arrival.immutable();
         this.direction = direction;
-        // Matches the server teleport exactly: X + 0.5, Y, Z + 0.5.
         this.exactSpawn = Vec3.atBottomCenterOf(arrival);
     }
 
@@ -85,34 +93,29 @@ public final class SummoningCinematicScreen extends Screen {
             scene.closingFromServer = true;
             client.setScreen(null);
         }
-        // Intro dialogue belongs to the server and must not be closed here.
     }
 
     @Override
     protected void init() {
         super.init();
-        ensureCameraLocked();
+        ensureCameraLocked(0D);
     }
 
     /**
-     * Forge fires this before the world camera is set up on every frame.
-     * Reattach after a client-side respawn/teleport or another mod's camera
-     * changes; never shift the target to follow that camera/player.
+     * RenderTick.START runs before the world view is drawn. Position the
+     * camera from absolute scene time for frame-rate-independent motion.
+     * Setting both old and current entity transforms avoids double lerp.
      */
     @SubscribeEvent
     public static void onRenderTick(TickEvent.RenderTickEvent event) {
         if (event.phase != TickEvent.Phase.START) return;
         Minecraft client = Minecraft.getInstance();
         if (client.screen instanceof SummoningCinematicScreen scene) {
-            scene.ensureCameraLocked();
+            scene.ensureCameraLocked(scene.ticks
+                    + Math.max(0F, Math.min(1F, event.renderTickTime)));
         }
     }
 
-    /**
-     * Minecraft/other mods can alter the rendered orientation even when an
-     * entity's yaw and pitch are static. Correct the VIEWPORT angles at the
-     * final available Forge event, using the same fixed spawn target.
-     */
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onCameraAngles(ViewportEvent.ComputeCameraAngles event) {
         Minecraft client = Minecraft.getInstance();
@@ -132,7 +135,7 @@ public final class SummoningCinematicScreen extends Screen {
         }
     }
 
-    private void ensureCameraLocked() {
+    private void ensureCameraLocked(double sceneTime) {
         Minecraft client = Minecraft.getInstance();
         if (client.player == null || client.level == null) return;
 
@@ -148,24 +151,26 @@ public final class SummoningCinematicScreen extends Screen {
             client.options.bobView().set(false);
         }
 
-        // A dimension transition discards the previous client level. Never
-        // reuse a phantom entity tied to that old level.
         if (camera == null || camera.level() != client.level) {
             camera = new ArmorStand(EntityType.ARMOR_STAND, client.level);
             camera.setInvisible(true);
-            cameraEye = chooseShot(client);
-            updateShotAngles();
+            chooseCameraPath(client);
         }
 
-        // Reassert identical old/current positions: zero position blending
-        // at all partial ticks, even with high FPS or unstable server TPS.
-        Vec3 eye = cameraEye;
-        if (eye == null) return;
+        Vec3 eye = cameraPosition(sceneTime);
+        cameraEye = eye;
         double feetY = eye.y - camera.getEyeHeight();
         camera.setPos(eye.x, feetY, eye.z);
         camera.xo = eye.x;
         camera.yo = feetY;
         camera.zo = eye.z;
+
+        double dx = exactSpawn.x - eye.x;
+        double dy = exactSpawn.y - eye.y;
+        double dz = exactSpawn.z - eye.z;
+        shotYaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+        shotPitch = (float) -Math.toDegrees(
+                Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
         camera.setYRot(shotYaw);
         camera.setXRot(shotPitch);
         camera.yRotO = shotYaw;
@@ -177,14 +182,27 @@ public final class SummoningCinematicScreen extends Screen {
     }
 
     /**
-     * Pick a visible viewpoint ONCE. The look-at position never changes.
-     * The selection does not depend on player yaw, player movement, scale,
-     * client render ticks, or particles.
+     * Preview beginning, middle and end of each candidate camera path.
+     * No level raycasts occur in the animation loop itself.
      */
-    private Vec3 chooseShot(Minecraft client) {
+    private void chooseCameraPath(Minecraft client) {
+        allowArc = false;
+        staticShot = chooseStaticShot(client);
+        for (double offset : VIEW_ANGLES) {
+            double candidate = direction + offset;
+            if (isClear(client, arcPosition(candidate, 0D))
+                    && isClear(client, arcPosition(candidate, 0.5D))
+                    && isClear(client, arcPosition(candidate, 1D))) {
+                baseAngle = candidate;
+                allowArc = true;
+                return;
+            }
+        }
+    }
+
+    private Vec3 chooseStaticShot(Minecraft client) {
         Vec3 best = exactSpawn.add(0D, SHOT_ELEVATION, SHOT_DISTANCE);
         double bestClearance = -1D;
-
         for (double offset : VIEW_ANGLES) {
             double angle = Math.toRadians(direction + offset);
             Vec3 desired = exactSpawn.add(
@@ -195,14 +213,10 @@ public final class SummoningCinematicScreen extends Screen {
             BlockHitResult hit = client.level.clip(new ClipContext(
                     exactSpawn, desired, ClipContext.Block.COLLIDER,
                     ClipContext.Fluid.NONE, client.player));
+            if (hit.getType() == HitResult.Type.MISS) return desired;
 
-            if (hit.getType() == HitResult.Type.MISS) {
-                return desired;
-            }
-
-            double clear = Math.max(0.6D,
-                    Math.min(ray.length(),
-                            exactSpawn.distanceTo(hit.getLocation()) - 0.4D));
+            double clear = Math.max(0.6D, Math.min(ray.length(),
+                    exactSpawn.distanceTo(hit.getLocation()) - 0.4D));
             if (clear > bestClearance) {
                 bestClearance = clear;
                 best = exactSpawn.add(ray.normalize().scale(clear));
@@ -211,16 +225,35 @@ public final class SummoningCinematicScreen extends Screen {
         return best;
     }
 
-    private void updateShotAngles() {
-        if (cameraEye == null) return;
-        // Aim at the exact saved block-centre position, not an NPC, live
-        // player bounding box, particle cloud, or gradually changing focus.
-        double dx = exactSpawn.x - cameraEye.x;
-        double dy = exactSpawn.y - cameraEye.y;
-        double dz = exactSpawn.z - cameraEye.z;
-        shotYaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
-        shotPitch = (float) -Math.toDegrees(
-                Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
+    private boolean isClear(Minecraft client, Vec3 eye) {
+        return client.level.clip(new ClipContext(
+                exactSpawn, eye, ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE, client.player))
+                .getType() == HitResult.Type.MISS;
+    }
+
+    private Vec3 arcPosition(double angle, double eased) {
+        double radians = Math.toRadians(angle + ARC_DEGREES * (eased - 0.5D));
+        double radius = SHOT_DISTANCE + PUSH_IN * (1D - eased);
+        double height = SHOT_ELEVATION + LOWER_BY * (1D - eased);
+        return exactSpawn.add(
+                Math.sin(radians) * radius, height,
+                Math.cos(radians) * radius);
+    }
+
+    private Vec3 cameraPosition(double sceneTime) {
+        if (!allowArc) {
+            return staticShot == null
+                    ? exactSpawn.add(0D, SHOT_ELEVATION, SHOT_DISTANCE)
+                    : staticShot;
+        }
+
+        double u = Math.max(0D, Math.min(1D,
+                (sceneTime - TITLE_TICKS) / SUMMON_TICKS));
+        // Cubic smoothstep: zero velocity at beginning and end; no sudden
+        // first/last frame motion or accumulated coordinate drift.
+        double eased = u * u * (3D - 2D * u);
+        return arcPosition(baseAngle, eased);
     }
 
     @Override
@@ -236,16 +269,58 @@ public final class SummoningCinematicScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         double t = Math.max(0D, Math.min(DURATION_TICKS, ticks + delta));
-        int fade = t < FADE_TICKS
-                ? (int) Math.round(255D * (1D - t / FADE_TICKS))
-                : t > DURATION_TICKS - FADE_TICKS
-                ? (int) Math.round(200D * (t - (DURATION_TICKS - FADE_TICKS)) / FADE_TICKS)
+        if (t < TITLE_TICKS) {
+            renderTitle(graphics, t);
+        } else {
+            renderSummoningOverlay(graphics, t - TITLE_TICKS);
+        }
+
+        String hint = "ESC - Skip intro";
+        graphics.drawString(font, hint, width - font.width(hint) - 12, 17,
+                0xFFD8C8AC, false);
+        super.render(graphics, mouseX, mouseY, delta);
+    }
+
+    private void renderTitle(GuiGraphics graphics, double titleTime) {
+        // A deliberately clean pack title, not a replacement for the pack's
+        // existing summoning art or animations.
+        graphics.fill(0, 0, width, height, 0xFF101016);
+        double opacity = Math.min(1D,
+                Math.min(titleTime / 12D, (TITLE_TICKS - titleTime) / 13D));
+        int alpha = (int) Math.round(Math.max(0D, opacity) * 255D);
+        int titleColor = (alpha << 24) | 0x00F5E6CD;
+        int subColor = (alpha << 24) | 0x00A999BB;
+
+        graphics.pose().pushPose();
+        graphics.pose().translate(width / 2.0F, height / 2.0F - 11.0F, 0.0F);
+        float scale = Math.min(2.2F,
+                Math.max(1F, (width - 44F) / Math.max(1F, font.width(PACK_TITLE))));
+        graphics.pose().scale(scale, scale, 1.0F);
+        graphics.drawCenteredString(font, PACK_TITLE, 0, -9, titleColor);
+        graphics.pose().popPose();
+
+        graphics.drawCenteredString(font, PACK_SUBTITLE,
+                width / 2, height / 2 + 24, subColor);
+        int lineWidth = Math.min(106, width / 2 - 20);
+        if (lineWidth > 0) {
+            graphics.fill(width / 2 - lineWidth, height / 2 + 15,
+                    width / 2 + lineWidth, height / 2 + 16,
+                    (alpha << 24) | 0x007E6A93);
+        }
+    }
+
+    private void renderSummoningOverlay(GuiGraphics graphics, double elapsed) {
+        int fade = elapsed < FADE_TICKS
+                ? (int) Math.round(255D * (1D - elapsed / FADE_TICKS))
+                : elapsed > SUMMON_TICKS - FADE_TICKS
+                ? (int) Math.round(200D
+                    * (elapsed - (SUMMON_TICKS - FADE_TICKS)) / FADE_TICKS)
                 : 0;
         if (fade > 0) {
             graphics.fill(0, 0, width, height, fade << 24);
         }
 
-        double offset = Math.abs(t - REVEAL_TICKS);
+        double offset = Math.abs(elapsed - (REVEAL_TICKS - TITLE_TICKS));
         int flash = offset < 7D ? (int) (110D * (1D - offset / 7D)) : 0;
         if (flash > 0) {
             graphics.fill(0, 0, width, height, (flash << 24) | 0x00E8D8F6);
@@ -253,10 +328,6 @@ public final class SummoningCinematicScreen extends Screen {
 
         graphics.fill(0, 0, width, 10, 0xCE090811);
         graphics.fill(0, height - 10, width, height, 0xCE090811);
-        String hint = "ESC - Skip intro";
-        graphics.drawString(font, hint, width - font.width(hint) - 12, 17,
-                0xFFD8C8AC, false);
-        super.render(graphics, mouseX, mouseY, delta);
     }
 
     @Override
@@ -285,6 +356,7 @@ public final class SummoningCinematicScreen extends Screen {
         }
         camera = null;
         cameraEye = null;
+        staticShot = null;
         previousCamera = null;
     }
 
