@@ -54,6 +54,12 @@ public final class NpcDialogueScreen extends Screen {
 
     public static void open(DialogueView view) {
         Minecraft minecraft = Minecraft.getInstance();
+        // Dialogue must never inherit the arrival cutscene's detached
+        // ArmorStand viewpoint, even if its packet overtakes the normal
+        // cinematic-close packet.
+        if (minecraft.screen instanceof SummoningCinematicScreen) {
+            SummoningCinematicScreen.closeFromServer();
+        }
         if (minecraft.screen instanceof NpcDialogueScreen current
                 && current.waitingForServer
                 && current.view.entityId() == view.entityId()) {
