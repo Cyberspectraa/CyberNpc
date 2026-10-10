@@ -74,6 +74,7 @@ public final class CyberIntroService {
         boolean queueScreenSent;
         boolean revealed;
         boolean effectsStarted;
+        boolean completionRequested;
         Session(UUID id, Stage stage) { this.id = id; this.stage = stage; }
     }
 
@@ -277,7 +278,14 @@ public final class CyberIntroService {
                 startSummoningEffects(player);
             }
             if (elapsed >= REVEAL_TICKS && !session.revealed) reveal(player, session);
-            if (elapsed >= SCENE_TICKS + SCENE_GRACE_TICKS) advanceFromScene(player);
+            // The client's final frame can arrive slightly before the server
+            // reaches its own tick deadline. Remember the request and finish
+            // at the first valid server tick instead of waiting for the
+            // 35-tick emergency timeout.
+            if ((session.completionRequested && elapsed >= SCENE_TICKS)
+                    || elapsed >= SCENE_TICKS + SCENE_GRACE_TICKS) {
+                advanceFromScene(player);
+            }
         }
         if (session.stage == Stage.GREETING) {
             ensurePopeReady(server);
@@ -321,6 +329,7 @@ public final class CyberIntroService {
         session.stageTick = player.getServer().overworld().getGameTime();
         session.revealed = false;
         session.effectsStarted = false;
+        session.completionRequested = false;
         CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new IntroScenePacket(true, arrival.pos(), arrival.yaw()));
         // Summoning particles and sounds begin AFTER the title card, so the
@@ -367,7 +376,10 @@ public final class CyberIntroService {
         if (session == null || session.stage != Stage.CINEMATIC
                 || !player.getUUID().equals(active)) return;
         long elapsed = player.getServer().overworld().getGameTime() - session.stageTick;
-        if (elapsed < SCENE_TICKS) return;
+        if (elapsed < SCENE_TICKS) {
+            session.completionRequested = true;
+            return;
+        }
         reveal(player, session);
         session.stage = Stage.GREETING;
         session.stageTick = player.getServer().overworld().getGameTime();
