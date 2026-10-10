@@ -269,6 +269,16 @@ public final class SummoningCinematicScreen extends Screen {
             completionSent = true;
             CyberNpcNetwork.CHANNEL.sendToServer(new IntroControlPacket(false));
         }
+
+        // Restore the real player camera as soon as the closing dip clears,
+        // even if the server's stop packet is late or the Pope is still
+        // approaching. Setting the screen directly does NOT invoke onClose
+        // (which would incorrectly send the "skip the Pope" packet).
+        // The server remains authoritative for the greeting and intro state.
+        if (ticks >= DURATION_TICKS + 4) {
+            closingFromServer = true;
+            Minecraft.getInstance().setScreen(null);
+        }
     }
 
     @Override
