@@ -273,7 +273,9 @@ public final class SummoningCinematicScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
-        double t = Math.max(0D, Math.min(DURATION_TICKS, ticks + delta));
+        // Keep rendering past the nominal end if server acknowledgement is slow;
+        // this lets the short handoff dip clear instead of holding a dark screen.
+        double t = Math.max(0D, ticks + delta);
         if (t < TITLE_TICKS) {
             renderTitle(graphics, t);
         } else {
@@ -322,12 +324,17 @@ public final class SummoningCinematicScreen extends Screen {
     }
 
     private void renderSummoningOverlay(GuiGraphics graphics, double elapsed) {
-        int fade = elapsed < FADE_TICKS
+        // Preserve the original opening reveal fade. At the very end, use
+        // a quick, soft dip rather than almost a second of darkness that
+        // could remain on-screen while waiting for a server handoff.
+        int openingFade = elapsed < FADE_TICKS
                 ? (int) Math.round(255D * (1D - elapsed / FADE_TICKS))
-                : elapsed > SUMMON_TICKS - FADE_TICKS
-                ? (int) Math.round(200D
-                    * (elapsed - (SUMMON_TICKS - FADE_TICKS)) / FADE_TICKS)
                 : 0;
+        double endDistance = Math.abs(elapsed - SUMMON_TICKS);
+        int handoffDip = endDistance < 4D
+                ? (int) Math.round(105D * (1D - endDistance / 4D))
+                : 0;
+        int fade = Math.max(openingFade, handoffDip);
         if (fade > 0) {
             graphics.fill(0, 0, width, height, fade << 24);
         }
