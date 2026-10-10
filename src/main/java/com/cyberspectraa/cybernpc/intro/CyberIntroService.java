@@ -135,6 +135,18 @@ public final class CyberIntroService {
     public static void onLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player) || !configured(player)) return;
         if (state(player).getBoolean(DONE)) return;
+        // If someone disconnected between the scripted death and respawn,
+        // recover their inventory/checkpoint before retrying the queue.
+        if (state(player).getBoolean(SCRIPTED_DEATH)) {
+            CompoundTag previous = state(player);
+            if (previous.contains("Inventory")) {
+                player.getInventory().load(previous.getList("Inventory", 10));
+            }
+            player.experienceLevel = previous.getInt("VanillaLevel");
+            player.totalExperience = previous.getInt("VanillaXp");
+            player.experienceProgress = previous.getFloat("VanillaProgress");
+            restoreCheckpoint(player);
+        }
         if (state(player).getBoolean(PENDING)) {
             resumeIfPending(player);
         } else if (!created(player)) {
@@ -330,6 +342,14 @@ public final class CyberIntroService {
         session.stageTick = player.getServer().overworld().getGameTime();
         player.setInvulnerable(false);
         player.hurt(player.damageSources().fellOutOfWorld(), Float.MAX_VALUE);
+        if (!player.isDeadOrDying()) {
+            // Creative-mode overrides or third-party damage hooks can reject
+            // even scripted damage. Never strand the player awaiting respawn.
+            restoreCheckpoint(player);
+            player.setInvulnerable(true);
+            session.stage = Stage.RESPAWNING;
+            session.stageTick = player.getServer().overworld().getGameTime();
+        }
         // Vanilla death must occur. Cinematic Respawn (client-only) handles
         // the camera and automatic respawn; without it the normal death screen
         // remains available, and players can respawn manually.
