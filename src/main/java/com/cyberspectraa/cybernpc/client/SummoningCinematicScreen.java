@@ -4,6 +4,7 @@ import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.network.IntroControlPacket;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.CameraType;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
@@ -17,16 +18,15 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderHandEvent;
-import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 import javax.annotation.Nullable;
 
 /**
- * Smooth 6.5-second camera orbit. RenderTickEvent.START positions the
- * temporary client-only camera BEFORE world rendering, so movement
- * interpolates every rendered frame instead of stepping at 20 TPS.
+ * Stable 6.5-second arrival shot. The camera is positioned once at scene
+ * start and remains locked to the actual arrival block, not the current
+ * player rotation, render tick timing or camera orbit.
  */
 @Mod.EventBusSubscriber(modid = CyberNpc.MOD_ID, value = Dist.CLIENT)
 public final class SummoningCinematicScreen extends Screen {
@@ -37,6 +37,7 @@ public final class SummoningCinematicScreen extends Screen {
     private final BlockPos arrival;
     private final float direction;
     @Nullable private Entity previousCamera;
+    @Nullable private CameraType previousCameraType;
     @Nullable private ArmorStand camera;
     private int ticks;
     private boolean completionSent;
@@ -69,75 +70,72 @@ public final class SummoningCinematicScreen extends Screen {
         super.init();
         Minecraft client = Minecraft.getInstance();
         if (client.level == null || client.player == null) return;
-        previousCamera = client.getCameraEntity();
-        camera = new ArmorStand(EntityType.ARMOR_STAND, client.level);
-        camera.setInvisible(true);
-        positionCamera(0D);
+
+        // Minecraft's third-person setting otherwise adds another camera
+        // offset behind our already-positioned cinematic camera. In particular,
+        // players using F5 appeared to drift away from the summoning point.
+        if (previousCameraType == null) {
+            previousCameraType = client.options.getCameraType();
+        }
+        client.options.setCameraType(CameraType.FIRST_PERSON);
+
+        if (camera == null) {
+            previousCamera = client.getCameraEntity();
+            camera = new ArmorStand(EntityType.ARMOR_STAND, client.level);
+            camera.setInvisible(true);
+            positionCameraOnce();
+        }
         client.setCameraEntity(camera);
     }
 
     /**
-     * Called before the 3D world is drawn. The camera's old/current positions
-     * are kept equal to avoid a second layer of Minecraft tick interpolation.
+     * A fixed shot avoids per-frame position/rotation interpolation jitter.
+     * The server teleports to the arrival block centre, so the camera uses
+     * that exact centre rather than following client-side player movement.
+     * Try nearby fixed viewpoints once if the preferred one hits a wall.
      */
-    @SubscribeEvent
-    public static void onRenderTick(TickEvent.RenderTickEvent event) {
-        if (event.phase != TickEvent.Phase.START) return;
-        Minecraft client = Minecraft.getInstance();
-        if (client.screen instanceof SummoningCinematicScreen scene) {
-            scene.positionCamera(scene.ticks + Math.min(1F, event.renderTickTime));
-        }
-    }
-
-    /** Rendering must stay cinematic even on a frame that still uses the player's view. */
-    @SubscribeEvent
-    public static void onRenderHand(RenderHandEvent event) {
-        if (Minecraft.getInstance().screen instanceof SummoningCinematicScreen) {
-            event.setCanceled(true);
-        }
-    }
-
-    private void positionCamera(double timeTicks) {
+    private void positionCameraOnce() {
         Minecraft client = Minecraft.getInstance();
         if (camera == null || client.level == null || client.player == null) return;
 
-        double u = Math.min(1D, Math.max(0D, timeTicks / DURATION_TICKS));
-        // Cubic smoothstep gives zero acceleration jumps at the ends.
-        double eased = u * u * (3D - 2D * u);
-        double radians = Math.toRadians(direction + 140D - 115D * eased);
-        double radius = 4.6D - 1.9D * eased;
-        // Frame the character at the configured arrival block. The target
-        // adapts to shorter/taller races, including Pehkui-scaled players.
-        double focusHeight = Math.max(0.4D,
-                Math.min(1.5D, client.player.getBbHeight() * 0.58D));
+        double focusHeight = Math.max(0.32D,
+                Math.min(1.35D, client.player.getBbHeight() * 0.55D));
         Vec3 focus = Vec3.atBottomCenterOf(arrival).add(0D, focusHeight, 0D);
+        double[] angles = {140D, 100D, 180D, 60D, 220D};
+        Vec3 bestPosition = null;
+        double bestDistance = -1D;
 
-        double x = focus.x + Math.sin(radians) * radius;
-        double z = focus.z + Math.cos(radians) * radius;
-        double y = focus.y + 2.15D - 0.85D * eased;
-        Vec3 desired = new Vec3(x, y, z);
-
-        // The scene needs no extra admin camera markers. Clip the camera
-        // closer when an indoor summoning room has walls in the orbit path.
-        BlockHitResult hit = client.level.clip(new ClipContext(
-                focus, desired, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE,
-                client.player));
-        Vec3 actual = desired;
-        if (hit.getType() == HitResult.Type.BLOCK) {
+        for (double angle : angles) {
+            double radians = Math.toRadians(direction + angle);
+            Vec3 desired = focus.add(
+                    Math.sin(radians) * 4.8D,
+                    1.9D,
+                    Math.cos(radians) * 4.8D);
             Vec3 ray = desired.subtract(focus);
-            double available = Math.max(0.4D, focus.distanceTo(hit.getLocation()) - 0.30D);
-            actual = focus.add(ray.normalize().scale(
-                    Math.min(available, ray.length())));
+            BlockHitResult hit = client.level.clip(new ClipContext(
+                    focus, desired, ClipContext.Block.COLLIDER,
+                    ClipContext.Fluid.NONE, client.player));
+            double allowed = ray.length();
+            if (hit.getType() == HitResult.Type.BLOCK) {
+                allowed = Math.max(0.65D,
+                        Math.min(allowed, focus.distanceTo(hit.getLocation()) - 0.35D));
+            }
+            if (allowed > bestDistance) {
+                bestDistance = allowed;
+                bestPosition = focus.add(ray.normalize().scale(allowed));
+            }
+            if (hit.getType() != HitResult.Type.BLOCK) break;
         }
 
+        Vec3 actual = bestPosition == null ? focus.add(0D, 1.9D, 4.8D) : bestPosition;
         double dx = focus.x - actual.x;
-        double dz = focus.z - actual.z;
         double dy = focus.y - actual.y;
+        double dz = focus.z - actual.z;
         float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
-        float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
-        // Minecraft renders from the camera entity's EYES, not its feet.
-        // Treat 'actual' as the intended viewpoint and offset the armor stand
-        // by its eye height; otherwise the shot looks over the arrival spot.
+        float pitch = (float) -Math.toDegrees(
+                Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
+
+        // Entity cameras render from their eyes, not their feet.
         double feetY = actual.y - camera.getEyeHeight();
         camera.setPos(actual.x, feetY, actual.z);
         camera.xo = actual.x;
@@ -147,6 +145,14 @@ public final class SummoningCinematicScreen extends Screen {
         camera.setXRot(pitch);
         camera.yRotO = yaw;
         camera.xRotO = pitch;
+    }
+
+    /** Never render the player's hand inside the cinematic camera. */
+    @SubscribeEvent
+    public static void onRenderHand(RenderHandEvent event) {
+        if (Minecraft.getInstance().screen instanceof SummoningCinematicScreen) {
+            event.setCanceled(true);
+        }
     }
 
     @Override
@@ -200,6 +206,10 @@ public final class SummoningCinematicScreen extends Screen {
         if (camera != null && client.getCameraEntity() == camera) {
             client.setCameraEntity(client.player != null
                     ? client.player : previousCamera);
+        }
+        if (previousCameraType != null) {
+            client.options.setCameraType(previousCameraType);
+            previousCameraType = null;
         }
         camera = null;
     }
