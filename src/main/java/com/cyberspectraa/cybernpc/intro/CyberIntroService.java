@@ -132,6 +132,25 @@ public final class CyberIntroService {
         return true;
     }
 
+    /**
+     * Replay the complete cinematic and Pope welcome for a finished character,
+     * without clearing their race, class, XP or unlocks. The same FIFO queue
+     * used by natural first-time arrivals also protects repeat testing.
+     *
+     * Results are explicit so CyberServer can show useful command feedback.
+     */
+    public static String testFullIntro(ServerPlayer player) {
+        if (!configured(player)) return "SETUP_REQUIRED";
+        if (!customised(player)) return "CUSTOMIZATION_INCOMPLETE";
+        if (QUEUE.containsKey(player.getUUID())) return "ALREADY_IN_INTRO";
+
+        mark(player, true, false);
+        Session session = new Session(player.getUUID(), Stage.WAITING);
+        QUEUE.put(player.getUUID(), session);
+        hold(player, true);
+        return active == null ? "STARTED" : "QUEUED";
+    }
+
     /** Returning players with interrupted introductions must stay hidden. */
     public static boolean resumeIfPending(ServerPlayer player) {
         if (!configured(player) || !state(player).getBoolean(PENDING)
