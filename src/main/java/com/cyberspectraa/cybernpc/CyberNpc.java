@@ -33,12 +33,13 @@ public final class CyberNpc {
         MinecraftForge.EVENT_BUS.addListener(CyberNpcCommands::register);
         MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.RegisterCommandsEvent event) ->
                 event.getDispatcher().register(
-                    Commands.literal("cyberintro")
+                    Commands.literal("cybernpc")
                         .requires(source -> source.hasPermission(2))
-                        .then(Commands.literal("setarrival").executes(
-                                ctx -> CyberIntroService.setArrival(ctx.getSource())))
-                        .then(Commands.literal("setpopewait").executes(
-                                ctx -> CyberIntroService.setPopeWait(ctx.getSource())))
+                        .then(Commands.literal("intro")
+                            .then(Commands.literal("setarrival").executes(
+                                    ctx -> CyberIntroService.setArrival(ctx.getSource())))
+                            .then(Commands.literal("setpopewait").executes(
+                                    ctx -> CyberIntroService.setPopeWait(ctx.getSource()))))
                 ));
     }
 }
