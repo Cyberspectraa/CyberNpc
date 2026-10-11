@@ -184,6 +184,16 @@ public class CyberNpcEntity extends PathfinderMob {
     private static final int DEBUG_SYNC_INTERVAL = 20;
 
     public static final String NATURAL_SPAWN_TAG = "CyberNpcNaturalSpawn";
+    /** Shared ID used by natural spawn packs and CyberRaces' deterministic habitat roll. */
+    public static final String NATURAL_PACK_TAG = "CyberNpcNaturalPack";
+    /** Only the first naturally spawned member attempts safe camp placement. */
+    public static final String NATURAL_PACK_LEADER_TAG = "CyberNpcNaturalPackLeader";
+
+    private static final class WildNaturalPack implements SpawnGroupData {
+        private final UUID partyId = UUID.randomUUID();
+        private final UUID leaderId;
+        private WildNaturalPack(UUID leaderId) { this.leaderId = leaderId; }
+    }
     public static final String CLASS_ADVANCEMENT_LOCK_TAG = "CyberNpcClassAdvancementLocked";
 
     private static final int CHAT_REACTION_COOLDOWN_TICKS = 40;
@@ -2666,6 +2676,22 @@ public class CyberNpcEntity extends PathfinderMob {
                     true
                 );
 
+                // NaturalSpawner carries SpawnGroupData through each attempt
+                // in one vanilla pack. They become a real party immediately,
+                // not just several strangers who might decide to be friends.
+                // CyberRaces uses this ID to give the pack a coherent biome
+                // appropriate race while keeping individual skin variations.
+                WildNaturalPack pack;
+                if (result instanceof WildNaturalPack previous) {
+                    pack = previous;
+                } else {
+                    pack = new WildNaturalPack(getUUID());
+                    result = pack;
+                    getPersistentData().putBoolean(NATURAL_PACK_LEADER_TAG, true);
+                }
+                getPersistentData().putUUID(NATURAL_PACK_TAG, pack.partyId);
+                setParty(pack.partyId, pack.leaderId);
+
                 // CyberRaces assigns a Wild NPC race just after the entity
                 // joins the level. Delay natural friendship/party seeding so
                 // race preference can participate in the initial social group.
@@ -4235,11 +4261,25 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     private void seedNaturalSpawnSocialContext() {
-        if (!(level() instanceof ServerLevel serverLevel)
-                || getRandom().nextFloat()
-                >= NATURAL_FRIEND_SEED_CHANCE) {
+        if (!(level() instanceof ServerLevel serverLevel)) return;
+
+        // Genuine natural pack members are already a party. Seed their
+        // friendship deterministically, so social AI can share food, defend
+        // the camp and stay together without waiting for random invitations.
+        if (getPersistentData().hasUUID(NATURAL_PACK_TAG)) {
+            UUID packId = getPersistentData().getUUID(NATURAL_PACK_TAG);
+            for (CyberNpcEntity mate : serverLevel.getEntitiesOfClass(
+                    CyberNpcEntity.class, getBoundingBox().inflate(16, 6, 16),
+                    npc -> npc != this && npc.isAlive()
+                            && npc.getNpcType() == NpcType.WILD
+                            && packId.equals(npc.getPersistentData().hasUUID(NATURAL_PACK_TAG)
+                                  ? npc.getPersistentData().getUUID(NATURAL_PACK_TAG) : null))) {
+                if (!areMutualFriends(mate)) seedPreExistingFriendship(mate);
+            }
             return;
         }
+
+        if (getRandom().nextFloat() >= NATURAL_FRIEND_SEED_CHANCE) return;
 
         List<CyberNpcEntity> nearby = serverLevel.getEntitiesOfClass(
                         CyberNpcEntity.class,
