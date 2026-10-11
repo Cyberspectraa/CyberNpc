@@ -21,6 +21,8 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+import java.util.List;
+
 /**
  * Supplements vanilla passive-mob spawning for Wild NPC expeditions.
  *
@@ -43,6 +45,8 @@ public final class WildNpcSpawnRecoveryEvents {
     private static final int MIN_PLAYER_DISTANCE = 36;
     private static final int MAX_PLAYER_DISTANCE = 88;
     private static final int SEARCH_ATTEMPTS = 36;
+    private static final int MAX_PLAYERS_PER_PASS = 2;
+    private static final int STARTUP_GRACE_TICKS = 200;
 
     private WildNpcSpawnRecoveryEvents() {}
 
@@ -53,11 +57,19 @@ public final class WildNpcSpawnRecoveryEvents {
                 || (level.dimension() != Level.OVERWORLD
                     && level.dimension() != Level.NETHER)
                 || !level.getGameRules().getBoolean(GameRules.RULE_DOMOBSPAWNING)
+                || level.getServer().getTickCount() < STARTUP_GRACE_TICKS
                 || level.getGameTime() % SPAWN_INTERVAL_TICKS != 0) {
             return;
         }
 
-        for (ServerPlayer player : level.players()) {
+        // Never scan every online player's surroundings in a single tick.
+        // Rotate which players get checked so multiplayer encounters remain fair.
+        List<ServerPlayer> players = level.players();
+        if (players.isEmpty()) return;
+        int first = (int) ((level.getGameTime() / SPAWN_INTERVAL_TICKS) % players.size());
+        int checks = Math.min(MAX_PLAYERS_PER_PASS, players.size());
+        for (int index = 0; index < checks; index++) {
+            ServerPlayer player = players.get((first + index) % players.size());
             if (player.isSpectator() || !player.isAlive()
                     || level.random.nextFloat() >= 0.80F) {
                 continue;
@@ -83,6 +95,8 @@ public final class WildNpcSpawnRecoveryEvents {
     }
 
     private static BlockPos findSite(ServerLevel level, ServerPlayer player) {
+        // Do not read a heightmap in a chunk that is not fully available yet.
+        if (!isFullyLoaded(level, player.blockPosition())) return null;
         // Surface heightmaps miss cave expeditions entirely. When the player
         // is well below the local surface, search walkable cave floors near
         // their actual Y rather than placing the pack far above them.
@@ -106,7 +120,7 @@ public final class WildNpcSpawnRecoveryEvents {
             BlockPos column = new BlockPos(x, player.getBlockY(), z);
             // Never generate chunks or populate unexplored territory just to
             // force a spawn. Exploration and normal chunk loading remain in charge.
-            if (!level.hasChunkAt(column)) continue;
+            if (!isFullyLoaded(level, column)) continue;
 
             if (level.dimension() == Level.OVERWORLD && !underground) {
                 int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
@@ -130,8 +144,8 @@ public final class WildNpcSpawnRecoveryEvents {
     }
 
     private static boolean safeSite(ServerLevel level, BlockPos pos) {
-        if (!level.hasChunkAt(pos) || !level.hasChunkAt(pos.above())
-                || !level.hasChunkAt(pos.below())
+        if (!isFullyLoaded(level, pos) || !isFullyLoaded(level, pos.above())
+                || !isFullyLoaded(level, pos.below())
                 || !level.getWorldBorder().isWithinBounds(pos)
                 || pos.getY() < level.getMinBuildHeight() + 2
                 || pos.getY() >= level.getMaxBuildHeight() - 2) {
@@ -164,6 +178,10 @@ public final class WildNpcSpawnRecoveryEvents {
                     < MIN_PLAYER_DISTANCE * MIN_PLAYER_DISTANCE) return false;
         }
         return true;
+    }
+
+    private static boolean isFullyLoaded(ServerLevel level, BlockPos pos) {
+        return level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4) != null;
     }
 
     private static boolean noNearbyNpc(ServerLevel level, BlockPos pos) {

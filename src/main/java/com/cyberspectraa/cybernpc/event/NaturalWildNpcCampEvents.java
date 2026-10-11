@@ -12,7 +12,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.event.entity.EntityJoinLevelEvent;
+import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -29,17 +29,24 @@ public final class NaturalWildNpcCampEvents {
     private NaturalWildNpcCampEvents() {}
 
     @SubscribeEvent
-    public static void onWildNpcJoined(EntityJoinLevelEvent event) {
-        if (!(event.getLevel() instanceof ServerLevel level)
-                || !(event.getEntity() instanceof CyberNpcEntity npc)
+    public static void onWildNpcTick(LivingEvent.LivingTickEvent event) {
+        // Never inspect or modify the world inside EntityJoinLevelEvent:
+        // CREATURE mobs can join while initial spawn chunks are generating.
+        // This runs only once a real, server-ticking leader is established.
+        if (!(event.getEntity() instanceof CyberNpcEntity npc)
                 || npc.getNpcType() != NpcType.WILD
                 || !npc.getPersistentData().getBoolean(CyberNpcEntity.NATURAL_SPAWN_TAG)
                 || !npc.getPersistentData().getBoolean(CyberNpcEntity.NATURAL_PACK_LEADER_TAG)
-                || npc.getPersistentData().getBoolean(ATTEMPTED)) {
+                || npc.getPersistentData().getBoolean(ATTEMPTED)
+                || npc.tickCount < 80
+                || npc.tickCount % 20 != 0
+                || !(npc.level() instanceof ServerLevel level)
+                || level.players().isEmpty()
+                || level.getServer().getTickCount() < 100) {
             return;
         }
-        // Once per original spawn: do not leave another permanent camp every
-        // time an NPC or chunk reloads. Respect gamerules / land protection.
+        // Persist the single attempt across chunk reloads, even when a camp
+        // cannot safely be placed. No world queries are made before this point.
         npc.getPersistentData().putBoolean(ATTEMPTED, true);
         if (!level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)
                 || level.dimension() == Level.END) {
@@ -75,7 +82,7 @@ public final class NaturalWildNpcCampEvents {
         for (BlockPos nearby : BlockPos.betweenClosed(
                 centre.offset(-12, -3, -12),
                 centre.offset(12, 3, 12))) {
-            if (!level.hasChunkAt(nearby)) continue;
+            if (!isFullyLoaded(level, nearby)) continue;
             Block block = level.getBlockState(nearby).getBlock();
             if (block == Blocks.CAMPFIRE || block == Blocks.SOUL_CAMPFIRE) {
                 return true;
@@ -87,9 +94,9 @@ public final class NaturalWildNpcCampEvents {
     private static boolean isSafeSite(ServerLevel level, BlockPos pos) {
         if (pos.getY() < level.getMinBuildHeight() + 2
                 || pos.getY() >= level.getMaxBuildHeight() - 2
-                || !level.hasChunkAt(pos)
-                || !level.hasChunkAt(pos.above())
-                || !level.hasChunkAt(pos.below())) return false;
+                || !isFullyLoaded(level, pos)
+                || !isFullyLoaded(level, pos.above())
+                || !isFullyLoaded(level, pos.below())) return false;
         if (!level.getBlockState(pos).isAir()
                 || !level.getBlockState(pos.above()).isAir()
                 || !level.getFluidState(pos).isEmpty()) return false;
@@ -120,6 +127,12 @@ public final class NaturalWildNpcCampEvents {
         return level.getEntitiesOfClass(CyberNpcEntity.class,
                 new net.minecraft.world.phys.AABB(pos).inflate(0.65D),
                 e -> e.isAlive()).isEmpty();
+    }
+
+    // getChunkNow never loads/generates a chunk or waits for worldgen to finish.
+    // hasChunkAt alone is not a guarantee that querying block data is safe.
+    private static boolean isFullyLoaded(ServerLevel level, BlockPos pos) {
+        return level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4) != null;
     }
 
     private static boolean isNaturalFloor(BlockState state) {
