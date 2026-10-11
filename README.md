@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current version: 0.44.39** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.40** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
@@ -15,6 +15,16 @@ CyberNpc is a reusable gameplay mod. [CyberRaces](https://github.com/Cyberspectr
 - **Mason:** special named NPC with a matching spawn egg, skin and the Choso Plush storyline supplied through CyberServer/CyberQuest.
 
 NPCs have humanoid models, visual armour/equipment, generated names, speech/reaction bubbles and social responses. Wild NPCs can become friends, form parties, assist allies, respond to threats, flee, ride compatible horses, hunt animals, collect food, cook, eat, sleep and recover. Their 18-slot inventories and important world data are persistent. Environmental and navigation logic includes fence/trapdoor avoidance and stuck-path recovery.
+
+### Natural Wild NPC expedition groups (0.44.40)
+
+Natural Wild NPCs now spawn as **small expeditions of 2–4 in the Overworld** and **2–3 in the Nether** (rare; Forge biome spawner weights 2 and 1 respectively). **No natural CyberNpc Wild NPCs spawn in the End**; spawn eggs and admin-created NPCs continue to work without restrictions. The existing Forge natural spawn caps and spawn checks still apply, so pack size may be smaller if nearby positions are blocked.
+
+Members of the same vanilla natural-spawn pack receive a persistent shared party ID, a leader and seeded friendships. When CyberRaces is installed, their base race is picked using the natural-spawn pack ID and the local habitat, so same-biome expedition members generally belong to the same race. Race evolutions remain **players-only**, and Undead remains excluded from Wild NPCs.
+
+The first member of a natural pack **tries to establish one campfire** a short distance from its arrival position. A camp is placed only in clear air over ordinary naturally occurring ground, away from dangerous nearby structures and other campfires. Existing terrain and blocks are not excavated or replaced. This respects the `mobGriefing` gamerule, avoids the End, and records the placement attempt so an NPC/chunk reload cannot leave additional campfires. Some terrain or protected sites may have no safe camp spot.
+
+Wild NPCs already hunt, store raw food, claim free campfire slots, cook their food and pick up cooked results; this release reuses that AI rather than creating a parallel cooking system. Camps are **stationary** wilderness stops, not carried while roaming. When `mobGriefing=false` camps are not placed, though existing placed campfires remain usable.
 
 ### Wild combat and class equipment
 
@@ -31,7 +41,7 @@ These percentages describe the Wild NPC gear-tier roll, **not** the chance of re
 
 With **Iron's Spells 'n Spellbooks** installed, compatible Wild casters use real Iron's spells and spellbooks, school-appropriate armour, casting times and animations. Implemented mage schools include Fire, Ice, Lightning, Nature, Holy, Ender, Blood and Evocation. School-specific spellbooks are used where available; Ice and Lightning can use generic Iron's books. The spellbooks remain in NPC inventories and are not duplicated into Curios. Instant and long-cast spells are supported; continuous/channelled spell casting is not yet supported by the NPC casting bridge.
 
-Other optional combat/equipment bridges include **Better Combat**, **Epic Knights** and **Tinkers' Construct**. **CyberRaces** can apply racial appearances, stats, evolutions and race-owned AI to Wild NPCs. **Pehkui** is accommodated for scaled NPC visuals and speech bubble positioning.
+Other optional combat/equipment bridges include **Better Combat**, **Epic Knights** and **Tinkers' Construct**. **CyberRaces** applies base-race appearances, stats, biome-aware natural race rolls and race-owned AI to Wild NPCs (no Wild NPC evolutions). **Pehkui** is accommodated for scaled NPC visuals and speech bubble positioning.
 
 ### Zombie NPCs
 
