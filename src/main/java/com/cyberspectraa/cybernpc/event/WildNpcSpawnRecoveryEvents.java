@@ -35,14 +35,14 @@ import net.minecraftforge.fml.common.Mod;
  */
 @Mod.EventBusSubscriber(modid = CyberNpc.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public final class WildNpcSpawnRecoveryEvents {
-    // One inexpensive opportunity per minute per loaded dimension. Local caps
-    // make further attempts no-ops once the area has a small expedition presence.
-    private static final long SPAWN_INTERVAL_TICKS = 1200L;
-    private static final int LOCAL_WILD_CAP = 8;
+    // A bounded encounter opportunity every 30 seconds per dimension.
+    // Local caps prevent expeditions from overwhelming populated worlds.
+    private static final long SPAWN_INTERVAL_TICKS = 600L;
+    private static final int LOCAL_WILD_CAP = 12;
     private static final int LOCAL_SCAN_RADIUS = 96;
-    private static final int MIN_PLAYER_DISTANCE = 40;
+    private static final int MIN_PLAYER_DISTANCE = 36;
     private static final int MAX_PLAYER_DISTANCE = 88;
-    private static final int SEARCH_ATTEMPTS = 20;
+    private static final int SEARCH_ATTEMPTS = 36;
 
     private WildNpcSpawnRecoveryEvents() {}
 
@@ -59,7 +59,7 @@ public final class WildNpcSpawnRecoveryEvents {
 
         for (ServerPlayer player : level.players()) {
             if (player.isSpectator() || !player.isAlive()
-                    || level.random.nextFloat() >= 0.65F) {
+                    || level.random.nextFloat() >= 0.80F) {
                 continue;
             }
 
@@ -68,7 +68,10 @@ public final class WildNpcSpawnRecoveryEvents {
                     npc -> npc.isAlive() && npc.getNpcType() == NpcType.WILD).size();
             if (existing >= LOCAL_WILD_CAP) continue;
 
-            int size = Math.min(2 + level.random.nextInt(3),
+            // Keep the Nether's smaller 2-3 member packs, even for
+            // supplemental encounters; Overworld packs stay at 2-4.
+            int size = Math.min(2 + level.random.nextInt(
+                    level.dimension() == Level.NETHER ? 2 : 3),
                     LOCAL_WILD_CAP - (int) existing);
             if (size < 2) continue;
 
@@ -80,6 +83,13 @@ public final class WildNpcSpawnRecoveryEvents {
     }
 
     private static BlockPos findSite(ServerLevel level, ServerPlayer player) {
+        // Surface heightmaps miss cave expeditions entirely. When the player
+        // is well below the local surface, search walkable cave floors near
+        // their actual Y rather than placing the pack far above them.
+        boolean underground = level.dimension() == Level.OVERWORLD
+                && player.getBlockY() + 20
+                    < level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                            player.getBlockX(), player.getBlockZ());
         for (int attempt = 0; attempt < SEARCH_ATTEMPTS; attempt++) {
             int dx = level.random.nextInt(MAX_PLAYER_DISTANCE * 2 + 1)
                     - MAX_PLAYER_DISTANCE;
@@ -98,16 +108,18 @@ public final class WildNpcSpawnRecoveryEvents {
             // force a spawn. Exploration and normal chunk loading remain in charge.
             if (!level.hasChunkAt(column)) continue;
 
-            if (level.dimension() == Level.OVERWORLD) {
+            if (level.dimension() == Level.OVERWORLD && !underground) {
                 int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
                 if (Math.abs(y - player.getBlockY()) > 28) continue;
                 BlockPos pos = new BlockPos(x, y, z);
                 if (safeSite(level, pos) && noNearbyNpc(level, pos)) return pos;
             } else {
-                // A heightmap in the Nether normally returns the bedrock roof.
-                // Search near the player's actual Y instead.
-                int top = Math.min(level.getMaxBuildHeight() - 3, player.getBlockY() + 14);
-                int bottom = Math.max(level.getMinBuildHeight() + 2, player.getBlockY() - 18);
+                // The Nether heightmap points at its bedrock roof; caves
+                // likewise need a local vertical scan to find real floors.
+                int above = level.dimension() == Level.NETHER ? 14 : 16;
+                int below = level.dimension() == Level.NETHER ? 18 : 16;
+                int top = Math.min(level.getMaxBuildHeight() - 3, player.getBlockY() + above);
+                int bottom = Math.max(level.getMinBuildHeight() + 2, player.getBlockY() - below);
                 for (int y = top; y >= bottom; y--) {
                     BlockPos pos = new BlockPos(x, y, z);
                     if (safeSite(level, pos) && noNearbyNpc(level, pos)) return pos;
@@ -162,27 +174,42 @@ public final class WildNpcSpawnRecoveryEvents {
     private static void spawnExpedition(ServerLevel level, BlockPos centre, int size) {
         SpawnGroupData group = null;
         for (int index = 0; index < size; index++) {
-            BlockPos spot = null;
-            for (int attempt = 0; attempt < 10; attempt++) {
-                BlockPos candidate = index == 0 ? centre : centre.offset(
-                        level.random.nextInt(7) - 3, 0,
-                        level.random.nextInt(7) - 3);
-                if (safeSite(level, candidate)) {
-                    spot = candidate;
-                    break;
-                }
-            }
-            if (spot == null) break;
-
             CyberNpcEntity npc = ModEntities.CYBER_NPC.get().create(level);
             if (npc == null) break;
-            npc.moveTo(spot.getX() + 0.5D, spot.getY(),
-                    spot.getZ() + 0.5D, level.random.nextFloat() * 360.0F, 0.0F);
-            if (!level.noCollision(npc)) continue;
 
+            float yaw = level.random.nextFloat() * 360.0F;
+            BlockPos spot = index == 0 ? centre : findPackMemberSite(level, centre, npc, yaw);
+            if (spot == null) break;
+
+            npc.moveTo(spot.getX() + 0.5D, spot.getY(),
+                    spot.getZ() + 0.5D, yaw, 0.0F);
+            if (!level.noCollision(npc)) break;
+
+            // Finalize only once a valid site is found, preserving the shared
+            // pack ID, race habitat seed, gear/class rolls and camp leader.
             group = npc.finalizeSpawn(level, level.getCurrentDifficultyAt(spot),
                     MobSpawnType.NATURAL, group, null);
             if (!level.addFreshEntity(npc)) break;
         }
+    }
+
+    private static BlockPos findPackMemberSite(ServerLevel level, BlockPos centre,
+                                                CyberNpcEntity npc, float yaw) {
+        // A fixed Y makes packs collapse into singletons on slopes and in
+        // caves. Check a small vertical neighbourhood without digging or
+        // generating chunks; the ordinary spawn/collision checks still apply.
+        for (int attempt = 0; attempt < 18; attempt++) {
+            int dx = level.random.nextInt(9) - 4;
+            int dz = level.random.nextInt(9) - 4;
+            if (dx == 0 && dz == 0) continue;
+            for (int dy : new int[] {0, 1, -1, 2, -2, 3, -3}) {
+                BlockPos candidate = centre.offset(dx, dy, dz);
+                if (!safeSite(level, candidate)) continue;
+                npc.moveTo(candidate.getX() + 0.5D, candidate.getY(),
+                        candidate.getZ() + 0.5D, yaw, 0.0F);
+                if (level.noCollision(npc)) return candidate;
+            }
+        }
+        return null;
     }
 }

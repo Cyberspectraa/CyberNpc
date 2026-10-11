@@ -3,7 +3,7 @@
   "biomes": "#minecraft:is_nether",
   "spawners": {
     "type": "cybernpc:cyber_npc",
-    "weight": 1,
+    "weight": 2,
     "minCount": 2,
     "maxCount": 3
   }
