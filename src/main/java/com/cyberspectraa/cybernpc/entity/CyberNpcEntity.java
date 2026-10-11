@@ -503,7 +503,17 @@ public class CyberNpcEntity extends PathfinderMob {
             BlockPos pos,
             RandomSource random
     ) {
+        // Spawn eggs and commands are unaffected; the End is off-limits for
+        // naturally generated Wild NPCs, including when datapacks or other
+        // mods inject the entity into an End biome spawn list.
+        if ((spawnType == MobSpawnType.NATURAL
+                || spawnType == MobSpawnType.CHUNK_GENERATION)
+                && level.getLevel().dimension() == Level.END) {
+            return false;
+        }
         return level.getFluidState(pos).isEmpty()
+                && level.getBlockState(pos).isAir()
+                && level.getBlockState(pos.above()).isAir()
                 && level.getBlockState(pos.below()).isValidSpawn(level, pos.below(), entityType);
     }
 
