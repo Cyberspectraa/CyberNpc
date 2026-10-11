@@ -1,220 +1,112 @@
 # CyberNpc
 
-## Current release: 0.41.0
+**Current version: 0.44.39** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
-CyberNpc v0.41.0 replaces the previous building setup with **four invisible marker blocks**.
+CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
-### The four markers
+CyberNpc is a reusable gameplay mod. [CyberRaces](https://github.com/Cyberspectraa/CyberRaces) owns race definitions, [CyberClasses](https://github.com/Cyberspectraa/CyberClasses) owns shared class definitions, [CyberQuest](https://github.com/Cyberspectraa/CyberQuest) owns quests and guild contracts, and [CyberServer](https://github.com/Cyberspectraa/CyberServer) owns this world's progression rules. Optional integrations are checked before use.
 
-**Building Marker**
-- Place one inside the main part of a building.
-- CyberNpc performs one bounded interior scan, using solid walls as the perimeter.
-- Normal doors, trapdoors and gates connect rooms instead of stopping the scan.
-- Exterior sky-visible space is rejected so an open front door does not make the scan spread through the town.
-- If the safe scan budget is ever reached, CyberNpc keeps everything it already found instead of failing with a "too big" error.
-- Any missed section can simply be added with a Room Marker.
+## NPC types and daily life
 
-**Room Marker**
-- Place it inside a room/section the Building Marker did not detect.
-- It runs the same interior scan.
-- It automatically links to the nearby Building Marker and stores its scanned area as part of that **same Building record**.
-- More than one Room Marker may extend the same building.
+- **Main NPCs:** persistent named residents that can be given homes, beds and workstations.
+- **Quest NPCs:** entities usable as quest givers by CyberQuest, including entities with a stable `CyberQuestNpcId`.
+- **Wild NPCs:** naturally generated adventurers with random appearances, races (when CyberRaces is available), classes, gear quality, personality, progression and survival behaviour.
+- **Special service roles:** Banker, Courier, Guard, Pope, Guild Receptionist and Shopkeeper; dedicated spawn eggs and service AI.
+- **Mason:** special named NPC with a matching spawn egg, skin and the Choso Plush storyline supplied through CyberServer/CyberQuest.
 
-**Bed Marker**
-- Place it near a real Minecraft bed.
-- It finds the nearest bed within 8 blocks and links that bed to the nearby Building.
-- Multiple Bed Markers are supported.
-- Multiple linked residents choose different currently available beds at night when possible.
+NPCs have humanoid models, visual armour/equipment, generated names, speech/reaction bubbles and social responses. Wild NPCs can become friends, form parties, assist allies, respond to threats, flee, ride compatible horses, hunt animals, collect food, cook, eat, sleep and recover. Their 18-slot inventories and important world data are persistent. Environmental and navigation logic includes fence/trapdoor avoidance and stuck-path recovery.
 
-**Work Marker**
-- Place it on the exact block where an NPC should stand while working.
-- Face the direction the NPC should face before placing it.
-- It links to the nearby Building.
-- The Work Marker itself is the exact standing/facing position; it is not a loose area.
+### Wild combat and class equipment
 
-All four blocks render invisibly and have no collision in normal play. They keep a small selectable outline so they can still be administered when you know where they are. Sneak + right-click nearby with any marker item removes a marker.
+CyberNpc executes NPC combat and equipment; CyberClasses defines class identities, rarities, restrictions and Level 20 advancements when installed. Normal **Classless** NPCs remain common. Wild NPCs may have melee, ranged, guard, support or casting behaviour depending on their class. Weapon and armour sets improve with gear quality:
 
-### Linking NPCs with the Town Register
+| Gear tier | Generation chance |
+| --- | ---: |
+| Standard | 70% |
+| Fine | 20% |
+| Rare | 8% |
+| Elite | 2% |
 
-The Town Register now works with **any CyberNpc NPC**, not only special service NPCs.
+These percentages describe the Wild NPC gear-tier roll, **not** the chance of receiving a particular class. Armour and combat behaviour respond to the assigned class and advancement; naturally spawned levels/advancement gates can additionally be controlled by CyberServer.
 
-1. Right-click the NPC with the **Town Register** to select them.
-2. Right-click a **Building Marker** with the Town Register to link that NPC to the building as their building/home.
-3. If the NPC works somewhere, right-click the wanted **Work Marker** with the Town Register.
+With **Iron's Spells 'n Spellbooks** installed, compatible Wild casters use real Iron's spells and spellbooks, school-appropriate armour, casting times and animations. Implemented mage schools include Fire, Ice, Lightning, Nature, Holy, Ender, Blood and Evocation. School-specific spellbooks are used where available; Ice and Lightning can use generic Iron's books. The spellbooks remain in NPC inventories and are not duplicated into Curios. Instant and long-cast spells are supported; continuous/channelled spell casting is not yet supported by the NPC casting bridge.
 
-This means an NPC can live in one linked Building but have a Work Marker in a completely different Building.
+Other optional combat/equipment bridges include **Better Combat**, **Epic Knights** and **Tinkers' Construct**. **CyberRaces** can apply racial appearances, stats, evolutions and race-owned AI to Wild NPCs. **Pehkui** is accommodated for scaled NPC visuals and speech bubble positioning.
 
-Normal Main NPCs:
-- go to their linked Work Marker during the day,
-- stand directly on its centre and face its stored direction,
-- return to their linked Building at night,
-- and use an available linked Bed Marker when one exists.
+### Zombie NPCs
 
-Special NPCs such as Banker, Courier, Guard and Pope continue using their persistent special-NPC records. Linking them through the Town Register also updates the relevant Home/Work anchors so their existing service behaviour continues to work.
+CyberNpc includes Wild NPC zombies and a zombification effect. The spawn-replacement handler replaces **exact vanilla `minecraft:zombie` entities** with CyberNpc zombie variants, retaining suitable original entity state. Drowned, Husks and Zombie Villagers are not part of this replacement.
 
-### Marker order and fixing links
+## Towns, buildings and NPC jobs
 
-The easiest order is:
+The current setup uses **four invisible marker blocks**, with small interaction/selection outlines but no normal collision:
 
-1. **Building Marker**
-2. optional **Room Marker(s)**
-3. **Bed Marker(s)**
-4. **Work Marker(s)**
-5. link NPCs with the **Town Register**
+| Marker | Purpose |
+| --- | --- |
+| **Building Marker** | Scans and records a bounded interior building area using the surrounding solid walls. |
+| **Room Marker** | Extends the same building record into another room or section. Multiple room markers are supported. |
+| **Bed Marker** | Links the nearest usable bed within 8 blocks to that building. Residents can use available beds. |
+| **Work Marker** | Records the exact working block and facing direction for an assigned NPC. |
 
-If a Room, Bed or Work marker was placed before its Building existed, right-click that invisible marker later. CyberNpc retries its automatic link instead of making you replace the whole setup.
+A convenient setup order is **Building → optional Room → Bed → Work**. Room/Bed/Work markers placed before the Building Marker can retry linking when interacted with later. Removing a main Building Marker removes its building record.
 
-Removing the main Building Marker removes its saved Building record. Existing secondary marker blocks can then be right-clicked after a new Building Marker is placed to link them again.
+Use the **Town Register** to select an NPC, then right-click a Building Marker to link its home and a Work Marker to assign its job. Main NPCs can travel to work during the day and return to their linked home/bed at night; special NPCs can also update their stored home/work anchors. Sneak-right-click marker removal and old-world data migration remain supported.
 
-The older Building Planner and item-frame marker items remain registered only for world compatibility and are no longer shown as the normal setup system.
+The previous **Building Planner and legacy marker items** remain registered for save compatibility, but are not the recommended setup method.
 
-### Guard Posts
+### Town services
 
-Guards now stand with their feet on the exact centre of a claimed Guard Post marker rather than stopping anywhere inside the old patrol-arrival radius. Shift rotation and bell responses still temporarily pull them away before they return to normal post/patrol duty.
+- **Guards:** guard posts, guard assignment, patrols, bell/alert responses, combat assistance and threat defence.
+- **Pope:** church routines, waiting positions and the scripted first-arrival greeting.
+- **Banker / currency:** persistent player balances, copper/silver/gold/platinum/dragon coins and banking interactions.
+- **Shopkeeper:** basic buying/selling using the coin economy.
+- **Courier / mail:** letter paper, addressed/sealed/opened letters, drop boxes, letter boxes, courier satchels and delivery routes.
+- **Guild Receptionist:** registration and turn-in of CyberQuest's physical Guild Board contracts when CyberQuest is installed.
+- **Developer Glasses:** a tabbed NPC inspector displaying class, gear quality, school, spell and other debug/state information.
 
-## Earlier Wild NPC class documentation
+## First-arrival introduction
 
-CyberNpc v0.14.0 expanded the Wild NPC class system into persistent equipment/loadout classes.
+When both locations are configured, CyberNpc coordinates a one-at-a-time first-arrival queue after character creation and class selection. The current cinematic includes:
 
-## Gear quality
+1. The wooden **TESTING VERSION** Blockbench title as **temporary artwork**, with a title fade.
+2. A controlled camera sweep aimed at the exact configured summoning block centre.
+3. CyberServer summoning visuals when CyberServer is present, followed by the character reveal.
+4. A short closing fade, restoration of the **player's normal camera**, then the Pope's welcome dialogue.
 
-Every Wild NPC now rolls a persistent gear tier independently of class:
+The cinematic is **2.25 seconds of title followed by 6.5 seconds of summoning**, with server-authoritative timing, an ESC skip option and recovery from interruptions. The camera and presentation in **0.44.39** are the accepted baseline; there is no plan to change the animation without a new request.
 
-- **Standard — 70%**
-- **Fine — 20%**
-- **Rare — 8%**
-- **Elite — 2%**
+Set the locations while standing at the required blocks:
 
-Higher tiers can provide stronger armor/weapons, enchantments, and small base-stat improvements. Elite NPCs are intentionally uncommon.
+```mcfunction
+/cybernpc intro setarrival
+/cybernpc intro setpopewait
+```
 
-All Wild NPC classes now spawn with visible armor, including Classless NPCs.
+With CyberServer installed, test the whole flow using `/arrival test`. With CyberRaces installed, the admin command `/cyberresetall` resets character progression and can re-arm the introduction for testing; **it is destructive to the targeted character's progression**.
 
-### Classless
-- Standard: leather armor and ordinary starting weapons.
-- Fine: chainmail armor, improved iron/ranged gear.
-- Rare: iron armor with stronger enchanted gear.
-- Elite: diamond armor with rare high-end weaponry.
-- Remains the common/default class; gear tier does not turn it into a special class.
+## Commands
 
-### Archer
-- Standard leather armor.
-- Fine chainmail.
-- Rare iron.
-- Elite diamond.
-- Uses bow/crossbow plus a backup sword.
-- Better gear tiers improve and enchant its weapons.
+These CyberNpc commands require permission level 2:
 
-### Knight
-- Standard chainmail.
-- Fine iron.
-- Rare diamond.
-- Elite netherite.
-- Sword-focused melee class.
-- Better gear tiers increase health/speed/attack stats in addition to equipment quality.
+```mcfunction
+/cybernpc spawn <name>
+/cybernpc mason spawn
+/cybernpc remove <target>
+/cybernpc intro setarrival
+/cybernpc intro setpopewait
+/cybernpc admin role <target> <role>
+/cybernpc admin wander <target> <true|false>
+/cybernpc admin hunger <target> <0..20>
+```
 
-### Rogue
-- Standard leather.
-- Fine chainmail.
-- Rare iron.
-- Elite diamond.
-- Fast melee/flanking class.
-- Better tiers improve sword quality, enchantments and class stats.
+The old `/cyberintro` top-level commands and former top-level `/cybernpc role`, `wander` and `hunger` are no longer the current command paths. For server arrival testing, use the CyberServer `/arrival` commands.
 
-## Mage schools
+## Integration and implementation notes
 
-Mage still only exists when **Iron's Spells 'n Spellbooks** is installed.
+- Core mod: **CyberNpc**. Compatible gameplay integrations are optional unless your modpack explicitly requires them.
+- **CyberRaces** provides race identity/scale and optional race-specific Wild NPC actions; **CyberClasses** owns the common class registry and advancement definitions.
+- **Iron's Spells 'n Spellbooks** provides real NPC magic; **Better Combat**, **Epic Knights**, **Tinkers' Construct**, **Better Horses** and **Pehkui** have optional compatibility paths.
+- **CyberQuest** integrates NPC quest IDs and guild services; **CyberServer** provides world policy, intro effects and seeded story content.
+- Not every class/advancement has unique combat AI, not every third-party modded block has custom pathfinding, and full gameplay/performance validation still requires in-pack testing.
 
-Each Mage now rolls one persistent Iron's magic school:
-
-- **Fire** — Pyromancer armor.
-- **Ice** — Cryomancer armor.
-- **Lightning** — Electromancer armor.
-- **Nature** — Plagued armor.
-- **Holy** — Priest armor.
-- **Ender** — Shadowwalker armor.
-- **Blood** — Cultist armor.
-- **Evocation** — Archevoker armor.
-
-The school is saved with the NPC and shown in Developer Glasses.
-
-## Real Iron's spellbooks
-
-Every Mage receives a real Iron's spellbook stored in its 18-slot NPC inventory.
-
-Where Iron's provides a suitable school-specific book, CyberNpc uses it:
-
-- Fire: Blaze Spell Book.
-- Nature: Druidic Spell Book.
-- Holy: Villager Spell Book.
-- Ender: Dragonskin Spell Book.
-- Blood: Necronomicon Spell Book.
-- Evocation: Evoker Spell Book.
-
-Ice and Lightning currently use an appropriate generic Iron's spellbook because the tested Iron's 1.20.1 version does not provide a dedicated school book for those schools.
-
-The spellbook is populated with actual Iron's spell-container NBT and real spells from that Mage's school. Gear quality affects spell count and spell level:
-
-- Standard: up to 2 school spells.
-- Fine: up to 3.
-- Rare: up to 3 at higher levels.
-- Elite: up to 4 at the strongest initial levels.
-
-The book is the Mage's actual persistent item. It is shown in the offhand while casting and is dropped with the rest of the NPC's inventory on death.
-
-## Real Iron's casting lifecycle
-
-Mage combat no longer uses CyberNpc-created magic.
-
-CyberNpc's optional compatibility bridge now follows Iron's own mob-casting sequence:
-
-- Reads spells from the Mage's actual spellbook.
-- Uses Iron's real spell registry.
-- Uses `CastSource.MOB`.
-- Creates Iron's `MagicData` and server-side synced spell data for the NPC.
-- Checks the spell's Iron's pre-cast conditions.
-- Uses the real Iron's cast time.
-- Calls Iron's server pre-cast, cast-tick, cast and cast-complete hooks.
-- Supports both **INSTANT** and **LONG** spells.
-- Continuous/channelled spells are intentionally excluded for this first loadout pass until their full repeated-tick behavior is supported safely.
-
-This lets schools such as Nature use their real long-cast Iron's spells rather than being forced into fake instant projectiles.
-
-## Spellcasting animation
-
-CyberNpc still uses its player-shaped model, so it does not replace itself with Iron's GeckoLib mob model.
-
-Instead, the player model now follows the real Iron's cast type/timing:
-
-- Instant spells use a quick forward casting thrust.
-- Long spells hold a sustained two-arm casting pose for the actual Iron's cast duration.
-- The real spellbook is visible in the offhand during the cast.
-- The spell projectile/effect, sound, damage and cast timing still come from Iron's itself.
-
-## Armor rendering
-
-CyberNpc now includes a humanoid armor render layer so vanilla class armor and compatible Forge custom armor can render on the NPC model.
-
-## Curios
-
-No extra Curios dependency was added in v0.14.0 because it is not required for NPC MOB casting: the authoritative spellbook is kept in the real NPC inventory and Iron's MOB casting can use it without a player Curios slot. This also avoids creating a duplicate copy of the book between the NPC inventory and a Curios inventory.
-
-If a later feature specifically requires Curios-only bonuses/accessories, a dedicated soft Curios bridge can be added then.
-
-## Developer Glasses
-
-The tabbed Developer Glasses HUD now also shows:
-
-- Gear tier.
-- Mage school.
-- Current Iron's spell being cast.
-- Internal class/personality/gear/school IDs on the Debug page.
-
-## Existing systems
-
-v0.14.0 keeps the proper 18-slot inventory, class rarity/personality system, combat spacing and assistance, hunger/starvation, food storage, real cooking, beds, persistent claims, livestock management, Zombification/Zombie NPCs, and the tabbed Developer Glasses HUD.
-
-Better Combat remains optional and is not required by CyberNpc.
-
-## Development target
-
-Minecraft 1.20.1, Forge 47.4.10, Java 17.
+For detailed tuning, see the current Java implementation and the corresponding CyberRaces, CyberClasses, CyberQuest and CyberServer repositories. Do not delete legacy registry IDs or world data when updating existing saves.
