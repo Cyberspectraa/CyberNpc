@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current version: 0.44.40** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.44** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
@@ -42,6 +42,8 @@ CyberNpc executes NPC combat and equipment; CyberClasses defines class identitie
 These percentages describe the Wild NPC gear-tier roll, **not** the chance of receiving a particular class. Armour and combat behaviour respond to the assigned class and advancement; naturally spawned levels/advancement gates can additionally be controlled by CyberServer.
 
 With **Iron's Spells 'n Spellbooks** installed, compatible Wild casters use real Iron's spells and spellbooks, school-appropriate armour, casting times and animations. Implemented mage schools include Fire, Ice, Lightning, Nature, Holy, Ender, Blood and Evocation. School-specific spellbooks are used where available; Ice and Lightning can use generic Iron's books. The spellbooks remain in NPC inventories and are not duplicated into Curios. Instant and long-cast spells are supported; continuous/channelled spell casting is not yet supported by the NPC casting bridge.
+
+With **CyberRaces 0.3.2-alpha.47+**, Slime Wild NPCs render their colour as part of the base skin rather than a second translucent animated model. This keeps female slim arms aligned with bow-drawing poses. If CyberRaces is missing or an older release is installed, CyberNpc keeps the original renderer and does not crash. No race, class, NPC inventory or save data changes are required.
 
 Other optional combat/equipment bridges include **Better Combat**, **Epic Knights** and **Tinkers' Construct**. **CyberRaces** applies base-race appearances, stats, biome-aware natural race rolls and race-owned AI to Wild NPCs (no Wild NPC evolutions). **Pehkui** is accommodated for scaled NPC visuals and speech bubble positioning.
 

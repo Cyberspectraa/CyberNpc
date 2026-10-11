@@ -271,6 +271,10 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
 
     @Override
     public ResourceLocation getTextureLocation(CyberNpcEntity entity) {
-        return CyberNpcSkinCache.getNpcTexture(entity);
+        ResourceLocation original = CyberNpcSkinCache.getNpcTexture(entity);
+        // The optional CyberRaces client hook replaces only Slime NPC skins.
+        // Drawing the gel as part of this existing pass prevents two sets of
+        // translucent arms crossing during bow draw on female (slim) models.
+        return CyberNpcSlimeSkinCompat.textureFor(entity, original);
     }
 }
