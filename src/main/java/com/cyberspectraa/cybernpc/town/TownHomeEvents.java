@@ -7,6 +7,7 @@ import com.cyberspectraa.cybernpc.item.TownRegisterItem;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
@@ -73,6 +74,18 @@ public final class TownHomeEvents {
                 || !(event.level instanceof ServerLevel level)
                 || level.getGameTime() % 1200L != 200L) return;
         TownHomeSavedData.get(level).populateOne(level);
+    }
+
+    @SubscribeEvent
+    public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END
+                || !(event.player instanceof ServerPlayer player)
+                || player.tickCount % 12 != 0
+                || (!(player.getMainHandItem().getItem() instanceof TownRegisterItem)
+                    && !(player.getOffhandItem().getItem() instanceof TownRegisterItem))) {
+            return;
+        }
+        TownHomeSavedData.get(player.serverLevel()).showClaimedDoorHighlights(player);
     }
 
     @SubscribeEvent

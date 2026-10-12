@@ -18,13 +18,15 @@ import java.util.Set;
 
 /**
  * Tight on-demand walkable-interior flood scan: never loads chunks or alters
- * blocks, and rejects scans that spill outside the 14-block envelope.
+ * blocks, and rejects scans that spill outside a bounded 48-block envelope.
  * The clicked front door is held closed virtually, even when open in-world.
  */
 public final class HouseInteriorScanner {
-    private static final int HORIZONTAL = 14;
-    private static final int VERTICAL = 8;
-    private static final int MAX_CELLS = 1200;
+    // Accommodates large custom-built homes and several connected floors.
+    // The walkable-cell budget bounds the actual work independently of volume.
+    private static final int HORIZONTAL = 48;
+    private static final int VERTICAL = 16;
+    private static final int MAX_CELLS = 12000;
 
     public record Result(boolean success, String message, BlockPos inside, Set<Long> beds) {
         static Result fail(String message) {
@@ -50,7 +52,7 @@ public final class HouseInteriorScanner {
         }
         if (chosen == null) {
             if ((front != null && front.escaped) || (back != null && back.escaped)) {
-                return Result.fail("House scan reached open ground or the safe size limit. Close wall gaps and try again.");
+                return Result.fail("House scan reached open ground or its safety limit (48 blocks from the door, 16 vertically, max 12000 walkable cells). Check outside gaps, and keep adjoining rooms connected by doors or stairs.");
             }
             return Result.fail("No reachable beds behind this door. Check the interior and any doors between rooms.");
         }
@@ -71,19 +73,26 @@ public final class HouseInteriorScanner {
             }
             BlockPos pos = queue.removeFirst();
             for (Direction direction : Direction.Plane.HORIZONTAL) {
+                // As soon as a route reaches the search boundary or an
+                // unloaded chunk, this is not a contained house. Stop rather
+                // than visiting up to 12000 exterior terrain blocks.
+                if (scan.escaped) return scan;
                 BlockPos side = pos.relative(direction);
                 collectBed(level, side, scan.beds);
                 collectBed(level, side.below(), scan.beds);
                 collectBed(level, side.above(), scan.beds);
                 enqueue(level, start, door, side, scan, queue);
+                if (scan.escaped) return scan;
                 BlockState lower = loaded(level, side) ? level.getBlockState(side)
                         : net.minecraft.world.level.block.Blocks.BEDROCK.defaultBlockState();
                 if (lower.getBlock() instanceof StairBlock || lower.getBlock() instanceof SlabBlock) {
                     enqueue(level, start, door, side.above(), scan, queue);
+                    if (scan.escaped) return scan;
                 }
                 if (loaded(level, side) && level.getBlockState(side)
                         .getCollisionShape(level, side).isEmpty()) {
                     enqueue(level, start, door, side.below(), scan, queue);
+                    if (scan.escaped) return scan;
                 }
             }
         }

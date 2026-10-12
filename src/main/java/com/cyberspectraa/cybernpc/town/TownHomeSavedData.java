@@ -4,6 +4,12 @@ import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.entity.CyberNpcNameGenerator;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
+import net.minecraft.core.particles.DustParticleOptions;
+import org.joml.Vector3f;
+import net.minecraft.world.InteractionHand;
+import com.cyberspectraa.cybernpc.item.TownRegisterItem;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.core.Direction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -32,6 +38,10 @@ import java.util.UUID;
 public final class TownHomeSavedData extends SavedData {
     private static final String KEY = "cybernpc_town_homes_v1";
     private static final double TOWN_RADIUS_SQR = 128.0D * 128.0D;
+    private static final double VISIBLE_DOOR_RADIUS_SQR = 28.0D * 28.0D;
+    private static final int MAX_HIGHLIGHTED_DOORS = 8;
+    private static final DustParticleOptions CLAIMED_DOOR_GLOW =
+            new DustParticleOptions(new Vector3f(0.22F, 0.95F, 0.65F), 1.25F);
     private final Map<UUID, Town> towns = new LinkedHashMap<>();
     private final Map<UUID, Home> homes = new LinkedHashMap<>();
     private int nextTown = 1;
@@ -289,6 +299,71 @@ public final class TownHomeSavedData extends SavedData {
             if (!home.residents.containsValue(bed)) return bed;
         }
         return null;
+    }
+
+    /**
+     * Visible, emerald-coloured door frame glimmers for the Town Register's
+     * holder only. The server owns registration truth, so there are no client
+     * caches that might claim a door belonging to another saved world.
+     *
+     * Called at most once every 12 ticks per holder. Never forces chunks.
+     */
+    public void showClaimedDoorHighlights(ServerPlayer player) {
+        ServerLevel level = player.serverLevel();
+        if (homes.isEmpty() || player.isSpectator() || !player.isAlive()
+                || (!(player.getMainHandItem().getItem() instanceof TownRegisterItem)
+                && !(player.getOffhandItem().getItem() instanceof TownRegisterItem))) {
+            return;
+        }
+
+        int shown = 0;
+        String dimension = level.dimension().location().toString();
+        for (Home home : homes.values()) {
+            if (shown >= MAX_HIGHLIGHTED_DOORS) break;
+            Town town = towns.get(home.townId);
+            if (town == null || !town.dimension.equals(dimension)
+                    || player.distanceToSqr(home.door.getX() + 0.5D,
+                            home.door.getY() + 1.0D, home.door.getZ() + 0.5D)
+                            > VISIBLE_DOOR_RADIUS_SQR
+                    || level.getChunkSource().getChunkNow(
+                            home.door.getX() >> 4, home.door.getZ() >> 4) == null) {
+                continue;
+            }
+            BlockState state = level.getBlockState(home.door);
+            if (!(state.getBlock() instanceof DoorBlock)) continue;
+            Direction facing = state.getValue(DoorBlock.FACING);
+            // A thin outline is placed on the player's side of the doorway,
+            // rather than in the door block or extending through the wall.
+            boolean alongX = facing.getAxis() == Direction.Axis.Z;
+            double planeX = home.door.getX() + 0.5D;
+            double planeZ = home.door.getZ() + 0.5D;
+            if (alongX) {
+                planeZ = home.door.getZ()
+                        + (player.getZ() < home.door.getZ() + 0.5D ? 0.15D : 0.85D);
+            } else {
+                planeX = home.door.getX()
+                        + (player.getX() < home.door.getX() + 0.5D ? 0.15D : 0.85D);
+            }
+            for (int height = 0; height < 5; height++) {
+                double y = home.door.getY() + 0.14D + height * 0.43D;
+                for (double side : new double[]{0.12D, 0.88D}) {
+                    double x = alongX ? home.door.getX() + side : planeX;
+                    double z = alongX ? planeZ : home.door.getZ() + side;
+                    level.sendParticles(player, CLAIMED_DOOR_GLOW, true,
+                            x, y, z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+                }
+            }
+            // Glowing upper lintel makes a registered door easily identifiable
+            // even when viewed at a distance or around a corner.
+            for (double across : new double[]{0.35D, 0.65D}) {
+                level.sendParticles(player, CLAIMED_DOOR_GLOW, true,
+                        alongX ? home.door.getX() + across : planeX,
+                        home.door.getY() + 1.96D,
+                        alongX ? planeZ : home.door.getZ() + across,
+                        1, 0.0D, 0.0D, 0.0D, 0.0D);
+            }
+            shown++;
+        }
     }
 
     /** A home is either in the new registry or still on legacy marker data. */
