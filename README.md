@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current version: 0.44.47** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.48** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
@@ -63,11 +63,13 @@ The new housing registry is independent of the previous building-marker registry
 4. **Sneak-right-click the town bell** to enable/disable automatic move-ins. This is OFF by default. With a nearby player and safe loaded interior, at most one Main NPC moves into the dimension each minute. Households vary between singles, couples, families and roommates (limited by beds); new NPCs receive saved identities and social relationships.
 5. Clicking the front door again **refreshes** its rooms/beds without deleting residents. A missing bed leaves its resident temporarily unassigned until a vacant bed is found. Unloaded residents remain in persistent home records and are never respawned as replacements merely because a chunk unloaded.
 
+**Extra-large house scanning (0.44.48):** The one-click house scanner extends to **128 blocks horizontally and 48 blocks vertically** from the clicked entrance, with a hard limit of **25,000 traversed indoor cells**. It now distinguishes roofed, walkable interior rooms from uncovered streets and gardens, so a second open doorway no longer automatically makes the scan flood the whole village. The scan still never forces chunk loading; if distant rooms are unloaded, an otherwise valid house can register provisionally with its detected beds and reports that the scan is partial. Rescanning a partial home merges detected beds rather than erasing existing bed assignments. The town-to-house registration radius is also **256 blocks** from the bell. Re-click registered house doors to refresh them.
+
 **Larger house scanning (0.44.47):** The scan now reaches up to **48 blocks horizontally and 16 blocks vertically from the registered front door**, with an independent **12,000 walkable-cell work limit**. Larger houses, connected staircases and multi-storey builds fit without allowing unlimited outdoor scanning. If the flood reaches open ground, an unloaded chunk or the safety limit, the house must still be enclosed; the scan never loads chunks. Re-register an existing home by clicking its front door again to update detected beds.
 
 **Claimed-door glow (0.44.47):** Holding the **Town Register in either hand** reveals a soft mint-green particle frame around already registered house doors within **28 blocks**. Only the player holding the Register sees the effect, and only around registered doors in loaded chunks. It stops automatically when you put the Register away. This is visual feedback, not a solid marker or permanent world effect.
 
-Home scans do not force chunks to load, and refuse open ground or oversized interiors. Close gaps and have a connected, reachable bedroom if the scan fails; the new scanner has a 48-block horizontal and 16-block vertical envelope around the door. Bell and door interactions with the Town Register take precedence over vanilla bell ringing/door opening; use an empty hand for ordinary block use.
+Home scans do not force chunks to load, and refuse open ground or oversized interiors. Close gaps and have a connected, reachable bedroom if the scan fails; the new scanner has a 128-block horizontal and 48-block vertical envelope around the door. Bell and door interactions with the Town Register take precedence over vanilla bell ringing/door opening; use an empty hand for ordinary block use.
 
 **Old housing markers (legacy compatibility only):** the previous setup used **four invisible marker blocks**, with small interaction/selection outlines but no normal collision:
 

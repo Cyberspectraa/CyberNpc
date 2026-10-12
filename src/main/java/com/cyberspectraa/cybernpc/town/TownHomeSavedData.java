@@ -37,7 +37,8 @@ import java.util.UUID;
  */
 public final class TownHomeSavedData extends SavedData {
     private static final String KEY = "cybernpc_town_homes_v1";
-    private static final double TOWN_RADIUS_SQR = 128.0D * 128.0D;
+    // Broad enough to assign homes in sprawling player-built settlements.
+    private static final double TOWN_RADIUS_SQR = 256.0D * 256.0D;
     private static final double VISIBLE_DOOR_RADIUS_SQR = 28.0D * 28.0D;
     private static final int MAX_HIGHLIGHTED_DOORS = 8;
     private static final DustParticleOptions CLAIMED_DOOR_GLOW =
@@ -188,7 +189,7 @@ public final class TownHomeSavedData extends SavedData {
     public String useDoor(ServerLevel level, BlockPos lowerDoor,
                           @Nullable CyberNpcEntity selected, boolean sneaking) {
         Town town = nearestTown(level, lowerDoor);
-        if (town == null) return "Create a town first: click its bell with the Town Register (within 128 blocks).";
+        if (town == null) return "Create a town first: click its bell with the Town Register (within 256 blocks).";
         Home home = null;
         for (Home candidate : homes.values()) {
             if (candidate.townId.equals(town.id) && candidate.door.equals(lowerDoor)) {
@@ -231,16 +232,25 @@ public final class TownHomeSavedData extends SavedData {
             homes.put(home.id, home);
             nextHome++;
         }
-        home.inside = scan.inside();
-        home.beds.clear();
+        if (!scan.partial()) {
+            home.inside = scan.inside();
+            home.beds.clear();
+        }
+        // If distant rooms were unloaded, merge newly found beds rather than
+        // deleting old saved assignments belonging to those unloaded rooms.
         home.beds.addAll(scan.beds());
         reassignBeds(home);
-        home.target = Math.min(home.target, home.beds.size());
+        home.target = Math.max(home.residents.size(),
+                householdTarget(home.kind, home.beds.size()));
         setDirty();
         return "Home " + (indexOfHome(home) + 1) + " registered in " + town.name
                 + ": " + home.beds.size() + " beds, " + home.residents.size()
                 + " residents, " + home.kind.toLowerCase(java.util.Locale.ROOT)
                 + " household (target " + home.target + ")."
+                + (scan.partial()
+                        ? " Partial scan: some chunks were unloaded. Existing bed assignments were preserved. "
+                            + "Keep the far rooms loaded and click again for a full refresh."
+                        : " Full indoor scan completed.")
                 + " Sneak-click the bell to enable gradual move-ins.";
     }
 
