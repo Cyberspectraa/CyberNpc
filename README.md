@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current version: 0.44.45** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.46** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
@@ -53,7 +53,19 @@ CyberNpc includes Wild NPC zombies and a zombification effect. The spawn-replace
 
 ## Towns, buildings and NPC jobs
 
-The current setup uses **four invisible marker blocks**, with small interaction/selection outlines but no normal collision:
+### New town homes and mixed households (0.44.46 — opt-in)
+
+The new housing registry is independent of the previous building-marker registry. **Main NPC housing only** is being migrated first; workplaces, market stalls and service jobs will be revisited separately. Existing world buildings, residents, work markers and special NPC anchors are preserved.
+
+1. Hold the **Town Register**, right-click an ordinary **bell** to found a town. Another normal click shows its house/bed/resident counts.
+2. Build a **walled, walkable house with real beds** and right-click its **front door** with the Town Register. The server performs a one-off bounded interior scan, on already-loaded chunks only. Door registration does not create NPCs automatically.
+3. Optionally select an existing ordinary **Main NPC** using the Town Register, then **sneak-right-click the registered door** to give them a vacant bed. Every bed can belong to at most one resident.
+4. **Sneak-right-click the town bell** to enable/disable automatic move-ins. This is OFF by default. With a nearby player and safe loaded interior, at most one Main NPC moves into the dimension each minute. Households vary between singles, couples, families and roommates (limited by beds); new NPCs receive saved identities and social relationships.
+5. Clicking the front door again **refreshes** its rooms/beds without deleting residents. A missing bed leaves its resident temporarily unassigned until a vacant bed is found. Unloaded residents remain in persistent home records and are never respawned as replacements merely because a chunk unloaded.
+
+Home scans do not force chunks to load, and refuse open ground or oversized interiors. Close gaps and have a connected, reachable bedroom if the scan fails; the new scanner has a 14-block horizontal and 8-block vertical envelope around the door. Bell and door interactions with the Town Register take precedence over vanilla bell ringing/door opening; use an empty hand for ordinary block use.
+
+**Old housing markers (legacy compatibility only):** the previous setup used **four invisible marker blocks**, with small interaction/selection outlines but no normal collision:
 
 | Marker | Purpose |
 | --- | --- |
@@ -62,7 +74,7 @@ The current setup uses **four invisible marker blocks**, with small interaction/
 | **Bed Marker** | Links the nearest usable bed within 8 blocks to that building. Residents can use available beds. |
 | **Work Marker** | Records the exact working block and facing direction for an assigned NPC. |
 
-A convenient setup order is **Building → optional Room → Bed → Work**. Room/Bed/Work markers placed before the Building Marker can retry linking when interacted with later. Removing a main Building Marker removes its building record.
+For old marker-based buildings, a convenient setup order is **Building → optional Room → Bed → Work**. Room/Bed/Work markers placed before the Building Marker can retry linking when interacted with later. Removing a main Building Marker removes its building record.
 
 Use the **Town Register** to select an NPC, then right-click a Building Marker to link its home and a Work Marker to assign its job. Main NPCs can travel to work during the day and return to their linked home/bed at night; special NPCs can also update their stored home/work anchors. Sneak-right-click marker removal and old-world data migration remain supported.
 

@@ -1105,6 +1105,21 @@ public class CyberNpcEntity extends PathfinderMob {
                 && socialMemory.isFriend(other.getUUID());
     }
 
+    /**
+     * Generated town household relationships are genuine persistent social
+     * memories, not just labels. Wild NPC parties and dialogue are unaffected.
+     */
+    public void seedTownHouseholdBond(CyberNpcEntity other, String kind) {
+        if (level().isClientSide || other == null || other == this
+                || getNpcType() != NpcType.MAIN
+                || other.getNpcType() != NpcType.MAIN) return;
+
+        int affinity = "COUPLE".equals(kind) ? 75
+                : "FAMILY".equals(kind) ? 65 : 36;
+        socialMemory.seedFriendship(other.getUUID(), affinity, affinity - 6, 32);
+        other.socialMemory.seedFriendship(getUUID(), affinity, affinity - 6, 32);
+    }
+
     public void reactToPlayerChat(
             Player player,
             NpcChatIntent intent,

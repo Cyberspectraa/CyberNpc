@@ -3,6 +3,7 @@ package com.cyberspectraa.cybernpc.entity;
 import com.cyberspectraa.cybernpc.building.BuildingPointType;
 import com.cyberspectraa.cybernpc.building.BuildingSavedData;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
+import com.cyberspectraa.cybernpc.town.TownHomeSavedData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -48,9 +49,13 @@ final class NpcBuildingBrain {
                 buildings.findResidentBuilding(level, npc);
         BuildingSavedData.WorkAssignment work =
                 buildings.findAssignedWork(level, npc);
+        // New opt-in town homes take precedence. Existing marker homes remain
+        // untouched and continue to function for pre-migration residents.
+        TownHomeSavedData.HomeAssignment townHome =
+                TownHomeSavedData.get(level).assignedHome(level, npc.getUUID());
 
         if (npc.isSleeping()) {
-            if (level.isNight() && home != null) {
+            if (level.isNight() && (home != null || townHome != null)) {
                 npc.getNavigation().stop();
                 npc.setSprinting(false);
                 busy = true;
@@ -70,6 +75,40 @@ final class NpcBuildingBrain {
 
             busy = false;
             return false;
+        }
+
+        if (townHome != null) {
+            busy = true;
+            npc.setSprinting(false);
+            BlockPos assigned = townHome.bed();
+            if (assigned != null
+                    && level.getChunkSource().getChunkNow(
+                            assigned.getX() >> 4, assigned.getZ() >> 4) != null) {
+                BlockPos bed = normalizeBedHead(level, assigned);
+                if (bed != null && !isBedOccupied(level, bed)) {
+                    if (npc.distanceToSqr(Vec3.atBottomCenterOf(bed)) > BED_USE_DISTANCE_SQR) {
+                        navigateTo(bed, 0.72D);
+                    } else {
+                        npc.getNavigation().stop();
+                        setBedOccupied(level, bed, true);
+                        activeBed = bed;
+                        npc.startSleeping(bed);
+                        homeTarget = null;
+                    }
+                    return true;
+                }
+            }
+            // A removed or temporarily occupied bed does not erase housing
+            // identity or cause an NPC to take somebody else's claimed bed.
+            if (level.getChunkSource().getChunkNow(
+                    townHome.inside().getX() >> 4, townHome.inside().getZ() >> 4) != null) {
+                if (npc.blockPosition().distSqr(townHome.inside()) > HOME_ARRIVE_SQR) {
+                    navigateTo(townHome.inside(), 0.70D);
+                } else {
+                    npc.getNavigation().stop();
+                }
+            }
+            return true;
         }
 
         if (home == null) {
