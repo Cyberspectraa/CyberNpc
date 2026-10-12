@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current version: 0.44.44** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.45** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
@@ -14,7 +14,7 @@ CyberNpc is a reusable gameplay mod. [CyberRaces](https://github.com/Cyberspectr
 - **Special service roles:** Banker, Courier, Guard, Pope, Guild Receptionist and Shopkeeper; dedicated spawn eggs and service AI.
 - **Mason:** special named NPC with a matching spawn egg, skin and the Choso Plush storyline supplied through CyberServer/CyberQuest.
 
-NPCs have humanoid models, visual armour/equipment, generated names, speech/reaction bubbles and social responses. Wild NPCs can become friends, form parties, assist allies, respond to threats, flee, ride compatible horses, hunt animals, collect food, cook, eat, sleep and recover. Their 18-slot inventories and important world data are persistent. Environmental and navigation logic includes fence/trapdoor avoidance and stuck-path recovery.
+NPCs have humanoid models, visual armour/equipment, generated names, speech/reaction bubbles and social responses. **Wild NPCs never open the written NPC dialogue UI**: right-clicking one produces a contextual, non-verbal reaction bubble and its existing grunt/vocalisation. Only Main, Quest and service NPCs can speak through scripted dialogue. This restriction is checked both during entity interaction and by the server dialogue controller to prevent stale sessions or indirect calls. Administrative tools, race abilities, social behaviour and Wild NPC reactions remain compatible. Wild NPCs can become friends, form parties, assist allies, respond to threats, flee, ride compatible horses, hunt animals, collect food, cook, eat, sleep and recover. Their 18-slot inventories and important world data are persistent. Environmental and navigation logic includes fence/trapdoor avoidance and stuck-path recovery.
 
 ### Natural Wild NPC expedition groups (0.44.43)
 

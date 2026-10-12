@@ -7900,9 +7900,29 @@ public class CyberNpcEntity extends PathfinderMob {
             return held.interactLivingEntity(player, this, hand);
         }
 
-        // Only open one dialogue for the main hand to avoid duplicate packets.
+        // Only process the main hand once, so dual-hand clicks cannot
+        // duplicate an interaction or its visual/audio reaction.
         if (hand != InteractionHand.MAIN_HAND) {
             return InteractionResult.PASS;
+        }
+
+        if (getNpcType() == NpcType.WILD) {
+            // Wild NPCs are deliberately speechless. A player can greet one
+            // through the existing emoji bubble and non-verbal vocalisation,
+            // but must never open the written dialogue interface. Admin tools
+            // above still work on Wild NPCs, including town registration.
+            if (!level().isClientSide && !isSleeping() && !isZombifying()) {
+                int reputation = getPlayerReputation(player.getUUID());
+                NpcReactionIcon reaction = isCombatActive()
+                        ? NpcReactionIcon.DANGER
+                        : reputation <= -25
+                                ? NpcReactionIcon.ANNOYED
+                                : reputation >= 25
+                                        ? NpcReactionIcon.FRIENDLY
+                                        : NpcReactionIcon.GREETING;
+                showReaction(reaction, 55);
+            }
+            return InteractionResult.sidedSuccess(level().isClientSide);
         }
 
         if (!level().isClientSide

@@ -27,7 +27,8 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Single conversation controller for every CyberNpc service and ordinary NPC.
+ * Server-authoritative conversation controller for Main, Quest and service
+ * NPCs only. Wild NPCs communicate through reaction bubbles, not dialogue.
  * The client renders the conversation but never decides rewards,
  * coin payments, quest registration or NPC identity.
  */
@@ -201,7 +202,10 @@ public final class NpcDialogueController {
     }
 
     private static boolean valid(ServerPlayer player, CyberNpcEntity npc) {
+        // Defence in depth: even another mod or a stale client dialogue
+        // session cannot make a Wild NPC speak or execute dialogue actions.
         return player != null && npc != null && npc.isAlive()
+            && npc.getNpcType() != NpcType.WILD
             && player.level() == npc.level()
             && player.distanceToSqr(npc) <= MAX_RANGE_SQR;
     }
@@ -303,9 +307,7 @@ public final class NpcDialogueController {
             case COURIER -> "Letters, packages, deliveries. Can I help?";
             case GUARD -> "Halt a moment, traveller. Everything all right?";
             case POPE -> "Peace be with you. What troubles your heart?";
-            default -> npc.getNpcType() == NpcType.WILD
-                ? "Well met. Don't mind the road dust."
-                : "Greetings, traveller. What can I do for you?";
+            default -> "Greetings, traveller. What can I do for you?";
         };
     }
 
