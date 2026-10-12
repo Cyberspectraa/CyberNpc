@@ -9,7 +9,7 @@ import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class CyberNpcNetwork {
-    private static final String PROTOCOL = "4";
+    private static final String PROTOCOL = "3";
 
     public static final SimpleChannel CHANNEL =
             NetworkRegistry.ChannelBuilder.named(
@@ -57,13 +57,6 @@ public final class CyberNpcNetwork {
                 .encoder(IntroControlPacket::encode)
                 .decoder(IntroControlPacket::decode)
                 .consumerMainThread(IntroControlPacket::handle)
-                .add();
-
-        CHANNEL.messageBuilder(
-                VoiceCaptionPacket.class, nextId++, NetworkDirection.PLAY_TO_CLIENT)
-                .encoder(VoiceCaptionPacket::encode)
-                .decoder(VoiceCaptionPacket::decode)
-                .consumerMainThread(VoiceCaptionPacket::handle)
                 .add();
 
         CHANNEL.messageBuilder(

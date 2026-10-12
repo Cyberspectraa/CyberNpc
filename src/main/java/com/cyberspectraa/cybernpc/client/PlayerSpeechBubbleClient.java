@@ -79,20 +79,6 @@ public final class PlayerSpeechBubbleClient {
         );
     }
 
-    /**
-     * The server controls speaker identity and recipients. Partial updates
-     * have a short TTL to avoid frozen captions after packet loss.
-     */
-    public static void onVoiceCaption(UUID speaker, String text, boolean complete) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || text == null || text.isBlank()) return;
-        String clean = text.trim();
-        if (clean.length() > 180) clean = clean.substring(0, 180);
-        long ttl = complete ? 70L : 24L;
-        ACTIVE.put(speaker, new SpeechState(Component.literal(clean),
-                minecraft.level.getGameTime() + ttl));
-    }
-
     @SubscribeEvent
     public static void onRenderPlayer(
             RenderPlayerEvent.Post event
