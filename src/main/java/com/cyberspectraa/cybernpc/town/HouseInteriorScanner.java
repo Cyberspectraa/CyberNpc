@@ -16,14 +16,17 @@ import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Collections;
 import java.util.Set;
 
 /**
  * One-click house scan, including large connected multi-floor houses.
  *
  * A hard distance and reachable-cell budget prevent unlimited scanning;
- * roof/shelter detection prevents a second entrance, open garden, or double
- * door from flooding the surrounding town. We never request chunk loading.
+ * Roof/shelter checks plus exterior-entrance ownership prevent an entire
+ * covered street, townhouse row or connecting corridor being called one home.
+ * Other registered doors are hard scan boundaries. No chunk is loaded.
  */
 public final class HouseInteriorScanner {
     // 0.44.48: 128 horizontal / 48 vertical, up from 48 / 16.
@@ -42,6 +45,11 @@ public final class HouseInteriorScanner {
     }
 
     public static Result scan(ServerLevel level, BlockPos doorPos) {
+        return scan(level, doorPos, Collections.emptySet());
+    }
+
+    public static Result scan(ServerLevel level, BlockPos doorPos,
+                              Set<BlockPos> otherRegisteredEntrances) {
         if (!loaded(level, doorPos)) {
             return Result.fail("House door is not in a loaded chunk.");
         }
@@ -52,8 +60,12 @@ public final class HouseInteriorScanner {
         }
 
         Direction facing = state.getValue(DoorBlock.FACING);
-        Scan front = flood(level, door.relative(facing), door);
-        Scan back = flood(level, door.relative(facing.getOpposite()), door);
+        Set<Long> registered = new HashSet<>();
+        for (BlockPos another : otherRegisteredEntrances) {
+            if (!another.equals(door)) registered.add(another.asLong());
+        }
+        Scan front = flood(level, door.relative(facing), door, registered);
+        Scan back = flood(level, door.relative(facing.getOpposite()), door, registered);
         Scan chosen = null;
 
         if (front != null && front.complete() && !front.beds.isEmpty()) {
@@ -69,8 +81,9 @@ public final class HouseInteriorScanner {
 
         if (chosen != null) {
             return new Result(true, "Home scanned (" + chosen.walkable.size()
-                    + " accessible indoor spaces)", chosen.start, Set.copyOf(chosen.beds),
-                    chosen.stoppedUnloaded);
+                    + " accessible indoor spaces, "
+                    + chosen.otherEntrances.size() + " other entrances excluded)",
+                    chosen.start, Set.copyOf(chosen.beds), chosen.stoppedUnloaded);
         }
 
         // Explain the actual blocker rather than blaming house size every time.
@@ -94,13 +107,15 @@ public final class HouseInteriorScanner {
             return Result.fail("Neither side of this door has a walkable, roofed "
                     + "interior. Check the floor, entrance, roof, and door position.");
         }
-        return Result.fail("No beds were found in connected indoor rooms. "
-                + "The scanner follows doors and stairs, and ignores open streets.");
+        return Result.fail("No beds belong to this entrance. Other exterior "
+                + "doors and registered house entrances are separate homes; "
+                + "use each home's own front door. Also check that beds are reachable.");
     }
 
-    private static Scan flood(ServerLevel level, BlockPos start, BlockPos door) {
+    private static Scan flood(ServerLevel level, BlockPos start, BlockPos door,
+                              Set<Long> registeredEntrances) {
         if (!standable(level, start, door)) return null;
-        Scan scan = new Scan(start.immutable());
+        Scan scan = new Scan(start.immutable(), door, registeredEntrances);
         if (!sheltered(level, start, scan)) return null;
 
         ArrayDeque<BlockPos> pending = new ArrayDeque<>();
@@ -112,6 +127,7 @@ public final class HouseInteriorScanner {
 
             for (Direction direction : Direction.Plane.HORIZONTAL) {
                 BlockPos side = pos.relative(direction);
+                detectCompetingEntrance(level, side, scan);
                 collectBed(level, side, scan);
                 collectBed(level, side.below(), scan);
                 collectBed(level, side.above(), scan);
@@ -132,12 +148,106 @@ public final class HouseInteriorScanner {
                 if (!scan.complete()) break;
             }
         }
+        // A long, covered passage between neighbouring houses must not let
+        // the first clicked door claim beds closer to another exterior entry.
+        // Interior doors with roofed rooms on both sides are not boundaries.
+        scan.beds.removeIf(bed -> {
+            BlockPos bedPos = BlockPos.of(bed);
+            double ownDistance = doorDistanceSqr(bedPos, scan.door);
+            for (long other : scan.otherEntrances) {
+                if (doorDistanceSqr(bedPos, BlockPos.of(other)) + 4.0D
+                        < ownDistance) return true;
+            }
+            return false;
+        });
         return scan;
+    }
+
+    private static double doorDistanceSqr(BlockPos a, BlockPos b) {
+        long dx = (long) a.getX() - b.getX();
+        long dz = (long) a.getZ() - b.getZ();
+        long dy = (long) a.getY() - b.getY();
+        return (double) (dx * dx + dz * dz + dy * dy);
+    }
+
+    /**
+     * A door leading from a roofed room out into uncovered space is an
+     * exterior entrance. Don't confuse it with an ordinary indoor room door.
+     * Registered front doors always win, even under a continuous awning.
+     */
+    private static void detectCompetingEntrance(ServerLevel level,
+                                                 BlockPos candidate, Scan scan) {
+        if (!loaded(level, candidate)) return;
+        BlockState state = level.getBlockState(candidate);
+        if (!(state.getBlock() instanceof DoorBlock)) return;
+        BlockPos other = lowerDoor(level, candidate);
+        if (other.equals(scan.door)) return;
+        if (sameDoubleEntrance(level, scan.door, other)) {
+            // The second leaf of the selected double front door is not
+            // a distinct home entrance.
+            return;
+        }
+        if (scan.knownEntrances.contains(other.asLong())
+                || isExteriorDoor(level, other, scan)) {
+            scan.otherEntrances.add(other.asLong());
+        }
+    }
+
+    private static boolean sameDoubleEntrance(ServerLevel level,
+                                              BlockPos original, BlockPos other) {
+        if (original.getY() != other.getY()
+                || Math.abs(original.getX() - other.getX()) > 1
+                || Math.abs(original.getZ() - other.getZ()) > 1
+                || !loaded(level, original) || !loaded(level, other)) {
+            return false;
+        }
+        BlockState first = level.getBlockState(original);
+        BlockState second = level.getBlockState(other);
+        if (!(first.getBlock() instanceof DoorBlock)
+                || !(second.getBlock() instanceof DoorBlock)) return false;
+        Direction facing = first.getValue(DoorBlock.FACING);
+        if (facing != second.getValue(DoorBlock.FACING)
+                || first.getValue(DoorBlock.HINGE)
+                    == second.getValue(DoorBlock.HINGE)) return false;
+        return facing.getAxis() == Direction.Axis.Z
+                ? original.getZ() == other.getZ()
+                : original.getX() == other.getX();
+    }
+
+    private static boolean isExteriorDoor(ServerLevel level,
+                                          BlockPos door, Scan scan) {
+        BlockState state = level.getBlockState(door);
+        if (!(state.getBlock() instanceof DoorBlock)) return false;
+        Direction direction = state.getValue(DoorBlock.FACING);
+        BlockPos front = door.relative(direction);
+        BlockPos back = door.relative(direction.getOpposite());
+        if (!loaded(level, front) || !loaded(level, back)) return false;
+        boolean frontRoofed = sheltered(level, front, scan);
+        boolean backRoofed = sheltered(level, back, scan);
+        return frontRoofed != backRoofed;
+    }
+
+    private static boolean competingDoorAt(ServerLevel level, BlockPos pos,
+                                           Scan scan) {
+        if (!loaded(level, pos)) return false;
+        BlockState state = level.getBlockState(pos);
+        if (!(state.getBlock() instanceof DoorBlock)) return false;
+        detectCompetingEntrance(level, pos, scan);
+        BlockPos other = lowerDoor(level, pos);
+        if (other.equals(scan.door)) return true;
+        if (sameDoubleEntrance(level, scan.door, other)) {
+            // Block the matching leaf as well: no access through either
+            // half of the selected front entrance during a house scan.
+            return true;
+        }
+        return scan.otherEntrances.contains(other.asLong());
     }
 
     private static void enqueue(ServerLevel level, BlockPos door, BlockPos next,
                                 Scan scan, ArrayDeque<BlockPos> pending) {
         if (scan.walkable.contains(next.asLong())) return;
+        if (competingDoorAt(level, next, scan)
+                || competingDoorAt(level, next.above(), scan)) return;
         if (!loaded(level, next) || !loaded(level, next.above())
                 || !loaded(level, next.below())) {
             // Stop at this chunk without forcing it to load. Successfully
@@ -242,13 +352,18 @@ public final class HouseInteriorScanner {
         final BlockPos start;
         final Set<Long> walkable = new LinkedHashSet<>();
         final Set<Long> beds = new LinkedHashSet<>();
+        final Set<Long> otherEntrances = new LinkedHashSet<>();
+        final Set<Long> knownEntrances;
+        final BlockPos door;
         final Map<Long, Boolean> roofCache = new HashMap<>();
         boolean stoppedUnloaded;
         boolean stoppedBoundary;
         boolean stoppedBudget;
 
-        Scan(BlockPos start) {
+        Scan(BlockPos start, BlockPos door, Set<Long> registeredEntrances) {
             this.start = start;
+            this.door = door;
+            this.knownEntrances = registeredEntrances;
         }
 
         boolean complete() {

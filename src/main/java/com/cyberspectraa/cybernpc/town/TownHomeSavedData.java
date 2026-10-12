@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.HashMap;
 import java.util.UUID;
 
 /**
@@ -218,7 +219,11 @@ public final class TownHomeSavedData extends SavedData {
         if (town == null) return "Create a town first: click its bell with the Town Register (within 256 blocks).";
         Home home = null;
         for (Home candidate : homes.values()) {
-            if (candidate.townId.equals(town.id) && candidate.door.equals(lowerDoor)) {
+            Town ownerTown = towns.get(candidate.townId);
+            if (ownerTown != null
+                    && ownerTown.dimension.equals(level.dimension().location().toString())
+                    && sameEntrance(level, candidate.door, lowerDoor)) {
+                // Either half of a double entrance is the same registered home.
                 home = candidate;
                 break;
             }
@@ -241,30 +246,120 @@ public final class TownHomeSavedData extends SavedData {
                     + town.name + " / Home " + (indexOfHome(home) + 1) + ".";
         }
 
-        HouseInteriorScanner.Result scan = HouseInteriorScanner.scan(level, lowerDoor);
-        if (!scan.success()) return scan.message();
+        // The house is identified by its PRIMARY door, not any passage/room
+        // reachable through the roofed-town flood scan. Block traversal via
+        // all other registered front doors and split shared covered spaces by
+        // their nearest entrance.
+        Set<BlockPos> otherDoors = new LinkedHashSet<>();
+        String dimension = level.dimension().location().toString();
         for (Home other : homes.values()) {
-            if (other != home && other.townId.equals(town.id)
-                    && !java.util.Collections.disjoint(other.beds, scan.beds())) {
-                return "This home shares beds with another registered house. Adjust the doorway or house layout.";
+            Town ownerTown = towns.get(other.townId);
+            if (other != home && ownerTown != null
+                    && ownerTown.dimension.equals(dimension)) {
+                otherDoors.add(other.door);
             }
         }
+        BlockPos primaryDoor = home == null ? lowerDoor : home.door;
+        HouseInteriorScanner.Result scan =
+                HouseInteriorScanner.scan(level, primaryDoor, otherDoors);
+        if (!scan.success()) return scan.message();
+
+        Set<Long> detected = new LinkedHashSet<>(scan.beds());
+        // Other registered entrances win beds closer to their own doors.
+        // An occupied bed is NEVER transferred without explicitly moving its
+        // NPC first, preserving legacy saves and permanent sleeping positions.
+        Map<Home, Set<Long>> transfers = new LinkedHashMap<>();
+        int skipped = 0;
+        int reassigned = 0;
+        for (Long bed : scan.beds()) {
+            BlockPos bedPos = BlockPos.of(bed);
+            double ownDistance = horizontalBedDistance(bedPos, primaryDoor);
+            Home nearest = null;
+            double nearestDistance = ownDistance;
+            for (Home other : homes.values()) {
+                Town ownerTown = towns.get(other.townId);
+                if (other == home || ownerTown == null
+                        || !ownerTown.dimension.equals(dimension)) continue;
+                double competing = horizontalBedDistance(bedPos, other.door);
+                if (competing + 4.0D < nearestDistance) {
+                    nearestDistance = competing;
+                    nearest = other;
+                }
+            }
+            if (nearest != null
+                    && (home == null || !home.residents.containsValue(bed))) {
+                detected.remove(bed);
+                skipped++;
+                continue;
+            }
+            boolean occupiedElsewhere = false;
+            for (Home other : homes.values()) {
+                if (other == home || !other.beds.contains(bed)) continue;
+                if (other.residents.containsValue(bed)) {
+                    occupiedElsewhere = true;
+                    break;
+                }
+                transfers.computeIfAbsent(other, ignored -> new LinkedHashSet<>())
+                        .add(bed);
+            }
+            if (occupiedElsewhere) {
+                detected.remove(bed);
+                skipped++;
+                for (Set<Long> move : transfers.values()) move.remove(bed);
+            }
+        }
+        if (detected.isEmpty()) {
+            return "No exclusive beds found for this front door. The scan "
+                    + "reached neighbouring homes, or their beds are already "
+                    + "assigned to existing residents. Register each house at "
+                    + "its own entrance; occupied beds are never stolen.";
+        }
+
         if (home == null) {
-            String kind = chooseHouseholdKind(level, scan.beds().size(), homes.size());
-            int capacity = scan.beds().size();
-            int target = householdTarget(kind, capacity);
+            String kind = chooseHouseholdKind(level, detected.size(), homes.size());
             home = new Home(UUID.randomUUID(), town.id,
-                    lowerDoor.immutable(), scan.inside(), kind, target);
+                    lowerDoor.immutable(), scan.inside(), kind,
+                    householdTarget(kind, detected.size()));
             homes.put(home.id, home);
             nextHome++;
         }
+
+        // Repair already-registered houses that accidentally included other
+        // homes' unoccupied beds in older versions. No NPC or occupied bed
+        // assignment is modified by a repair.
+        for (Map.Entry<Home, Set<Long>> transfer : transfers.entrySet()) {
+            Home former = transfer.getKey();
+            for (Long bed : transfer.getValue()) {
+                if (detected.contains(bed) && former.beds.remove(bed)) {
+                    reassigned++;
+                }
+            }
+            former.target = Math.max(former.residents.size(),
+                    householdTarget(former.kind, former.beds.size()));
+        }
+
         if (!scan.partial()) {
             home.inside = scan.inside();
             home.beds.clear();
         }
-        // If distant rooms were unloaded, merge newly found beds rather than
-        // deleting old saved assignments belonging to those unloaded rooms.
-        home.beds.addAll(scan.beds());
+        // If distant chunks were unloaded, preserve only pre-existing beds
+        // that aren't known to belong to a different registered door.
+        home.beds.addAll(detected);
+        final Home registeredHome = home;
+        home.beds.removeIf(bed -> {
+            BlockPos bedPos = BlockPos.of(bed);
+            double ours = horizontalBedDistance(bedPos, registeredHome.door);
+            for (Home other : homes.values()) {
+                Town ownerTown = towns.get(other.townId);
+                if (other != registeredHome && ownerTown != null
+                        && ownerTown.dimension.equals(dimension)
+                        && horizontalBedDistance(bedPos, other.door) + 4.0D < ours
+                        && !registeredHome.residents.containsValue(bed)) {
+                    return true;
+                }
+            }
+            return false;
+        });
         reassignBeds(home);
         home.target = Math.max(home.residents.size(),
                 householdTarget(home.kind, home.beds.size()));
@@ -273,11 +368,44 @@ public final class TownHomeSavedData extends SavedData {
                 + ": " + home.beds.size() + " beds, " + home.residents.size()
                 + " residents, " + home.kind.toLowerCase(java.util.Locale.ROOT)
                 + " household (target " + home.target + ")."
+                + (skipped > 0 ? " Excluded " + skipped + " neighbouring-house beds." : "")
+                + (reassigned > 0 ? " Corrected " + reassigned + " previously shared beds." : "")
                 + (scan.partial()
-                        ? " Partial scan: some chunks were unloaded. Existing bed assignments were preserved. "
-                            + "Keep the far rooms loaded and click again for a full refresh."
-                        : " Full indoor scan completed.")
+                        ? " Partial scan: distant chunks are unloaded; existing valid assignments preserved."
+                        : " Each available bed belongs to only this house.")
                 + " Sneak-click the bell to enable gradual move-ins.";
+    }
+
+    private static double horizontalBedDistance(BlockPos bed, BlockPos door) {
+        long dx = (long) bed.getX() - door.getX();
+        long dz = (long) bed.getZ() - door.getZ();
+        long dy = (long) bed.getY() - door.getY();
+        // Height matters for stacked flats/apartments with separate doors.
+        return (double) (dx * dx + dz * dz + dy * dy);
+    }
+
+    /** Both leaves of one double doorway must resolve to one house. */
+    private static boolean sameEntrance(ServerLevel level, BlockPos a, BlockPos b) {
+        if (a.equals(b)) return true;
+        if (a.getY() != b.getY() || Math.abs(a.getX() - b.getX()) > 1
+                || Math.abs(a.getZ() - b.getZ()) > 1
+                || level.getChunkSource().getChunkNow(a.getX() >> 4, a.getZ() >> 4) == null
+                || level.getChunkSource().getChunkNow(b.getX() >> 4, b.getZ() >> 4) == null) {
+            return false;
+        }
+        BlockState first = level.getBlockState(a);
+        BlockState second = level.getBlockState(b);
+        if (!(first.getBlock() instanceof DoorBlock)
+                || !(second.getBlock() instanceof DoorBlock)) return false;
+        Direction facing = first.getValue(DoorBlock.FACING);
+        // Side-by-side neighbours are not necessarily a double door. Only
+        // opposite-hinge leaves facing the SAME way count as one entrance.
+        if (facing != second.getValue(DoorBlock.FACING)
+                || first.getValue(DoorBlock.HINGE) == second.getValue(DoorBlock.HINGE)) {
+            return false;
+        }
+        return facing.getAxis() == Direction.Axis.Z ? a.getZ() == b.getZ()
+                : a.getX() == b.getX();
     }
 
     private int indexOfHome(Home home) {

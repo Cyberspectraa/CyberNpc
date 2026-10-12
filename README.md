@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current version: 0.44.49** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.50** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
@@ -63,6 +63,12 @@ Other optional combat/equipment bridges include **Better Combat**, **Epic Knight
 CyberNpc includes Wild NPC zombies and a zombification effect. The spawn-replacement handler replaces **exact vanilla `minecraft:zombie` entities** with CyberNpc zombie variants, retaining suitable original entity state. Drowned, Husks and Zombie Villagers are not part of this replacement.
 
 ## Towns, buildings and NPC jobs
+
+### Separate house ownership (0.44.50)
+
+Registering a home must never count other houses in the same terrace, row, apartment building or roofed street. House scanning keeps the **128-block horizontal / 48-block vertical safety limits** but now recognises exterior doors, treats **other registered house entrances as solid ownership boundaries**, and rejects beds nearer a competing exterior entrance than the clicked front door. True interior room doors remain traversable. Both leaves of a double entrance count as one house, rather than creating two homes.
+
+Each real bed can belong to **at most one registered home**. On a new registration, beds accidentally claimed by an older home may be reassigned to the new, nearer front door **only if unoccupied**. Occupied/assigned beds and persistent residents are protected from automatic reassignment; the game reports excluded neighbouring beds. Repeat the Town Register click on an older home to refresh its exclusive beds and correct stale scans. Scans are still on-demand, bounded, and never force chunks to load. If two buildings have no meaningful structural division or use an unusual shared entrance, add a proper dividing doorway/wall so the scanner can tell where the homes separate.
 
 ### New town homes and mixed households (0.44.46 — opt-in)
 
