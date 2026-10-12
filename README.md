@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current version: 0.44.50** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.51** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
@@ -112,6 +112,17 @@ The previous **Building Planner and legacy marker items** remain registered for 
 - **Courier / mail:** letter paper, addressed/sealed/opened letters, drop boxes, letter boxes, courier satchels and delivery routes.
 - **Guild Receptionist:** registration and turn-in of CyberQuest's physical Guild Board contracts when CyberQuest is installed.
 - **Developer Glasses:** a tabbed NPC inspector displaying class, gear quality, school, spell and other debug/state information.
+
+### Live proximity voice captions (0.44.51, CyberServer companion)
+
+The existing player speech bubble accepts a temporary server-authorised
+`VoiceCaptionPacket` for recognised Simple Voice Chat speech. Only nearby
+players in the same dimension receive captions (32 block display radius).
+Partial captions expire after about 1.2 seconds without updates and completed
+sentences after 3.5 seconds. Chat messages and NPC bubbles are not changed.
+CyberServer handles actual voice recognition, opt-in and private-group rejection.
+**Both CyberNpc 0.44.51 and compatible CyberServer builds are required**; the
+network protocol is incremented, so clients and the server must update together.
 
 ## First-arrival introduction
 
