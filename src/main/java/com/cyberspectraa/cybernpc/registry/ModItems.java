@@ -8,7 +8,6 @@ import com.cyberspectraa.cybernpc.item.BuildingMarkerItem;
 import com.cyberspectraa.cybernpc.item.BuildingPlannerItem;
 import com.cyberspectraa.cybernpc.item.CyberNpcSpawnEggItem;
 import com.cyberspectraa.cybernpc.item.ChosoPlushItem;
-import com.cyberspectraa.cybernpc.item.DeveloperGlassesItem;
 import com.cyberspectraa.cybernpc.item.LetterPaperItem;
 import com.cyberspectraa.cybernpc.item.GuardPostMarkerItem;
 import com.cyberspectraa.cybernpc.item.NpcMarkerItem;
@@ -298,10 +297,6 @@ public final class ModItems {
                     new SpecialNpcRemovalStickItem(
                             new Item.Properties().stacksTo(1)
                     ));
-
-    public static final RegistryObject<Item> DEVELOPER_GLASSES =
-            ITEMS.register("developer_glasses", () ->
-                    new DeveloperGlassesItem(new Item.Properties()));
 
     private static RegistryObject<Item> marker(
             String name,

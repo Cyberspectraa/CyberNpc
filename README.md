@@ -1,10 +1,20 @@
 # CyberNpc
 
-**Current version: 0.44.50** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.52** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
 CyberNpc is a reusable gameplay mod. [CyberRaces](https://github.com/Cyberspectraa/CyberRaces) owns race definitions, [CyberClasses](https://github.com/Cyberspectraa/CyberClasses) owns shared class definitions, [CyberQuest](https://github.com/Cyberspectraa/CyberQuest) owns quests and guild contracts, and [CyberServer](https://github.com/Cyberspectraa/CyberServer) owns this world's progression rules. Optional integrations are checked before use.
+
+### Developer Glasses removal (0.44.52)
+
+Developer Glasses and the associated tabbed developer HUD have been
+removed, along with their creative item, model, texture, translation entries
+and client V-key binding. Existing world items referencing
+`cybernpc:developer_glasses` will no longer resolve when worlds are loaded.
+This does not change NPC AI, data, dialogue, typed-chat speech bubbles, or
+the ordinary tools used to register towns and houses. The separate
+voice-to-bubble experimental feature remains reverted.
 
 ## NPC types and daily life
 
@@ -111,7 +121,6 @@ The previous **Building Planner and legacy marker items** remain registered for 
 - **Shopkeeper:** basic buying/selling using the coin economy.
 - **Courier / mail:** letter paper, addressed/sealed/opened letters, drop boxes, letter boxes, courier satchels and delivery routes.
 - **Guild Receptionist:** registration and turn-in of CyberQuest's physical Guild Board contracts when CyberQuest is installed.
-- **Developer Glasses:** a tabbed NPC inspector displaying class, gear quality, school, spell and other debug/state information.
 
 ## First-arrival introduction
 

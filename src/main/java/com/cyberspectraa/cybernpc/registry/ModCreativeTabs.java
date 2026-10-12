@@ -57,7 +57,6 @@ public final class ModCreativeTabs {
                                 output.accept(ModItems.WORK_MARKER.get());
 
                                 output.accept(ModItems.SPECIAL_NPC_REMOVAL_STICK.get());
-                                output.accept(ModItems.DEVELOPER_GLASSES.get());
                             })
                             .build()
             );
