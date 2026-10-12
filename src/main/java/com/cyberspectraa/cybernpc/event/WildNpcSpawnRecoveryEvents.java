@@ -4,6 +4,7 @@ import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
+import com.cyberspectraa.cybernpc.town.TownWildSpawnProtection;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -118,6 +119,9 @@ public final class WildNpcSpawnRecoveryEvents {
             int x = player.getBlockX() + dx;
             int z = player.getBlockZ() + dz;
             BlockPos column = new BlockPos(x, player.getBlockY(), z);
+            // Avoid even the heightmap/chunk scan for a candidate in a town
+            // safety zone. Position-only guard also covers caves under town.
+            if (TownWildSpawnProtection.blocksNaturalWildSpawn(level, column)) continue;
             // Never generate chunks or populate unexplored territory just to
             // force a spawn. Exploration and normal chunk loading remain in charge.
             if (!isFullyLoaded(level, column)) continue;
@@ -144,7 +148,9 @@ public final class WildNpcSpawnRecoveryEvents {
     }
 
     private static boolean safeSite(ServerLevel level, BlockPos pos) {
-        if (!isFullyLoaded(level, pos) || !isFullyLoaded(level, pos.above())
+        // Checked again for EACH pack member, not only the expedition centre.
+        if (TownWildSpawnProtection.blocksNaturalWildSpawn(level, pos)
+                || !isFullyLoaded(level, pos) || !isFullyLoaded(level, pos.above())
                 || !isFullyLoaded(level, pos.below())
                 || !level.getWorldBorder().isWithinBounds(pos)
                 || pos.getY() < level.getMinBuildHeight() + 2

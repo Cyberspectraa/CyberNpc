@@ -134,6 +134,32 @@ public final class TownHomeSavedData extends SavedData {
         return tag;
     }
 
+    /**
+     * Pure saved-position check used by BOTH Forge's natural spawn placement
+     * rule and CyberNpc's supplemental expedition generator. No world scans,
+     * chunk loading or changes to legacy resident data.
+     */
+    public boolean blocksNaturalWildSpawn(ServerLevel level, BlockPos pos) {
+        String dimension = level.dimension().location().toString();
+
+        for (Town town : towns.values()) {
+            if (town.dimension.equals(dimension)
+                    && TownWildSpawnProtection.withinHorizontalRange(
+                            pos, town.bell, TownWildSpawnProtection.TOWN_BELL_RADIUS)) {
+                return true;
+            }
+        }
+        for (Home home : homes.values()) {
+            Town town = towns.get(home.townId);
+            if (town != null && town.dimension.equals(dimension)
+                    && TownWildSpawnProtection.withinHorizontalRange(
+                            pos, home.door, TownWildSpawnProtection.REGISTERED_HOME_RADIUS)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Bell click creates a town; sneak click toggles controlled population. */
     public String useBell(ServerLevel level, BlockPos bell, boolean sneaking) {
         Town town = null;

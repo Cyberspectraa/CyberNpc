@@ -3,6 +3,7 @@ package com.cyberspectraa.cybernpc.event;
 import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.entity.NpcType;
+import com.cyberspectraa.cybernpc.town.TownWildSpawnProtection;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -54,7 +55,10 @@ public final class NaturalWildNpcCampEvents {
         }
 
         BlockPos centre = npc.blockPosition();
-        if (nearExistingCamp(level, centre)) return;
+        // Wild NPCs that wandered toward a town must not create a campfire
+        // inside its protected area, even if they originally spawned outside.
+        if (TownWildSpawnProtection.blocksNaturalWildSpawn(level, centre)
+                || nearExistingCamp(level, centre)) return;
 
         // Only build at the edge of the pack, not in its walking space.
         // Deterministic randomized attempts spread sites around the leader.
@@ -92,7 +96,8 @@ public final class NaturalWildNpcCampEvents {
     }
 
     private static boolean isSafeSite(ServerLevel level, BlockPos pos) {
-        if (pos.getY() < level.getMinBuildHeight() + 2
+        if (TownWildSpawnProtection.blocksNaturalWildSpawn(level, pos)
+                || pos.getY() < level.getMinBuildHeight() + 2
                 || pos.getY() >= level.getMaxBuildHeight() - 2
                 || !isFullyLoaded(level, pos)
                 || !isFullyLoaded(level, pos.above())

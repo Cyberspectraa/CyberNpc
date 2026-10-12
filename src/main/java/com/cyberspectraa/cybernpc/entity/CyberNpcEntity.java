@@ -15,6 +15,7 @@ import com.cyberspectraa.cybernpc.registry.ModEffects;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.cyberspectraa.cybernpc.registry.ModItems;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
+import com.cyberspectraa.cybernpc.town.TownWildSpawnProtection;
 import com.cyberspectraa.cybernpc.dialogue.NpcDialogueController;
 import com.cyberspectraa.cybernpc.service.SpecialNpcSavedData;
 import com.cyberspectraa.cybernpc.world.CyberNpcWorldClaims;
@@ -506,10 +507,12 @@ public class CyberNpcEntity extends PathfinderMob {
         // Spawn eggs and commands are unaffected; the End is off-limits for
         // naturally generated Wild NPCs, including when datapacks or other
         // mods inject the entity into an End biome spawn list.
-        if ((spawnType == MobSpawnType.NATURAL
-                || spawnType == MobSpawnType.CHUNK_GENERATION)
-                && level.getLevel().dimension() == Level.END) {
-            return false;
+        if (spawnType == MobSpawnType.NATURAL
+                || spawnType == MobSpawnType.CHUNK_GENERATION) {
+            if (level.getLevel().dimension() == Level.END
+                    || TownWildSpawnProtection.blocksNaturalWildSpawn(level.getLevel(), pos)) {
+                return false;
+            }
         }
         return level.getFluidState(pos).isEmpty()
                 && level.getBlockState(pos).isAir()

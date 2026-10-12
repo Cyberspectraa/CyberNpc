@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current version: 0.44.48** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.49** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
@@ -27,6 +27,17 @@ Members of the same vanilla natural-spawn pack receive a persistent shared party
 The first member of a natural pack **tries to establish one campfire** a short distance from its arrival position. A camp is placed only in clear air over ordinary naturally occurring ground, away from dangerous nearby structures and other campfires. Existing terrain and blocks are not excavated or replaced. This respects the `mobGriefing` gamerule, avoids the End, and records the placement attempt so an NPC/chunk reload cannot leave additional campfires. Some terrain or protected sites may have no safe camp spot.
 
 Wild NPCs already hunt, store raw food, claim free campfire slots, cook their food and pick up cooked results; this release reuses that AI rather than creating a parallel cooking system. Camps are **stationary** wilderness stops, not carried while roaming. When `mobGriefing=false` camps are not placed, though existing placed campfires remain usable.
+
+### Wild NPC town-spawn protection (0.44.49)
+
+Wild NPCs **do not spawn naturally inside or near protected towns**. This includes standard Forge biome/pack spawns and the bounded supplemental expedition generator. The exclusion is horizontal (also protects caves and rooftops), persists in the existing town save data, and does not generate/load chunks:
+
+- Within **320 blocks** of a registered Town Register bell (256-block house registration area plus a 64-block wilderness buffer).
+- Within **144 blocks** of each registered house door, including houses far from the town bell.
+- Within **192 blocks** of the Overworld world spawn point, whether or not a bell town has been established.
+- Within **192 blocks** of CyberNpc's configured first-arrival/summoning position in its dimension, when set.
+
+Wild NPC camps will also never be newly constructed within these protected areas, even when a previously spawned Wild NPC wanders into town. **This does not remove or teleport existing Wild NPCs, stop them walking through towns, change the Nether wilderness outside the protected area, or restrict spawn eggs/admin spawns or Main NPC town residents.** No setup changes are required for already registered bells and houses. The constants are in `TownWildSpawnProtection` for future tuning.
 
 ### Wild combat and class equipment
 
