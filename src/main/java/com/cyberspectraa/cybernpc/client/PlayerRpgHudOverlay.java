@@ -62,8 +62,9 @@ public final class PlayerRpgHudOverlay {
         } else if ("irons_spellbooks".equals(id.getNamespace())
                 && "mana_overlay".equals(id.getPath())
                 && IronsManaHudCompat.current(Minecraft.getInstance().player) != null) {
-            // Only suppress Iron's native mana if we can draw the true mana
-            // ourselves. An unavailable optional API must not hide its HUD.
+            // Also suppress the native gauge for a recognised zero-capacity
+            // pool; otherwise it would reappear when our blue bar is hidden.
+            // An unavailable optional API must not hide its HUD.
             event.setCanceled(true);
         }
     }
@@ -100,7 +101,10 @@ public final class PlayerRpgHudOverlay {
                 hunger + "/20", GREEN_DARK, GREEN_LIGHT);
 
         IronsManaHudCompat.Mana mana = IronsManaHudCompat.current(player);
-        if (mana != null) {
+        // A recognised zero-capacity mana pool means the character has no
+        // mana, not that the optional integration is unavailable. Hide this
+        // gauge while still suppressing Iron's own native gauge below.
+        if (mana != null && mana.maximum() > 0) {
             gauge(gui, font, bx, y + 44, 32, MANA_WIDTH,
                     mana.current() / (float) Math.max(1, mana.maximum()),
                     mana.current() + "/" + mana.maximum(),
