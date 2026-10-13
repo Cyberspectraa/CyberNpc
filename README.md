@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current version: 0.44.55** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.56** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
@@ -15,6 +15,37 @@ and client V-key binding. Existing world items referencing
 This does not change NPC AI, data, dialogue, typed-chat speech bubbles, or
 the ordinary tools used to register towns and houses. The separate
 voice-to-bubble experimental feature remains reverted.
+
+## Top-left player RPG HUD (0.44.56 preview)
+
+Optional, **client-side top-left HUD panel** with a 3D preview of the real
+player model/skin/gear, a health bar that follows maximum HP, a mana bar
+using Iron's Spells 'n Spellbooks' own client-synced mana and max-mana
+attribute, and compact hunger/armour numeric displays. This does not
+create a new mana system or change combat, healing or hunger mechanics.
+
+* Vanilla player hearts, hunger icons, armour icons and Iron's original
+  `mana_overlay` are hidden only while the replacement HUD is active.
+* Hotbar, XP/level, crosshair, air, mount health, effects and other overlays
+  remain untouched.
+* Mana is optional. If Iron's Spells is not installed or its client data
+  cannot be read, a neutral "unavailable" label appears instead.
+* Uses vanilla's real player inventory-preview rendering, so clothing,
+  equipped armor, skins, and compatible race rendering can be shown.
+  HUD clipping is scoped to the portrait viewport.
+* Client config is generated at
+  `config/cybernpc-hud-client.toml` with the following settings:
+  `rpg_hud.enabled`, `rpg_hud.replace_vanilla_bars`,
+  `rpg_hud.show_character_preview`, `rpg_hud.x_offset`, and
+  `rpg_hud.y_offset`. The HUD can be disabled without removing the mod.
+* The experiment is fully client-side. No new packets or multiplayer
+  protocol changes; install the same CyberNpc version as your server.
+
+**Test:** Compare third-person preview including your race/armor,
+verify health and mana update in real time, take food damage/heal,
+and verify the hotbar remains usable. If the modpack has another
+health/mana HUD, disable its own bar to prevent overlap. This is a
+preview, not yet visually tested across all races and UI scale settings.
 
 ## Workstation removal keybind (0.44.55)
 

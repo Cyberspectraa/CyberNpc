@@ -1,6 +1,7 @@
 package com.cyberspectraa.cybernpc;
 
 import com.cyberspectraa.cybernpc.command.CyberNpcCommands;
+import com.cyberspectraa.cybernpc.client.PlayerHudConfig;
 import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.registry.ModBlocks;
 import com.cyberspectraa.cybernpc.registry.ModCreativeTabs;
@@ -11,6 +12,8 @@ import com.cyberspectraa.cybernpc.registry.ModSounds;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.ModLoadingContext;
+import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 
 @Mod(CyberNpc.MOD_ID)
@@ -27,6 +30,8 @@ public final class CyberNpc {
         ModSounds.SOUND_EVENTS.register(modEventBus);
         ModCreativeTabs.TABS.register(modEventBus);
         CyberNpcNetwork.register();
+        ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT,
+                PlayerHudConfig.SPEC, "cybernpc-hud-client.toml");
 
         MinecraftForge.EVENT_BUS.addListener(CyberNpcCommands::register);
     }
