@@ -6,6 +6,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderGuiEvent;
@@ -17,31 +18,32 @@ import net.minecraftforge.fml.common.Mod;
 import java.util.Locale;
 
 /**
- * Optional client RPG HUD. All values are read from live client game state.
- * Never changes health, hunger, armour, Iron's mana or other game mechanics.
- * Hotbar, XP, mount health, air, status effects and crosshair stay vanilla.
+ * Classic Minecraft-style pixel HUD inspired by the arrangement (not assets)
+ * of Souls Combat HUD. Narrow stone-rimmed gauges and an unboxed player model.
+ * No simulated stats; no change to core inventory/hotbar/crosshair rendering.
  */
 @Mod.EventBusSubscriber(modid = CyberNpc.MOD_ID, value = Dist.CLIENT,
         bus = Mod.EventBusSubscriber.Bus.FORGE)
 public final class PlayerRpgHudOverlay {
-    private static final int WIDTH = 258;
-    private static final int HEIGHT = 115;
-    private static final int PORTRAIT_WIDTH = 66;
-    private static final int BAR_WIDTH = 163;
+    private static final ResourceLocation FRAME =
+            new ResourceLocation(CyberNpc.MOD_ID, "textures/gui/player_hud.png");
+    private static final int ATLAS_W = 256;
+    private static final int ATLAS_H = 96;
+    private static final int HEALTH_WIDTH = 144;
+    private static final int HUNGER_WIDTH = 152;
+    private static final int MANA_WIDTH = 184;
+    private static final int MAX_W = 253;
+    private static final int MAX_H = 93;
 
-    private static final int EDGE = 0xE26F849A;
-    private static final int PANEL = 0xDA101A29;
-    private static final int PORTRAIT = 0xCB263447;
-    private static final int WHITE = 0xFFECF2FA;
-    private static final int MUTED = 0xFFACBDD0;
-    private static final int HEALTH = 0xFFD95663;
-    private static final int HEALTH_DARK = 0xFF482E38;
-    private static final int MANA = 0xFF6594ED;
-    private static final int MANA_DARK = 0xFF223752;
-    private static final int FOOD = 0xFFE3B865;
-    private static final int ARMOR = 0xFFAAC4D8;
+    private static final int RED_DARK = 0xFF77322C;
+    private static final int RED_LIGHT = 0xFFBD534A;
+    private static final int GREEN_DARK = 0xFF2D693E;
+    private static final int GREEN_LIGHT = 0xFF4F9A58;
+    private static final int BLUE_DARK = 0xFF2C568D;
+    private static final int BLUE_LIGHT = 0xFF417CB5;
+    private static final int WHITE = 0xFFF5F0E1;
 
-    private static boolean shouldRender() {
+    private static boolean visible() {
         Minecraft mc = Minecraft.getInstance();
         return PlayerHudConfig.ENABLED.get()
                 && !mc.options.hideGui
@@ -51,127 +53,100 @@ public final class PlayerRpgHudOverlay {
     }
 
     @SubscribeEvent
-    public static void hideOriginalBars(RenderGuiOverlayEvent.Pre event) {
-        if (!shouldRender() || !PlayerHudConfig.REPLACE_VANILLA.get()) return;
+    public static void hideVanilla(RenderGuiOverlayEvent.Pre event) {
+        if (!visible() || !PlayerHudConfig.REPLACE_VANILLA.get()) return;
         var id = event.getOverlay().id();
         if (id.equals(VanillaGuiOverlay.PLAYER_HEALTH.id())
                 || id.equals(VanillaGuiOverlay.ARMOR_LEVEL.id())
-                || id.equals(VanillaGuiOverlay.FOOD_LEVEL.id())
-                || ("irons_spellbooks".equals(id.getNamespace())
-                        && "mana_overlay".equals(id.getPath()))) {
+                || id.equals(VanillaGuiOverlay.FOOD_LEVEL.id())) {
+            event.setCanceled(true);
+        } else if ("irons_spellbooks".equals(id.getNamespace())
+                && "mana_overlay".equals(id.getPath())
+                && IronsManaHudCompat.current(Minecraft.getInstance().player) != null) {
+            // Only suppress Iron's native mana if we can draw the true mana
+            // ourselves. An unavailable optional API must not hide its HUD.
             event.setCanceled(true);
         }
     }
 
     @SubscribeEvent
     public static void draw(RenderGuiEvent.Post event) {
-        if (!shouldRender()) return;
+        if (!visible()) return;
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
         if (player == null) return;
         GuiGraphics gui = event.getGuiGraphics();
         Font font = mc.font;
+        int x = Mth.clamp(PlayerHudConfig.X_OFFSET.get(), 0,
+                Math.max(0, gui.guiWidth() - MAX_W));
+        int y = Mth.clamp(PlayerHudConfig.Y_OFFSET.get(), 0,
+                Math.max(0, gui.guiHeight() - MAX_H));
 
-        int x = Mth.clamp(PlayerHudConfig.X_OFFSET.get(),
-                0, Math.max(0, gui.guiWidth() - WIDTH));
-        int y = Mth.clamp(PlayerHudConfig.Y_OFFSET.get(),
-                0, Math.max(0, gui.guiHeight() - HEIGHT));
-
-        fillBorder(gui, x - 1, y - 1, WIDTH + 2, HEIGHT + 2,
-                EDGE, PANEL);
-        gui.fill(x + 4, y + 4, x + 4 + PORTRAIT_WIDTH, y + HEIGHT - 4,
-                PORTRAIT);
-        gui.fill(x + 4, y + 4, x + 4 + PORTRAIT_WIDTH, y + 5,
-                0xFF7F93AC);
-
+        // Unboxed paper doll, closer to the supplied pixel HUD reference than
+        // a modern "dashboard" panel. Inventory renderer respects real player
+        // skin, armor and whichever entity renderer mods currently provide.
         if (PlayerHudConfig.CHARACTER_PREVIEW.get()) {
-            drawPlayerPreview(gui, player, x, y);
-        } else {
-            gui.drawCenteredString(font, "CHARACTER",
-                    x + 4 + PORTRAIT_WIDTH / 2, y + HEIGHT / 2 - 4, MUTED);
+            gui.enableScissor(x + 2, y + 1, x + 62, y + 83);
+            try {
+                InventoryScreen.renderEntityInInventoryFollowsMouse(
+                        gui, x + 31, y + 81, 34, 0.0F, 0.0F, player);
+            } finally {
+                gui.disableScissor();
+            }
         }
 
-        int right = x + 80;
-        String name = font.plainSubstrByWidth(
-                player.getName().getString(), BAR_WIDTH);
-        gui.drawString(font, name, right, y + 7, WHITE, false);
-        gui.fill(right, y + 20, right + BAR_WIDTH, y + 21, 0xFF4A5B70);
+        int bx = x + 62;
+        int currentHealthMax = Math.max(1, Mth.ceil(player.getMaxHealth()));
+        float health = Math.max(0, Math.min(player.getHealth(), currentHealthMax));
+        gauge(gui, font, bx, y + 10, 0, HEALTH_WIDTH, health / currentHealthMax,
+                number(health) + "/" + currentHealthMax, RED_DARK, RED_LIGHT);
 
-        int healthMaximum = Math.max(1, (int) Math.ceil(player.getMaxHealth()));
-        float healthNow = Mth.clamp(player.getHealth(), 0.0F,
-                (float) healthMaximum);
-        String healthText = format(healthNow) + " / " + healthMaximum;
-        drawBar(gui, font, right, y + 27, "HEALTH", healthText,
-                healthNow / healthMaximum, HEALTH, HEALTH_DARK);
+        int hunger = Mth.clamp(player.getFoodData().getFoodLevel(), 0, 20);
+        gauge(gui, font, bx, y + 27, 16, HUNGER_WIDTH, hunger / 20.0F,
+                hunger + "/20", GREEN_DARK, GREEN_LIGHT);
 
-        var mana = IronsManaHudCompat.current(player);
+        IronsManaHudCompat.Mana mana = IronsManaHudCompat.current(player);
         if (mana != null) {
-            drawBar(gui, font, right, y + 57, "MANA",
-                    mana.current() + " / " + mana.maximum(),
-                    mana.current() / (float) mana.maximum(),
-                    MANA, MANA_DARK);
-        } else {
-            gui.drawString(font, "MANA", right, y + 57, MUTED, false);
-            gui.drawString(font, "Iron's Spells unavailable",
-                    right, y + 70, MUTED, false);
+            gauge(gui, font, bx, y + 44, 32, MANA_WIDTH,
+                    mana.current() / (float) Math.max(1, mana.maximum()),
+                    mana.current() + "/" + mana.maximum(),
+                    BLUE_DARK, BLUE_LIGHT);
         }
 
-        int food = Mth.clamp(player.getFoodData().getFoodLevel(), 0, 20);
-        int armour = Mth.clamp(player.getArmorValue(), 0, 20);
-        gui.fill(right, y + 87, right + BAR_WIDTH, y + 88, 0xFF4A5B70);
-        gui.drawString(font, "FOOD", right, y + 94, FOOD, false);
-        drawRightText(gui, font, food + "/20", right + 74, y + 94, WHITE);
-        gui.drawString(font, "ARMOUR", right + 84, y + 94, ARMOR, false);
-        drawRightText(gui, font, armour + "/20",
-                right + BAR_WIDTH, y + 94, WHITE);
+        // Small hand-drawn pixel icons, like vanilla inventory sprites.
+        // Display actual values rather than limiting modded armour to 20.
+        gui.blit(FRAME, x + 8, y + 73, 0, 54, 12, 12, ATLAS_W, ATLAS_H);
+        gui.drawString(font, Integer.toString(hunger), x + 21, y + 75, WHITE, true);
+        gui.blit(FRAME, x + 40, y + 73, 17, 54, 12, 12, ATLAS_W, ATLAS_H);
+        gui.drawString(font, Integer.toString(player.getArmorValue()),
+                x + 53, y + 75, WHITE, true);
     }
 
-    private static String format(float amount) {
-        if (amount == Math.floor(amount)) return Integer.toString((int) amount);
-        return String.format(Locale.ROOT, "%.1f", amount);
+    private static String number(float value) {
+        if (value == Mth.floor(value)) return Integer.toString((int) value);
+        return String.format(Locale.ROOT, "%.1f", value);
     }
 
-    private static void drawPlayerPreview(GuiGraphics gui, LocalPlayer player,
-                                          int x, int y) {
-        // InventoryScreen uses the player's actual entity renderer, so skins,
-        // equipped armour, race render layers and animations are reused.
-        // Clip oversized models; never leave a scissor enabled behind us.
-        gui.enableScissor(x + 5, y + 6,
-                x + 3 + PORTRAIT_WIDTH, y + HEIGHT - 5);
-        try {
-            InventoryScreen.renderEntityInInventoryFollowsMouse(gui,
-                    x + 37, y + HEIGHT - 10,
-                    26, 0.0F, 0.0F, player);
-        } finally {
-            gui.disableScissor();
+    private static void gauge(GuiGraphics gui, Font font,
+                              int x, int y, int v, int width, float fraction,
+                              String text, int base, int highlight) {
+        // Entire background/frame is native 1:1 nearest-neighbour pixel art,
+        // never scaled or blurred.
+        gui.blit(FRAME, x, y, 0, v, width, 13, ATLAS_W, ATLAS_H);
+
+        int length = Mth.clamp(Math.round((width - 15)
+                * Mth.clamp(fraction, 0.0F, 1.0F)), 0, width - 15);
+        if (length > 0) {
+            gui.fill(x + 8, y + 4, x + 8 + length, y + 9, base);
+            gui.fill(x + 8, y + 4, x + 8 + length, y + 5, highlight);
+            // Subtle discrete Minecraft pixel shading; no smooth gradients.
+            for (int dx = 12; dx < length; dx += 18) {
+                gui.fill(x + 8 + dx, y + 8, x + 9 + dx, y + 9,
+                        0x60201B12);
+            }
         }
-    }
 
-    private static void drawBar(GuiGraphics gui, Font font, int x, int y,
-                                String label, String value, float ratio,
-                                int fill, int empty) {
-        gui.drawString(font, label, x, y, fill, false);
-        drawRightText(gui, font, value, x + BAR_WIDTH, y, WHITE);
-        int top = y + 11;
-        gui.fill(x, top, x + BAR_WIDTH, top + 10, 0xF2000000);
-        gui.fill(x + 1, top + 1, x + BAR_WIDTH - 1, top + 9, empty);
-        int filled = Math.round((BAR_WIDTH - 2) * Mth.clamp(ratio, 0.0F, 1.0F));
-        if (filled > 0) {
-            gui.fill(x + 1, top + 1, x + 1 + filled, top + 9, fill);
-            gui.fill(x + 1, top + 1, x + 1 + filled, top + 3,
-                    0x44FFFFFF);
-        }
-    }
-
-    private static void drawRightText(GuiGraphics gui, Font font,
-                                      String text, int right, int y, int colour) {
-        gui.drawString(font, text, right - font.width(text), y, colour, false);
-    }
-
-    private static void fillBorder(GuiGraphics gui, int x, int y,
-                                   int width, int height, int border, int inside) {
-        gui.fill(x, y, x + width, y + height, border);
-        gui.fill(x + 1, y + 1, x + width - 1, y + height - 1, inside);
+        gui.drawString(font, text, x + 13, y + 2, WHITE, true);
     }
 
     private PlayerRpgHudOverlay() {}

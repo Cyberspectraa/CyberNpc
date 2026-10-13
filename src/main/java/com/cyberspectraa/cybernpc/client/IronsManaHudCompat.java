@@ -35,7 +35,7 @@ final class IronsManaHudCompat {
         if (readCurrentMana == null) return null;
         try {
             Attribute maxAttribute = ForgeRegistries.ATTRIBUTES.getValue(MAX_MANA_ID);
-            if (maxAttribute == null || !player.hasAttribute(maxAttribute)) return null;
+            if (maxAttribute == null || player.getAttribute(maxAttribute) == null) return null;
             int max = Math.max(1, (int) Math.ceil(player.getAttributeValue(maxAttribute)));
             int current = Math.max(0,
                     ((Number) readCurrentMana.invoke(null)).intValue());

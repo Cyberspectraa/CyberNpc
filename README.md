@@ -16,36 +16,39 @@ This does not change NPC AI, data, dialogue, typed-chat speech bubbles, or
 the ordinary tools used to register towns and houses. The separate
 voice-to-bubble experimental feature remains reverted.
 
-## Top-left player RPG HUD (0.44.56 preview)
+## Pixel-art top-left player HUD (0.44.56)
 
-Optional, **client-side top-left HUD panel** with a 3D preview of the real
-player model/skin/gear, a health bar that follows maximum HP, a mana bar
-using Iron's Spells 'n Spellbooks' own client-synced mana and max-mana
-attribute, and compact hunger/armour numeric displays. This does not
-create a new mana system or change combat, healing or hunger mechanics.
+**Client-side Minecraft pixel-style HUD**, following the *layout* (not art)
+of the user's Souls Combat HUD reference. The gauge frame, trim, food and
+armor icons are original, nearest-neighbour PNG sprites in
+`assets/cybernpc/textures/gui/player_hud.png`; there is **no large modern
+blue dashboard panel**. The full player renderer draws the real skin,
+armor and compatible race models on the left, with stone-rimmed health
+(red), hunger (green) and Iron's mana (blue) gauges extending to the right.
+Numbers are rendered using Minecraft's own pixel font.
 
-* Vanilla player hearts, hunger icons, armour icons and Iron's original
-  `mana_overlay` are hidden only while the replacement HUD is active.
-* Hotbar, XP/level, crosshair, air, mount health, effects and other overlays
-  remain untouched.
-* Mana is optional. If Iron's Spells is not installed or its client data
-  cannot be read, a neutral "unavailable" label appears instead.
-* Uses vanilla's real player inventory-preview rendering, so clothing,
-  equipped armor, skins, and compatible race rendering can be shown.
-  HUD clipping is scoped to the portrait viewport.
-* Client config is generated at
-  `config/cybernpc-hud-client.toml` with the following settings:
+* **Health:** current/max, including modded max-health bonuses.
+* **Hunger:** current/20 in a green bar and a compact pixel food icon.
+* **Armor:** real numerical armor stat beside a small pixel helmet icon.
+* **Mana:** real client-synced Iron's Spells 'n Spellbooks mana/max mana.
+  The blue gauge **disappears completely** when that optional mod is
+  not installed or the API is unavailable.
+* Vanilla hearts, armor icons and hunger icons are hidden only while the
+  replacement is displayed and `replace_vanilla_bars` is enabled. Iron's
+  native mana gauge is hidden only if this mod successfully reads mana.
+* Hotbar, XP bar, crosshair, air/mount meters, bosses and chat remain untouched.
+* Uses the original live player entity renderer (skin, armour, race models);
+  the paper-doll area is clipped and has no modern panel behind it.
+* Client configuration at `config/cybernpc-hud-client.toml`:
   `rpg_hud.enabled`, `rpg_hud.replace_vanilla_bars`,
-  `rpg_hud.show_character_preview`, `rpg_hud.x_offset`, and
-  `rpg_hud.y_offset`. The HUD can be disabled without removing the mod.
-* The experiment is fully client-side. No new packets or multiplayer
-  protocol changes; install the same CyberNpc version as your server.
+  `rpg_hud.show_character_preview`, `rpg_hud.x_offset`,
+  `rpg_hud.y_offset`. Set `enabled = false` to restore the default HUD.
+* No gameplay changes or new packets. CyberNpc **0.44.56** should be
+  installed on server and client as usual, keeping CyberServer 0.2.4.
 
-**Test:** Compare third-person preview including your race/armor,
-verify health and mana update in real time, take food damage/heal,
-and verify the hotbar remains usable. If the modpack has another
-health/mana HUD, disable its own bar to prevent overlap. This is a
-preview, not yet visually tested across all races and UI scale settings.
+**Test:** World load with/without Iron's Spells installed, health/hunger
+changes, player scale/armor textures, different GUI scales, and optional
+HUD mods. Appearance and race compatibility still require in-game verification.
 
 ## Workstation removal keybind (0.44.55)
 
