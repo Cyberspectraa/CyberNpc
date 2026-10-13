@@ -32,6 +32,8 @@ public final class TownWorkSavedData extends SavedData {
     private static final String KEY = "cybernpc_town_work_v1";
     private static final double CLAIM_RADIUS_SQR = 96.0D * 96.0D;
     private static final double DISPLAY_RANGE_SQR = 28.0D * 28.0D;
+    private static final int MAX_POINTS_PER_JOB = 8;
+    private static final double MAX_GROUP_DISTANCE_SQR = 24.0D * 24.0D;
     private static final DustParticleOptions HIGHLIGHT =
             new DustParticleOptions(new Vector3f(1.0F, 0.76F, 0.22F), 1.1F);
     private final Map<String, Station> stations = new LinkedHashMap<>();
@@ -53,6 +55,12 @@ public final class TownWorkSavedData extends SavedData {
             Station station = new Station(entry.getUUID("Town"), dimension,
                     pos, BlockPos.of(entry.getLong("Stand")), entry.getString("Job"));
             if (entry.hasUUID("Worker")) station.worker = entry.getUUID("Worker");
+            // The 0.44.53 records have no Root; each old station stays its
+            // own independent job until the player explicitly groups it.
+            station.root = entry.contains("Root", Tag.TAG_LONG)
+                    ? BlockPos.of(entry.getLong("Root")) : pos;
+            station.role = entry.contains("Role", Tag.TAG_STRING)
+                    ? entry.getString("Role") : station.job;
             data.stations.put(key(dimension, pos), station);
         }
         return data;
@@ -68,7 +76,11 @@ public final class TownWorkSavedData extends SavedData {
             entry.putLong("Pos", station.pos.asLong());
             entry.putLong("Stand", station.stand.asLong());
             entry.putString("Job", station.job);
-            if (station.worker != null) entry.putUUID("Worker", station.worker);
+            entry.putLong("Root", station.root.asLong());
+            entry.putString("Role", station.role);
+            if (station.worker != null && station.root.equals(station.pos)) {
+                entry.putUUID("Worker", station.worker);
+            }
             list.add(entry);
         }
         tag.put("Stations", list);
@@ -135,8 +147,11 @@ public final class TownWorkSavedData extends SavedData {
             existing = null;
         }
         if (existing != null) {
-            String current = existing.worker == null ? "vacant" : "occupied";
-            return existing.job + " workstation: " + current + ". "
+            Station root = leader(existing);
+            String current = root == null || root.worker == null ? "vacant" : "occupied";
+            String group = root == null ? "" : " | stations: " + countMembers(root);
+            return (root == null ? existing.job : root.role)
+                    + " workplace: " + current + group + ". "
                     + "Sneak-click with a selected housed Main NPC to assign/unassign.";
         }
         BlockPos stand = standNear(level, pos, visitor);
@@ -149,14 +164,148 @@ public final class TownWorkSavedData extends SavedData {
                 + "town will eventually claim it, or sneak-click with a selected NPC.";
     }
 
+    /**
+     * On the first grouped click, choose a main workstation. Following
+     * clicks add nearby compatible blocks as secondary activity points.
+     * Shift-click a secondary point while grouping to unlink it completely.
+     * The register remembers selection, but the world owns all station data.
+     */
+    public String multiselect(ServerLevel level, BlockPos pos,
+                              BlockPos visitor, net.minecraft.world.item.ItemStack register,
+                              boolean removePoint) {
+        String dim = dimension(level);
+        String job = TownJobTypes.forBlock(level.getBlockState(pos));
+        if (job == null) return "Select a supported workstation block.";
+        var tag = register.getOrCreateTagElement("CyberNpcTownRegister");
+        if (!tag.hasUUID("GroupTown") || !tag.contains("GroupRoot", Tag.TAG_LONG)
+                || !dim.equals(tag.getString("GroupDimension"))) {
+            String registered = register(level, pos, visitor);
+            Station clicked = stations.get(key(dim, pos));
+            if (clicked == null) return registered;
+            Station main = leader(clicked);
+            if (main == null) return "That workplace's main station is missing.";
+            tag.putString("GroupDimension", dim);
+            tag.putLong("GroupRoot", main.pos.asLong());
+            tag.putUUID("GroupTown", main.townId);
+            return "Selected " + main.role + " workplace as main station ("
+                    + countMembers(main) + "/"+ MAX_POINTS_PER_JOB + " points). "
+                    + "Click more stations to link; sneak-click a secondary one to remove it. "
+                    + "Press K to finish.";
+        }
+        BlockPos rootPos = BlockPos.of(tag.getLong("GroupRoot"));
+        Station root = stations.get(key(dim, rootPos));
+        if (root == null || !root.root.equals(root.pos)
+                || !root.townId.equals(tag.getUUID("GroupTown"))) {
+            TownRegisterReset.clearAnchor(register);
+            return "Main workstation is no longer registered. Click a new main station.";
+        }
+        if (pos.equals(root.pos)) {
+            return root.role + " workplace: " + countMembers(root)
+                    + " linked stations, " + (root.worker == null ? "vacant" : "employed")
+                    + ". Click another workstation to add it.";
+        }
+        Station existing = stations.get(key(dim, pos));
+        if (removePoint) {
+            if (existing == null || !root.pos.equals(existing.root))
+                return "That block is not an extra station in the selected workplace.";
+            stations.remove(key(dim, pos));
+            setDirty();
+            return "Removed extra " + existing.job + " station from " + root.role
+                    + " workplace. " + countMembers(root) + " point(s) remain.";
+        }
+        if (root.pos.distSqr(pos) > MAX_GROUP_DISTANCE_SQR) {
+            return "Too far from the main station: linked workstations must be within 24 blocks.";
+        }
+        UUID town = TownHomeSavedData.get(level).townIdNear(level, pos);
+        if (!root.townId.equals(town)) return "Both stations must belong to the same town.";
+        if (existing != null) {
+            if (root.pos.equals(existing.root)) return "Already linked to this workplace.";
+            if (!existing.root.equals(existing.pos) || countMembers(existing) > 1
+                    || existing.worker != null) {
+                return "That station already belongs to another workplace or has an employee. "
+                        + "It cannot be moved automatically.";
+            }
+        }
+        if (countMembers(root) >= MAX_POINTS_PER_JOB) {
+            return "A workplace supports up to " + MAX_POINTS_PER_JOB + " stations.";
+        }
+        if (existing == null) {
+            BlockPos stand = standNear(level, pos, visitor);
+            if (stand == null) return "No free standing position beside that block.";
+            existing = new Station(root.townId, dim, pos.immutable(), stand.immutable(), job);
+            stations.put(key(dim, pos), existing);
+        }
+        existing.root = root.pos;
+        existing.worker = null;
+        setDirty();
+        return "Linked " + job + " station to " + root.role + " workplace ("
+                + countMembers(root) + "/" + MAX_POINTS_PER_JOB
+                + "). Still ONE job slot for this workplace.";
+    }
+
+    private int countMembers(Station root) {
+        int count = 0;
+        for (Station s : stations.values()) {
+            if (s.dimension.equals(root.dimension) && s.root.equals(root.pos)) count++;
+        }
+        return count;
+    }
+
+    @Nullable
+    private Station leader(Station station) {
+        return stations.get(key(station.dimension, station.root));
+    }
+
+    private void removeOrPromote(ServerLevel level, Station invalid) {
+        stations.remove(key(invalid.dimension, invalid.pos));
+        if (invalid.root.equals(invalid.pos)) {
+            // Main workstation broke: transfer the original job/worker to a
+            // remaining loaded valid workstation. Do not silently lose jobs.
+            Station replacement = null;
+            for (Station site : stations.values()) {
+                if (site.dimension.equals(invalid.dimension)
+                        && site.root.equals(invalid.pos)
+                        && level.getChunkSource().getChunkNow(site.pos.getX() >> 4,
+                            site.pos.getZ() >> 4) != null && stationStillExists(level, site)) {
+                    replacement = site;
+                    break;
+                }
+            }
+            if (replacement != null) {
+                BlockPos newRoot = replacement.pos;
+                for (Station site : stations.values()) {
+                    if (site.dimension.equals(invalid.dimension)
+                            && site.root.equals(invalid.pos)) site.root = newRoot;
+                }
+                replacement.role = invalid.role;
+                replacement.worker = invalid.worker;
+            }
+        }
+        setDirty();
+    }
+
+    /** Only used when a multi-selection anchor becomes invalid. */
+    private static final class TownRegisterReset {
+        private static void clearAnchor(net.minecraft.world.item.ItemStack stack) {
+            var tag = stack.getTagElement("CyberNpcTownRegister");
+            if (tag != null) {
+                tag.remove("GroupTown");
+                tag.remove("GroupDimension");
+                tag.remove("GroupRoot");
+            }
+        }
+    }
+
     /** Sneak-click in Work Mode assigns a chosen, housed Main NPC. */
     public String assign(ServerLevel level, BlockPos pos, @Nullable CyberNpcEntity npc) {
-        Station station = stations.get(key(dimension(level), pos));
-        if (station == null) return "Register this workstation with a normal click first.";
+        Station clicked = stations.get(key(dimension(level), pos));
+        if (clicked == null) return "Register this workstation with a normal click first.";
+        Station station = leader(clicked);
+        if (station == null) return "The workplace's main workstation is missing. "
+                + "Wait for a maintenance check and try again.";
         if (!stationStillExists(level, station)) {
-            stations.remove(key(dimension(level), pos));
-            setDirty();
-            return "The workstation changed or was removed. Register it again.";
+            removeOrPromote(level, station);
+            return "The main workstation changed or was removed. Try again.";
         }
         if (npc == null || !eligibleResident(level, station, npc))
             return "Select a living ordinary Main NPC who owns a registered home in this town.";
@@ -195,11 +344,19 @@ public final class TownWorkSavedData extends SavedData {
         String dim = dimension(level);
         for (Station station : new ArrayList<>(stations.values())) {
             if (!station.dimension.equals(dim)) continue;
+            // Extras are NOT job vacancies; one group hires only one NPC.
+            if (!station.root.equals(station.pos)) {
+                if (leader(station) == null) {
+                    // Protect an orphaned substation without creating a job
+                    // until a root maintenance cycle resolves it.
+                    continue;
+                }
+                continue;
+            }
             if (level.getChunkSource().getChunkNow(station.pos.getX() >> 4,
                     station.pos.getZ() >> 4) == null) continue;
             if (!stationStillExists(level, station)) {
-                stations.remove(key(dim, station.pos));
-                setDirty();
+                removeOrPromote(level, station);
                 continue;
             }
             if (station.worker != null) continue;
@@ -234,17 +391,26 @@ public final class TownWorkSavedData extends SavedData {
         if (worker == null || stations.isEmpty()) return null;
         String dim = dimension(level);
         for (Station station : stations.values()) {
-            if (!worker.equals(station.worker) || !dim.equals(station.dimension)) continue;
-            if (level.getChunkSource().getChunkNow(station.pos.getX() >> 4,
-                    station.pos.getZ() >> 4) == null) return null;
-            if (!stationStillExists(level, station)) return null;
-            if (!canStand(level, station.stand)) return null;
-            return new JobAssignment(station.pos, station.stand, station.job);
+            if (!station.root.equals(station.pos) || !worker.equals(station.worker)
+                    || !dim.equals(station.dimension)) continue;
+            java.util.List<WorkPoint> points = new java.util.ArrayList<>();
+            for (Station candidate : stations.values()) {
+                if (!dim.equals(candidate.dimension)
+                        || !station.pos.equals(candidate.root)) continue;
+                if (level.getChunkSource().getChunkNow(candidate.pos.getX() >> 4,
+                        candidate.pos.getZ() >> 4) == null) continue;
+                if (!stationStillExists(level, candidate)
+                        || !canStand(level, candidate.stand)) continue;
+                points.add(new WorkPoint(candidate.pos, candidate.stand));
+            }
+            return points.isEmpty() ? null : new JobAssignment(station.role,
+                    java.util.List.copyOf(points));
         }
         return null;
     }
 
-    public record JobAssignment(BlockPos station, BlockPos stand, String job) {}
+    public record WorkPoint(BlockPos station, BlockPos stand) {}
+    public record JobAssignment(String job, java.util.List<WorkPoint> points) {}
 
     public void onNpcDeath(CyberNpcEntity npc) {
         boolean changed = false;
@@ -280,6 +446,8 @@ public final class TownWorkSavedData extends SavedData {
         final BlockPos pos;
         final BlockPos stand;
         final String job;
+        BlockPos root;
+        String role;
         @Nullable UUID worker;
         Station(UUID townId, String dimension, BlockPos pos, BlockPos stand, String job) {
             this.townId = townId;
@@ -287,6 +455,8 @@ public final class TownWorkSavedData extends SavedData {
             this.pos = pos;
             this.stand = stand;
             this.job = job;
+            this.root = pos;
+            this.role = job;
         }
     }
     private TownWorkSavedData() {}

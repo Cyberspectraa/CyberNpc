@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current version: 0.44.53** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.54** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
@@ -15,6 +15,42 @@ and client V-key binding. Existing world items referencing
 This does not change NPC AI, data, dialogue, typed-chat speech bubbles, or
 the ordinary tools used to register towns and houses. The separate
 voice-to-bubble experimental feature remains reverted.
+
+## Multiple workstations per job (0.44.54)
+
+A single registered town job can now own **up to eight linked workstations**.
+This is useful for a forge with a smithing table, anvil, grindstone and furnace,
+without hiring four separate blacksmiths.
+
+**How to use:**
+
+1. In the Town Register, enter WORK MODE (sneak + right-click air).
+2. With the register in your **main hand**, press **K** (configurable in
+   Minecraft Controls) to enable WORKSTATION MULTISELECT.
+3. Click the **main workstation** to select it. If it has not been registered,
+   it is registered first. Its original job type becomes the job for the group.
+4. Click additional supported work blocks within **24 blocks**, in the same
+   town, to attach them as activity points. A previously registered empty
+   single-station job can be attached; a station with an employee or already
+   belonging to a multi-station workplace cannot be stolen.
+5. **Sneak-click an extra station** while grouping to unregister/detach it.
+   The main station itself cannot be detached this way.
+6. Press **K** again to finish. The Town Register remembers normal WORK MODE.
+   Assign an employee normally by selecting a housed Main NPC and sneak-clicking
+   any workstation in the group, or let an unemployed resident claim the vacancy.
+
+All linked stations share **one job slot and one worker**. The worker
+periodically moves between **loaded, valid and walkable** station positions
+during their existing work shifts, roughly every 65 seconds. There are no
+automatic production/crafting effects yet.
+
+Saved format `cybernpc_town_work_v1` is backward compatible. Any workplace
+from 0.44.53 without a `Root` field remains an independent one-station job.
+Legacy invisible Work markers and the original housing system are unchanged.
+If a main station is broken, the registry attempts to promote a valid loaded
+extra while keeping the original job title and worker; other chunks are not
+force-loaded. The new key/control packet requires **CyberNpc 0.44.54 on both
+server and client**. CyberServer 0.2.4 is still compatible.
 
 ## Town workplace and employment prototype (0.44.53)
 

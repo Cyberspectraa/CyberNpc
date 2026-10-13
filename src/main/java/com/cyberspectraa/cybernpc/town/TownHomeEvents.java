@@ -52,7 +52,11 @@ public final class TownHomeEvents {
         String response;
         if (station) {
             TownWorkSavedData jobs = TownWorkSavedData.get(level);
-            if (event.getEntity().isShiftKeyDown()) {
+            if (TownRegisterItem.isGrouping(stack)) {
+                response = jobs.multiselect(level, event.getPos(),
+                        event.getEntity().blockPosition(), stack,
+                        event.getEntity().isShiftKeyDown());
+            } else if (event.getEntity().isShiftKeyDown()) {
                 response = jobs.assign(level, event.getPos(), selectedMainNpc(level, stack));
             } else {
                 response = jobs.register(level, event.getPos(), event.getEntity().blockPosition());

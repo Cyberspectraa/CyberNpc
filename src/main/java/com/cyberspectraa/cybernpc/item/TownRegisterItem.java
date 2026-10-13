@@ -40,6 +40,29 @@ public final class TownRegisterItem extends Item {
     private static final String SELECTED_NAME = "SelectedName";
     private static final String SELECTED_SPECIAL = "SelectedIsSpecial";
     private static final String WORK_MODE = "WorkMode";
+    private static final String GROUP_MODE = "GroupMode";
+
+    public static boolean isGrouping(ItemStack register) {
+        var tag = register.getTagElement(ROOT);
+        return tag != null && tag.getBoolean(GROUP_MODE);
+    }
+
+    public static void toggleMultiselect(net.minecraft.server.level.ServerPlayer player) {
+        ItemStack register = player.getMainHandItem();
+        if (!(register.getItem() instanceof TownRegisterItem) || !isWorkMode(register)) {
+            return;
+        }
+        var tag = register.getOrCreateTagElement(ROOT);
+        boolean grouping = !tag.getBoolean(GROUP_MODE);
+        tag.putBoolean(GROUP_MODE, grouping);
+        tag.remove("GroupRoot");
+        tag.remove("GroupTown");
+        tag.remove("GroupDimension");
+        player.displayClientMessage(Component.literal(grouping
+                ? "Workstation MULTISELECT ON: click main job station, then click extras. "
+                  + "Sneak-click extras to unlink. K to finish."
+                : "Workstation MULTISELECT OFF: returning to standard Work Mode."), false);
+    }
 
     public static boolean isWorkMode(ItemStack register) {
         var tag = register.getTagElement(ROOT);
@@ -53,7 +76,12 @@ public final class TownRegisterItem extends Item {
         if (!player.isShiftKeyDown()) return super.use(level, player, hand);
         if (!level.isClientSide) {
             boolean workMode = !isWorkMode(register);
-            register.getOrCreateTagElement(ROOT).putBoolean(WORK_MODE, workMode);
+            var tag = register.getOrCreateTagElement(ROOT);
+            tag.putBoolean(WORK_MODE, workMode);
+            tag.putBoolean(GROUP_MODE, false);
+            tag.remove("GroupRoot");
+            tag.remove("GroupTown");
+            tag.remove("GroupDimension");
             player.displayClientMessage(Component.literal(workMode
                     ? "Town Register: WORK MODE. Click a workstation to register it; "
                     + "sneak-click with a selected housed Main NPC to assign."
@@ -459,7 +487,8 @@ public final class TownRegisterItem extends Item {
         }
 
         tooltip.add(Component.literal("Mode: "
-                + (isWorkMode(stack) ? "WORK" : "HOME")));
+                + (isWorkMode(stack)
+                        ? (isGrouping(stack) ? "WORK / MULTISELECT" : "WORK") : "HOME")));
         tooltip.add(Component.literal("Sneak + right-click air: change mode"));
         tooltip.add(
                 Component.literal(
@@ -480,6 +509,8 @@ public final class TownRegisterItem extends Item {
                 "Work Mode: click station to register / inspect"));
         tooltip.add(Component.literal(
                 "Work Mode + sneak click: assign selected housed NPC"));
+        tooltip.add(Component.literal(
+                "Work Mode + K: group workstations into one job"));
     }
 
     @Nullable

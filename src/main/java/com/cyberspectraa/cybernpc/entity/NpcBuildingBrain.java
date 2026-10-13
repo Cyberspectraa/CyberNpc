@@ -213,7 +213,15 @@ final class NpcBuildingBrain {
     }
 
     private boolean tickTownWork(TownWorkSavedData.JobAssignment job) {
-        BlockPos stand = job.stand();
+        if (job.points().isEmpty()) return false;
+        // Station rotation is deterministic per worker. A new point is chosen
+        // roughly every 65 seconds; pathing/navigation do the actual travel.
+        // No forced teleporting or unloading adjacent chunks.
+        long rotation = Math.floorDiv(npc.level().getGameTime()
+                + Math.floorMod(npc.getUUID().hashCode(), 800), 1300L);
+        int index = Math.floorMod(rotation, job.points().size());
+        TownWorkSavedData.WorkPoint point = job.points().get(index);
+        BlockPos stand = point.stand();
         npc.setSprinting(false);
         if (npc.distanceToSqr(Vec3.atBottomCenterOf(stand)) > 2.0D * 2.0D) {
             navigateTo(stand, 0.69D);
@@ -221,9 +229,9 @@ final class NpcBuildingBrain {
             npc.getNavigation().stop();
             if (npc.tickCount % 40 == 0) {
                 npc.getLookControl().setLookAt(
-                        job.station().getX() + 0.5D,
-                        job.station().getY() + 0.7D,
-                        job.station().getZ() + 0.5D);
+                        point.station().getX() + 0.5D,
+                        point.station().getY() + 0.7D,
+                        point.station().getZ() + 0.5D);
             }
         }
         return true;
