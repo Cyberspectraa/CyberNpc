@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current version: 0.44.54** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.55** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
@@ -15,6 +15,30 @@ and client V-key binding. Existing world items referencing
 This does not change NPC AI, data, dialogue, typed-chat speech bubbles, or
 the ordinary tools used to register towns and houses. The separate
 voice-to-bubble experimental feature remains reverted.
+
+## Workstation removal keybind (0.44.55)
+
+**J — Remove Registered Workstation** is a new configurable key in
+Minecraft Controls > Key Binds. Hold the **Town Register in your main
+hand**, switch it to **WORK MODE**, look directly at a registered
+workstation from within six blocks, then press **J**.
+
+* Only the CyberNpc workplace registration is removed. The actual
+  workstation block, its inventory, town homes, and old Work markers
+  are untouched.
+* Removing an **extra** station leaves the main job and employee intact.
+* Removing the **main** workstation of a group promotes an available
+  linked station to main and preserves the assigned employee and
+  original job. Distant chunks are never force-loaded to do this.
+* Removing a single/final workstation dissolves that job registration;
+  the employee becomes unemployed and may later be hired elsewhere.
+* The removal is validated and ray-traced by the server. The client
+  does not get to specify arbitrary target coordinates.
+* Removing a station clears the register's current multiselect root,
+  so choosing the next main station is explicit. The K multiselect
+  switch itself stays on/off as chosen.
+* This update advances CyberNpc's network protocol. **Both client and
+  server must run CyberNpc 0.44.55**. No CyberServer update is needed.
 
 ## Multiple workstations per job (0.44.54)
 

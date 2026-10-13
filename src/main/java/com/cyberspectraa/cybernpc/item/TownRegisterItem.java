@@ -47,6 +47,16 @@ public final class TownRegisterItem extends Item {
         return tag != null && tag.getBoolean(GROUP_MODE);
     }
 
+    /** Clears the current multiselect selection without changing work mode. */
+    public static void clearGroupAnchor(ItemStack register) {
+        var tag = register.getTagElement(ROOT);
+        if (tag != null) {
+            tag.remove("GroupRoot");
+            tag.remove("GroupTown");
+            tag.remove("GroupDimension");
+        }
+    }
+
     public static void toggleMultiselect(net.minecraft.server.level.ServerPlayer player) {
         ItemStack register = player.getMainHandItem();
         if (!(register.getItem() instanceof TownRegisterItem) || !isWorkMode(register)) {
@@ -55,9 +65,7 @@ public final class TownRegisterItem extends Item {
         var tag = register.getOrCreateTagElement(ROOT);
         boolean grouping = !tag.getBoolean(GROUP_MODE);
         tag.putBoolean(GROUP_MODE, grouping);
-        tag.remove("GroupRoot");
-        tag.remove("GroupTown");
-        tag.remove("GroupDimension");
+        clearGroupAnchor(register);
         player.displayClientMessage(Component.literal(grouping
                 ? "Workstation MULTISELECT ON: click main job station, then click extras. "
                   + "Sneak-click extras to unlink. K to finish."
@@ -511,6 +519,8 @@ public final class TownRegisterItem extends Item {
                 "Work Mode + sneak click: assign selected housed NPC"));
         tooltip.add(Component.literal(
                 "Work Mode + K: group workstations into one job"));
+        tooltip.add(Component.literal(
+                "Work Mode + J: unregister looked-at workstation"));
     }
 
     @Nullable

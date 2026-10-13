@@ -9,7 +9,7 @@ import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class CyberNpcNetwork {
-    private static final String PROTOCOL = "4";
+    private static final String PROTOCOL = "5";
 
     public static final SimpleChannel CHANNEL =
             NetworkRegistry.ChannelBuilder.named(
@@ -73,6 +73,13 @@ public final class CyberNpcNetwork {
                 .encoder(WorkplaceGroupTogglePacket::encode)
                 .decoder(WorkplaceGroupTogglePacket::decode)
                 .consumerMainThread(WorkplaceGroupTogglePacket::handle)
+                .add();
+
+        CHANNEL.messageBuilder(
+                WorkplaceRemovePacket.class, nextId++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(WorkplaceRemovePacket::encode)
+                .decoder(WorkplaceRemovePacket::decode)
+                .consumerMainThread(WorkplaceRemovePacket::handle)
                 .add();
     }
 

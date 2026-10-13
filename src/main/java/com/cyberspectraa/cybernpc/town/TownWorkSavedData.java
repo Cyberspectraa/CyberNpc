@@ -256,32 +256,84 @@ public final class TownWorkSavedData extends SavedData {
         return stations.get(key(station.dimension, station.root));
     }
 
-    private void removeOrPromote(ServerLevel level, Station invalid) {
-        stations.remove(key(invalid.dimension, invalid.pos));
-        if (invalid.root.equals(invalid.pos)) {
-            // Main workstation broke: transfer the original job/worker to a
-            // remaining loaded valid workstation. Do not silently lose jobs.
-            Station replacement = null;
-            for (Station site : stations.values()) {
-                if (site.dimension.equals(invalid.dimension)
-                        && site.root.equals(invalid.pos)
-                        && level.getChunkSource().getChunkNow(site.pos.getX() >> 4,
-                            site.pos.getZ() >> 4) != null && stationStillExists(level, site)) {
+    /**
+     * Unregister exactly one physical station. For a main station, preserve
+     * the job and its employee by promoting a surviving linked station.
+     * Unloaded chunks aren't forced to load, and saved members are retained.
+     */
+    @Nullable
+    private Station removeOrPromote(ServerLevel level, Station removed) {
+        stations.remove(key(removed.dimension, removed.pos));
+        Station replacement = null;
+        if (removed.root.equals(removed.pos)) {
+            // Reject known broken secondary stations, but preserve unloaded
+            // ones instead of deleting valid jobs solely because a chunk left
+            // simulation range.
+            for (Station site : new ArrayList<>(stations.values())) {
+                if (!site.dimension.equals(removed.dimension)
+                        || !site.root.equals(removed.pos)) continue;
+                if (!stationStillExists(level, site)) {
+                    stations.remove(key(site.dimension, site.pos));
+                    continue;
+                }
+                if (replacement == null || (isLoaded(level, site.pos)
+                        && !isLoaded(level, replacement.pos))) {
                     replacement = site;
-                    break;
                 }
             }
             if (replacement != null) {
                 BlockPos newRoot = replacement.pos;
                 for (Station site : stations.values()) {
-                    if (site.dimension.equals(invalid.dimension)
-                            && site.root.equals(invalid.pos)) site.root = newRoot;
+                    if (site.dimension.equals(removed.dimension)
+                            && site.root.equals(removed.pos)) site.root = newRoot;
                 }
-                replacement.role = invalid.role;
-                replacement.worker = invalid.worker;
+                replacement.role = removed.role;
+                replacement.worker = removed.worker;
             }
         }
         setDirty();
+        return replacement;
+    }
+
+    private static boolean isLoaded(ServerLevel level, BlockPos pos) {
+        return level.getChunkSource().getChunkNow(
+                pos.getX() >> 4, pos.getZ() >> 4) != null;
+    }
+
+    /**
+     * Remove the block's WORKPLACE REGISTRATION only. This never breaks a
+     * Minecraft block, affects homes or edits legacy Work-marker assignments.
+     * Invoked solely after the packet verifies the player's held register.
+     */
+    public String removeRegistered(ServerLevel level, BlockPos pos,
+                                   net.minecraft.world.item.ItemStack register) {
+        Station clicked = stations.get(key(dimension(level), pos));
+        if (clicked == null) {
+            return "No registered workstation here. Look at one and press J.";
+        }
+        boolean main = clicked.root.equals(clicked.pos);
+        Station oldRoot = leader(clicked);
+        String role = oldRoot == null ? clicked.job : oldRoot.role;
+        String removedKind = clicked.job;
+        boolean hadEmployee = clicked.worker != null;
+        Station replacement = removeOrPromote(level, clicked);
+        // Grouping remains enabled if K mode is on, but the next click must
+        // deliberately choose a main workstation again.
+        com.cyberspectraa.cybernpc.item.TownRegisterItem
+                .clearGroupAnchor(register);
+        if (!main) {
+            return "Unregistered extra " + removedKind + " station from "
+                    + role + " workplace. Job and worker are unchanged; "
+                    + "the block itself was not removed.";
+        }
+        if (replacement != null) {
+            return "Removed main station. " + replacement.job
+                    + " is now the main workstation for the " + role
+                    + " job. Existing employee preserved; block left intact.";
+        }
+        return "Removed the final " + role + " workstation and its job"
+                + (hadEmployee ? "; its employee is now unemployed" : "")
+                + ". The block itself was not removed.";
     }
 
     /** Only used when a multi-selection anchor becomes invalid. */
