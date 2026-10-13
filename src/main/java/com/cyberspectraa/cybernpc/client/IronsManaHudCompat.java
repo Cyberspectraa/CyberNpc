@@ -36,7 +36,13 @@ final class IronsManaHudCompat {
         try {
             Attribute maxAttribute = ForgeRegistries.ATTRIBUTES.getValue(MAX_MANA_ID);
             if (maxAttribute == null || player.getAttribute(maxAttribute) == null) return null;
-            int max = Math.max(1, (int) Math.ceil(player.getAttributeValue(maxAttribute)));
+            // A zero max mana is intentional for CyberClasses' ManaTier.NONE
+            // (and for any future race/ability that grants no mana pool).
+            // Do not turn that zero into a fake 1-point mana gauge.
+            double effectiveMax = player.getAttributeValue(maxAttribute);
+            if (!Double.isFinite(effectiveMax)) return null;
+            if (effectiveMax <= 0.0D) return new Mana(0, 0);
+            int max = Math.max(1, (int) Math.ceil(effectiveMax));
             int current = Math.max(0,
                     ((Number) readCurrentMana.invoke(null)).intValue());
             return new Mana(Math.min(current, max), max);
