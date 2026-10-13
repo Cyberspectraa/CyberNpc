@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current version: 0.44.60** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.61** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
@@ -15,6 +15,28 @@ and client V-key binding. Existing world items referencing
 This does not change NPC AI, data, dialogue, typed-chat speech bubbles, or
 the ordinary tools used to register towns and houses. The separate
 voice-to-bubble experimental feature remains reverted.
+
+## Native Minecraft HUD icons (0.44.61)
+
+The CyberNpc RPG HUD now references the **native Minecraft 1.20.1
+`textures/gui/icons.png`** directly, rather than the hand-drawn 9x9
+symbols in CyberNpc's texture atlas. Health uses the full vanilla heart
+and hunger the full vanilla drumstick, each with its proper vanilla
+outline/background. The armour label beneath the portrait likewise
+shows the vanilla full-armour sprite.
+
+Since vanilla Minecraft has no mana symbol, the blue mana orb is taken
+from its original 16x16 `textures/item/heart_of_the_sea.png` item art
+and drawn at 12x12 pixels in the existing column. This is a static
+visual representation only and does not consume an item.
+
+No third-party icons or copied vanilla texture files are bundled.
+Minecraft resource packs that replace these assets automatically affect
+the displayed icons. The existing custom stone frames, compact layout,
+2D skin face, actual health/food/armour values, optional Iron's mana
+integration and zero-mana hide behavior are unchanged. This is a
+CyberNpc-only client HUD change. Install CyberNpc 0.44.61 on client and
+server; no other Cyber mod updates are needed.
 
 ## Readable pixel-art HUD icons (0.44.60)
 

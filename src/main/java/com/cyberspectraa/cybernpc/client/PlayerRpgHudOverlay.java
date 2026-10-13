@@ -26,6 +26,12 @@ import java.util.Locale;
 public final class PlayerRpgHudOverlay {
     private static final ResourceLocation FRAME =
             new ResourceLocation(CyberNpc.MOD_ID, "textures/gui/player_hud.png");
+    // Render directly from the Minecraft 1.20.1 textures rather than copying
+    // vanilla pixels into our own atlas. Resource packs can replace them.
+    private static final ResourceLocation VANILLA_ICONS =
+            new ResourceLocation("minecraft", "textures/gui/icons.png");
+    private static final ResourceLocation VANILLA_MANA_ORB =
+            new ResourceLocation("minecraft", "textures/item/heart_of_the_sea.png");
     private static final int ATLAS_W = 256;
     private static final int ATLAS_H = 96;
     // Each original texture row has a different length. Stitch the rightmost
@@ -99,11 +105,11 @@ public final class PlayerRpgHudOverlay {
         int bx = x + 68;
         int currentHealthMax = Math.max(1, Mth.ceil(player.getMaxHealth()));
         float health = Math.max(0, Math.min(player.getHealth(), currentHealthMax));
-        gauge(gui, font, bx, y + 8, 0, HEALTH_FRAME_WIDTH, 0, health / currentHealthMax,
+        gauge(gui, font, bx, y + 8, 0, HEALTH_FRAME_WIDTH, HudIcon.HEALTH, health / currentHealthMax,
                 number(health) + "/" + currentHealthMax, RED_DARK, RED_LIGHT);
 
         int hunger = Mth.clamp(player.getFoodData().getFoodLevel(), 0, 20);
-        gauge(gui, font, bx, y + 24, 16, HUNGER_FRAME_WIDTH, 12, hunger / 20.0F,
+        gauge(gui, font, bx, y + 24, 16, HUNGER_FRAME_WIDTH, HudIcon.FOOD, hunger / 20.0F,
                 hunger + "/20", GREEN_DARK, GREEN_LIGHT);
 
         IronsManaHudCompat.Mana mana = IronsManaHudCompat.current(player);
@@ -111,7 +117,7 @@ public final class PlayerRpgHudOverlay {
         // mana, not that the optional integration is unavailable. Hide this
         // gauge while still suppressing Iron's own native gauge below.
         if (mana != null && mana.maximum() > 0) {
-            gauge(gui, font, bx, y + 40, 32, MANA_FRAME_WIDTH, 24,
+            gauge(gui, font, bx, y + 40, 32, MANA_FRAME_WIDTH, HudIcon.MANA,
                     mana.current() / (float) Math.max(1, mana.maximum()),
                     mana.current() + "/" + mana.maximum(),
                     BLUE_DARK, BLUE_LIGHT);
@@ -120,7 +126,9 @@ public final class PlayerRpgHudOverlay {
         // Armor stays immediately below the face. Hunger is already shown
         // inside its own gauge, so do not repeat the same number below.
         // Preserve the actual modded armor value rather than capping at 20.
-        gui.blit(FRAME, x + 13, y + 51, 17, 54, 12, 12, ATLAS_W, ATLAS_H);
+        // Vanilla full armour badge from Minecraft's own 1.20.1 HUD atlas.
+        gui.blit(VANILLA_ICONS, x + 13, y + 52, 16, 9, 9, 9, 256, 256);
+        gui.blit(VANILLA_ICONS, x + 13, y + 52, 34, 9, 9, 9, 256, 256);
         gui.drawString(font, Integer.toString(player.getArmorValue()),
                 x + 28, y + 53, WHITE, true);
     }
@@ -150,8 +158,10 @@ public final class PlayerRpgHudOverlay {
         return String.format(Locale.ROOT, "%.1f", value);
     }
 
+    private enum HudIcon { HEALTH, FOOD, MANA }
+
     private static void gauge(GuiGraphics gui, Font font,
-                              int x, int y, int v, int originalWidth, int iconU,
+                              int x, int y, int v, int originalWidth, HudIcon icon,
                               float fraction, String text, int base, int highlight) {
         // Preserve the native pixel-art left trim and far-right end cap when
         // shortening the three differently sized source sprites to one width.
@@ -171,10 +181,27 @@ public final class PlayerRpgHudOverlay {
             }
         }
 
-        // Place the original nine-pixel atlas sprites just to the left of
-        // each bar rather than on top of its trim. At the HUD's left edge
-        // this clears the portrait frame by six pixels and the bar by five.
-        gui.blit(FRAME, x - 14, y + 2, iconU, 70, 9, 9, ATLAS_W, ATLAS_H);
+        // The vanilla HUD draws a background silhouette and then a full
+        // heart/drumstick on top of it. Use both 9x9 sprites so outlines
+        // remain correct even when a resource pack replaces icons.png.
+        // Minecraft has no mana icon, so use its 16x16 Heart of the Sea
+        // item art as a compact blue magical orb instead of our droplet.
+        switch (icon) {
+            case HEALTH -> {
+                gui.blit(VANILLA_ICONS, x - 14, y + 2,
+                        16, 0, 9, 9, 256, 256);
+                gui.blit(VANILLA_ICONS, x - 14, y + 2,
+                        52, 0, 9, 9, 256, 256);
+            }
+            case FOOD -> {
+                gui.blit(VANILLA_ICONS, x - 14, y + 2,
+                        16, 27, 9, 9, 256, 256);
+                gui.blit(VANILLA_ICONS, x - 14, y + 2,
+                        52, 27, 9, 9, 256, 256);
+            }
+            case MANA -> gui.blit(VANILLA_MANA_ORB, x - 16, y + 1,
+                    12, 12, 0.0F, 0.0F, 16, 16, 16, 16);
+        }
         gui.drawString(font, text, x + 13, y + 2, WHITE, true);
     }
 
