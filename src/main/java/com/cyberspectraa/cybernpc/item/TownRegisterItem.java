@@ -14,6 +14,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -38,6 +39,28 @@ public final class TownRegisterItem extends Item {
     private static final String SELECTED_ENTITY = "SelectedEntity";
     private static final String SELECTED_NAME = "SelectedName";
     private static final String SELECTED_SPECIAL = "SelectedIsSpecial";
+    private static final String WORK_MODE = "WorkMode";
+
+    public static boolean isWorkMode(ItemStack register) {
+        var tag = register.getTagElement(ROOT);
+        return tag != null && tag.getBoolean(WORK_MODE);
+    }
+
+    /** Sneak + right-click AIR switches modes without disturbing house controls. */
+    @Override
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+        ItemStack register = player.getItemInHand(hand);
+        if (!player.isShiftKeyDown()) return super.use(level, player, hand);
+        if (!level.isClientSide) {
+            boolean workMode = !isWorkMode(register);
+            register.getOrCreateTagElement(ROOT).putBoolean(WORK_MODE, workMode);
+            player.displayClientMessage(Component.literal(workMode
+                    ? "Town Register: WORK MODE. Click a workstation to register it; "
+                    + "sneak-click with a selected housed Main NPC to assign."
+                    : "Town Register: HOME MODE. Click town bells and front doors normally."), true);
+        }
+        return InteractionResultHolder.sidedSuccess(register, level.isClientSide);
+    }
 
     public TownRegisterItem(Properties properties) {
         super(properties);
@@ -106,6 +129,14 @@ public final class TownRegisterItem extends Item {
 
         ItemStack stack = context.getItemInHand();
         UUID identity = selectedId(stack);
+
+        if (isWorkMode(stack)) {
+            player.displayClientMessage(Component.literal(
+                    "Work Mode: click a supported workstation (smithing table, "
+                    + "lectern, composter, smoker, barrel, etc.). "
+                    + "Sneak + right-click air to return to Home Mode."), true);
+            return InteractionResult.CONSUME;
+        }
 
         if (identity == null) {
             player.displayClientMessage(
@@ -427,6 +458,9 @@ public final class TownRegisterItem extends Item {
             );
         }
 
+        tooltip.add(Component.literal("Mode: "
+                + (isWorkMode(stack) ? "WORK" : "HOME")));
+        tooltip.add(Component.literal("Sneak + right-click air: change mode"));
         tooltip.add(
                 Component.literal(
                         "Right-click any CyberNpc NPC: select"
@@ -442,6 +476,10 @@ public final class TownRegisterItem extends Item {
                         "Use on Work marker: assign exact work spot"
                 )
         );
+        tooltip.add(Component.literal(
+                "Work Mode: click station to register / inspect"));
+        tooltip.add(Component.literal(
+                "Work Mode + sneak click: assign selected housed NPC"));
     }
 
     @Nullable

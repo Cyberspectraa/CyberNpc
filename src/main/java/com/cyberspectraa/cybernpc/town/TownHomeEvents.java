@@ -37,23 +37,34 @@ public final class TownHomeEvents {
         ItemStack stack = event.getEntity().getMainHandItem();
         if (!(stack.getItem() instanceof TownRegisterItem)) return;
         var state = event.getLevel().getBlockState(event.getPos());
-        boolean bell = state.getBlock() instanceof BellBlock;
-        boolean door = state.getBlock() instanceof DoorBlock;
-        if (!bell && !door) return;
+        boolean workMode = TownRegisterItem.isWorkMode(stack);
+        boolean station = workMode && TownJobTypes.forBlock(state) != null;
+        boolean bell = !workMode && state.getBlock() instanceof BellBlock;
+        boolean door = !workMode && state.getBlock() instanceof DoorBlock;
+        if (!bell && !door && !station) return;
 
-        // Consume both sides, but run all registry writes only on the server.
+        // Workstations and vanilla bells/doors use their own right-click logic;
+        // handle the Town Register first so furnace/lectern UIs don't open.
         event.setCanceled(true);
         event.setCancellationResult(InteractionResult.SUCCESS);
         if (!(event.getLevel() instanceof ServerLevel level)) return;
 
-        TownHomeSavedData data = TownHomeSavedData.get(level);
         String response;
-        if (bell) {
-            response = data.useBell(level, event.getPos(), event.getEntity().isShiftKeyDown());
+        if (station) {
+            TownWorkSavedData jobs = TownWorkSavedData.get(level);
+            if (event.getEntity().isShiftKeyDown()) {
+                response = jobs.assign(level, event.getPos(), selectedMainNpc(level, stack));
+            } else {
+                response = jobs.register(level, event.getPos(), event.getEntity().blockPosition());
+            }
+        } else if (bell) {
+            response = TownHomeSavedData.get(level).useBell(
+                    level, event.getPos(), event.getEntity().isShiftKeyDown());
         } else {
             BlockPos lower = HouseInteriorScanner.lowerDoor(level, event.getPos());
             CyberNpcEntity selected = selectedMainNpc(level, stack);
-            response = data.useDoor(level, lower, selected, event.getEntity().isShiftKeyDown());
+            response = TownHomeSavedData.get(level).useDoor(
+                    level, lower, selected, event.getEntity().isShiftKeyDown());
         }
         event.getEntity().displayClientMessage(Component.literal(response), false);
     }
@@ -74,6 +85,7 @@ public final class TownHomeEvents {
                 || !(event.level instanceof ServerLevel level)
                 || level.getGameTime() % 1200L != 200L) return;
         TownHomeSavedData.get(level).populateOne(level);
+        TownWorkSavedData.get(level).autoHireOne(level);
     }
 
     @SubscribeEvent
@@ -85,7 +97,12 @@ public final class TownHomeEvents {
                     && !(player.getOffhandItem().getItem() instanceof TownRegisterItem))) {
             return;
         }
-        TownHomeSavedData.get(player.serverLevel()).showClaimedDoorHighlights(player);
+        if (TownRegisterItem.isWorkMode(player.getMainHandItem())
+                || TownRegisterItem.isWorkMode(player.getOffhandItem())) {
+            TownWorkSavedData.get(player.serverLevel()).highlight(player);
+        } else {
+            TownHomeSavedData.get(player.serverLevel()).showClaimedDoorHighlights(player);
+        }
     }
 
     @SubscribeEvent
@@ -94,6 +111,7 @@ public final class TownHomeEvents {
                 && npc.getNpcType() == NpcType.MAIN
                 && npc.level() instanceof ServerLevel level) {
             TownHomeSavedData.get(level).onNpcDeath(npc);
+            TownWorkSavedData.get(level).onNpcDeath(npc);
         }
     }
 

@@ -4,6 +4,7 @@ import com.cyberspectraa.cybernpc.building.BuildingPointType;
 import com.cyberspectraa.cybernpc.building.BuildingSavedData;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
 import com.cyberspectraa.cybernpc.town.TownHomeSavedData;
+import com.cyberspectraa.cybernpc.town.TownWorkSavedData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -28,6 +29,9 @@ final class NpcBuildingBrain {
     @Nullable
     private BlockPos activeBed;
     private int repathCooldown;
+    @Nullable
+    private TownWorkSavedData.JobAssignment cachedTownJob;
+    private long lastJobLookupTick = -1L;
     private boolean busy;
 
     NpcBuildingBrain(CyberNpcEntity npc) {
@@ -53,6 +57,12 @@ final class NpcBuildingBrain {
         // untouched and continue to function for pre-migration residents.
         TownHomeSavedData.HomeAssignment townHome =
                 TownHomeSavedData.get(level).assignedHome(level, npc.getUUID());
+        // Job data is persistent and dimension aware, but only query it every
+        // 40 ticks. NPC movement must not scan saved jobs every game tick.
+        if (lastJobLookupTick < 0 || npc.tickCount - lastJobLookupTick >= 40) {
+            cachedTownJob = TownWorkSavedData.get(level).assignedJob(level, npc.getUUID());
+            lastJobLookupTick = npc.tickCount;
+        }
 
         if (npc.isSleeping()) {
             if (level.isNight() && (home != null || townHome != null)) {
@@ -68,9 +78,15 @@ final class NpcBuildingBrain {
         if (!level.isNight()) {
             homeTarget = null;
 
+            // Existing Work marker assignments take absolute precedence.
             if (work != null) {
                 busy = true;
                 return tickWork(work);
+            }
+
+            if (cachedTownJob != null && shouldWorkNow(level)) {
+                busy = true;
+                return tickTownWork(cachedTownJob);
             }
 
             busy = false;
@@ -175,7 +191,42 @@ final class NpcBuildingBrain {
         homeTarget = null;
         activeBed = null;
         repathCooldown = 0;
+        cachedTownJob = null;
+        lastJobLookupTick = -1L;
         busy = false;
+    }
+
+    /**
+     * A modest day routine for NEW station-based jobs only. Legacy marker
+     * workers are untouched. Staggered shifts, lunch and short breathers
+     * allow normal idle/social/stroll AI to run when off duty.
+     */
+    private boolean shouldWorkNow(ServerLevel level) {
+        if (npc.getHunger() <= 5.0F
+                || npc.getHealth() < npc.getMaxHealth() * 0.45F) return false;
+        long time = Math.floorMod(level.getDayTime(), 24000L);
+        long offset = Math.floorMod(npc.getUUID().hashCode(), 900) - 450;
+        boolean shift = (time >= 2500L + offset && time <= 6300L + offset)
+                || (time >= 7900L + offset && time <= 11100L + offset);
+        // A 20-second breather during each longer shift, not permanent idle.
+        return shift && (time + offset) % 2800L < 2400L;
+    }
+
+    private boolean tickTownWork(TownWorkSavedData.JobAssignment job) {
+        BlockPos stand = job.stand();
+        npc.setSprinting(false);
+        if (npc.distanceToSqr(Vec3.atBottomCenterOf(stand)) > 2.0D * 2.0D) {
+            navigateTo(stand, 0.69D);
+        } else {
+            npc.getNavigation().stop();
+            if (npc.tickCount % 40 == 0) {
+                npc.getLookControl().setLookAt(
+                        job.station().getX() + 0.5D,
+                        job.station().getY() + 0.7D,
+                        job.station().getZ() + 0.5D);
+            }
+        }
+        return true;
     }
 
     private boolean tickWork(

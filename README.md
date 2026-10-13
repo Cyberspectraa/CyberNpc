@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current version: 0.44.52** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.53** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
@@ -15,6 +15,59 @@ and client V-key binding. Existing world items referencing
 This does not change NPC AI, data, dialogue, typed-chat speech bubbles, or
 the ordinary tools used to register towns and houses. The separate
 voice-to-bubble experimental feature remains reverted.
+
+## Town workplace and employment prototype (0.44.53)
+
+The first, **opt-in** workplace system works alongside the registered towns
+and homes introduced in 0.44.46. It does not overwrite or reinterpret old
+building markers, existing home assignments, or special-service NPC workplaces.
+
+**Town Register modes:**
+
+1. Hold the Town Register. **Sneak + right-click the air** to switch between
+   HOME and WORK modes. HOME mode retains normal bell/door house registration,
+   population toggle and manual house assignments.
+2. In WORK mode, **normal-click a vanilla workstation** to register one job
+   slot for the nearest registered town bell (within 256 blocks). There must
+   be one walkable block beside the station; the system reserves this place
+   for NPC pathfinding and displays a short registration/status message.
+3. Residents who own a **registered town home** may automatically claim
+   vacant workstations in the same town. One nearby, loaded worker at most
+   is hired per 60-second check per loaded dimension, within 96 blocks of
+   their station; no chunks are loaded by the job system.
+4. Optionally select a housed ordinary Main NPC with the Town Register,
+   then **sneak-click a registered station in WORK mode** to assign them
+   immediately. Sneak-click again with that same selected NPC to unassign
+   them; the vacancy may be claimed again by an unemployed resident.
+5. Registered stations display a subtle gold particle indicator only to
+   nearby players holding the Town Register in WORK mode (at most 8 stations
+   per holder every 12 ticks). In HOME mode, registered house doors retain
+   their own emerald indicators.
+
+**Initially supported vanilla blocks:** Smithing Table / Blast Furnace /
+Grindstone / Anvil (Blacksmith), Lectern (Librarian), Composter (Farmer),
+Smoker (Cook), Brewing Stand (Alchemist), Barrel (Merchant), Fletching
+Table (Fletcher), Cartography Table (Cartographer), Stonecutter (Mason),
+Loom (Tailor), Crafting Table (Artisan) and Furnace (Smelter).
+
+Job assignments are persisted in separate Overworld saved data
+`cybernpc_town_work_v1`; existing player home ownership is untouched.
+Unloaded residents keep their reserved jobs. Once the original station
+block is removed/replaced and its chunk is loaded, its registration is
+invalidated on the next employment check. A dead NPC releases their job.
+
+**Prototype daytime behaviour:** new station employees commute to a free
+adjacent standing spot during two staggered daily work shifts, with a
+midday break, brief breathers, and free-time wandering/social behaviour
+between shifts. They return to their registered home at night using the
+existing home brain. Existing **Work marker** NPCs remain on their old
+exact-position AI (intentionally preserved). This first update does not
+simulate production, trades, crafting or multi-station buildings yet.
+
+**Test caveat:** The workstation/job engine is a first in-game test build;
+check navigation near doors, enclosed workplaces, daily activity balance,
+and saved assignment persistence. Be sure CyberNpc 0.44.53 is installed
+on both the server and clients. No CyberServer version change is needed.
 
 ## NPC types and daily life
 

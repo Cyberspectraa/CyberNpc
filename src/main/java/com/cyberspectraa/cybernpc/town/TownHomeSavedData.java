@@ -548,6 +548,28 @@ public final class TownHomeSavedData extends SavedData {
         return null;
     }
 
+    /**
+     * Read-only job integration. A worker must belong to a REGISTERED home
+     * in the same town/dimension; legacy home-marker assignments are untouched.
+     */
+    @Nullable
+    public UUID residentTownId(ServerLevel level, UUID npcId) {
+        if (npcId == null) return null;
+        String dimension = level.dimension().location().toString();
+        for (Home home : homes.values()) {
+            Town town = towns.get(home.townId);
+            if (town != null && town.dimension.equals(dimension)
+                    && home.residents.containsKey(npcId)) return town.id;
+        }
+        return null;
+    }
+
+    @Nullable
+    public UUID townIdNear(ServerLevel level, BlockPos pos) {
+        Town town = nearestTown(level, pos);
+        return town == null ? null : town.id;
+    }
+
     public record HomeAssignment(@Nullable BlockPos bed, BlockPos inside) {}
 
     /** One opportunity per minute per loaded dimension, after world startup. */
