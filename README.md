@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current version: 0.44.56** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.57** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
@@ -16,14 +16,30 @@ This does not change NPC AI, data, dialogue, typed-chat speech bubbles, or
 the ordinary tools used to register towns and houses. The separate
 voice-to-bubble experimental feature remains reverted.
 
+## Static player face HUD (0.44.57)
+
+The live, rotating full-body player preview has been replaced with a **static
+2D face portrait** from the player's own Minecraft skin. It renders the 8x8
+face texture (skin UV 8,8) and its transparent 8x8 hat/outer hair layer
+(UV 40,8) enlarged with crisp Minecraft pixels inside a simple stone border.
+There are no player-model pose, head movement, rotation, Pehkui scale or idle
+animation effects in this portrait.
+
+The existing health, hunger, armor and Iron's Spells mana displays are
+unchanged for this iteration. The existing
+`config/cybernpc-hud-client.toml` setting
+`rpg_hud.show_character_preview` controls the new face portrait; saved
+client configs remain valid. Only CyberNpc changes, so CyberServer stays on
+v0.2.4. Install v0.44.57 on both client and server as usual.
+
 ## Pixel-art top-left player HUD (0.44.56)
 
 **Client-side Minecraft pixel-style HUD**, following the *layout* (not art)
 of the user's Souls Combat HUD reference. The gauge frame, trim, food and
 armor icons are original, nearest-neighbour PNG sprites in
 `assets/cybernpc/textures/gui/player_hud.png`; there is **no large modern
-blue dashboard panel**. The full player renderer draws the real skin,
-armor and compatible race models on the left, with stone-rimmed health
+blue dashboard panel**. The fixed 2D skin portrait draws the player's own face and hair/hat
+overlay on the left, with stone-rimmed health
 (red), hunger (green) and Iron's mana (blue) gauges extending to the right.
 Numbers are rendered using Minecraft's own pixel font.
 
@@ -37,8 +53,9 @@ Numbers are rendered using Minecraft's own pixel font.
   replacement is displayed and `replace_vanilla_bars` is enabled. Iron's
   native mana gauge is hidden only if this mod successfully reads mana.
 * Hotbar, XP bar, crosshair, air/mount meters, bosses and chat remain untouched.
-* Uses the original live player entity renderer (skin, armour, race models);
-  the paper-doll area is clipped and has no modern panel behind it.
+* Uses the original 2D Minecraft skin face texture and its outer
+  head layer; the portrait never moves. Custom 3D race-specific head
+  geometry is intentionally not shown in the flat portrait.
 * Client configuration at `config/cybernpc-hud-client.toml`:
   `rpg_hud.enabled`, `rpg_hud.replace_vanilla_bars`,
   `rpg_hud.show_character_preview`, `rpg_hud.x_offset`,

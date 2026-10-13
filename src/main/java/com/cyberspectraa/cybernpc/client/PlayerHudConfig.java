@@ -21,7 +21,7 @@ public final class PlayerHudConfig {
                 "while the new CyberNpc HUD is displayed. Leave the hotbar and XP intact.")
                 .define("replace_vanilla_bars", true);
         CHARACTER_PREVIEW = builder.comment(
-                "Render your real Minecraft character, skin and gear in the HUD.")
+                "Show a static 2D face portrait using your Minecraft skin and hat/hair overlay.")
                 .define("show_character_preview", true);
         X_OFFSET = builder.comment("Horizontal HUD offset from the top-left screen corner.")
                 .defineInRange("x_offset", 8, 0, 1000);

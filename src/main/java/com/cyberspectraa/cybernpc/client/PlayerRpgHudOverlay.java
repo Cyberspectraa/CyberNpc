@@ -4,7 +4,6 @@ import com.cyberspectraa.cybernpc.CyberNpc;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -19,7 +18,7 @@ import java.util.Locale;
 
 /**
  * Classic Minecraft-style pixel HUD inspired by the arrangement (not assets)
- * of Souls Combat HUD. Narrow stone-rimmed gauges and an unboxed player model.
+ * of Souls Combat HUD. Narrow stone-rimmed gauges and a fixed 2D skin face.
  * No simulated stats; no change to core inventory/hotbar/crosshair rendering.
  */
 @Mod.EventBusSubscriber(modid = CyberNpc.MOD_ID, value = Dist.CLIENT,
@@ -82,17 +81,12 @@ public final class PlayerRpgHudOverlay {
         int y = Mth.clamp(PlayerHudConfig.Y_OFFSET.get(), 0,
                 Math.max(0, gui.guiHeight() - MAX_H));
 
-        // Unboxed paper doll, closer to the supplied pixel HUD reference than
-        // a modern "dashboard" panel. Inventory renderer respects real player
-        // skin, armor and whichever entity renderer mods currently provide.
+        // A perfectly still, pixel-sharp skin portrait. Draw the eight-by-
+        // eight face region and optional hat/hair layer directly from the
+        // locally cached player skin. This avoids inventory model rotation,
+        // breathing/idle animation and view-angle changes.
         if (PlayerHudConfig.CHARACTER_PREVIEW.get()) {
-            gui.enableScissor(x + 2, y + 1, x + 62, y + 83);
-            try {
-                InventoryScreen.renderEntityInInventoryFollowsMouse(
-                        gui, x + 31, y + 81, 34, 0.0F, 0.0F, player);
-            } finally {
-                gui.disableScissor();
-            }
+            drawStaticFace(gui, player, x + 8, y + 10);
         }
 
         int bx = x + 62;
@@ -120,6 +114,26 @@ public final class PlayerRpgHudOverlay {
         gui.blit(FRAME, x + 40, y + 73, 17, 54, 12, 12, ATLAS_W, ATLAS_H);
         gui.drawString(font, Integer.toString(player.getArmorValue()),
                 x + 53, y + 75, WHITE, true);
+    }
+
+    /**
+     * Player skins use the standard 64x64 atlas layout:
+     * (8,8) is the face and (40,8) is the translucent outer hat layer.
+     * The UV rectangles are fixed; no 3D pose, mouse direction or tick
+     * interpolation affects this sprite.
+     */
+    private static void drawStaticFace(GuiGraphics gui, LocalPlayer player, int x, int y) {
+        final int size = 44;
+
+        // Simple 1-pixel stepped stone border, consistent with Minecraft UI.
+        gui.fill(x - 4, y - 4, x + size + 4, y + size + 4, 0xFF241E1B);
+        gui.fill(x - 3, y - 3, x + size + 3, y + size + 3, 0xFFB4A48A);
+        gui.fill(x - 2, y - 2, x + size + 2, y + size + 2, 0xFF6B6155);
+        gui.fill(x - 1, y - 1, x + size + 1, y + size + 1, 0xFF302C29);
+
+        ResourceLocation skin = player.getSkinTextureLocation();
+        gui.blit(skin, x, y, size, size, 8.0F, 8.0F, 8, 8, 64, 64);
+        gui.blit(skin, x, y, size, size, 40.0F, 8.0F, 8, 8, 64, 64);
     }
 
     private static String number(float value) {
