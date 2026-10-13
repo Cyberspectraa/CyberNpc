@@ -28,11 +28,14 @@ public final class PlayerRpgHudOverlay {
             new ResourceLocation(CyberNpc.MOD_ID, "textures/gui/player_hud.png");
     private static final int ATLAS_W = 256;
     private static final int ATLAS_H = 96;
-    private static final int HEALTH_WIDTH = 144;
-    private static final int HUNGER_WIDTH = 152;
-    private static final int MANA_WIDTH = 184;
-    private static final int MAX_W = 253;
-    private static final int MAX_H = 93;
+    // Each original texture row has a different length. Stitch the rightmost
+    // eight pixels at the new shared gauge width to preserve its end cap.
+    private static final int HEALTH_FRAME_WIDTH = 144;
+    private static final int HUNGER_FRAME_WIDTH = 152;
+    private static final int MANA_FRAME_WIDTH = 184;
+    private static final int GAUGE_WIDTH = 140;
+    private static final int MAX_W = 200;
+    private static final int MAX_H = 68;
 
     private static final int RED_DARK = 0xFF77322C;
     private static final int RED_LIGHT = 0xFFBD534A;
@@ -87,17 +90,17 @@ public final class PlayerRpgHudOverlay {
         // locally cached player skin. This avoids inventory model rotation,
         // breathing/idle animation and view-angle changes.
         if (PlayerHudConfig.CHARACTER_PREVIEW.get()) {
-            drawStaticFace(gui, player, x + 8, y + 10);
+            drawStaticFace(gui, player, x + 6, y + 8);
         }
 
-        int bx = x + 62;
+        int bx = x + 54;
         int currentHealthMax = Math.max(1, Mth.ceil(player.getMaxHealth()));
         float health = Math.max(0, Math.min(player.getHealth(), currentHealthMax));
-        gauge(gui, font, bx, y + 10, 0, HEALTH_WIDTH, health / currentHealthMax,
+        gauge(gui, font, bx, y + 8, 0, HEALTH_FRAME_WIDTH, 0, health / currentHealthMax,
                 number(health) + "/" + currentHealthMax, RED_DARK, RED_LIGHT);
 
         int hunger = Mth.clamp(player.getFoodData().getFoodLevel(), 0, 20);
-        gauge(gui, font, bx, y + 27, 16, HUNGER_WIDTH, hunger / 20.0F,
+        gauge(gui, font, bx, y + 24, 16, HUNGER_FRAME_WIDTH, 12, hunger / 20.0F,
                 hunger + "/20", GREEN_DARK, GREEN_LIGHT);
 
         IronsManaHudCompat.Mana mana = IronsManaHudCompat.current(player);
@@ -105,19 +108,18 @@ public final class PlayerRpgHudOverlay {
         // mana, not that the optional integration is unavailable. Hide this
         // gauge while still suppressing Iron's own native gauge below.
         if (mana != null && mana.maximum() > 0) {
-            gauge(gui, font, bx, y + 44, 32, MANA_WIDTH,
+            gauge(gui, font, bx, y + 40, 32, MANA_FRAME_WIDTH, 24,
                     mana.current() / (float) Math.max(1, mana.maximum()),
                     mana.current() + "/" + mana.maximum(),
                     BLUE_DARK, BLUE_LIGHT);
         }
 
-        // Small hand-drawn pixel icons, like vanilla inventory sprites.
-        // Display actual values rather than limiting modded armour to 20.
-        gui.blit(FRAME, x + 8, y + 73, 0, 54, 12, 12, ATLAS_W, ATLAS_H);
-        gui.drawString(font, Integer.toString(hunger), x + 21, y + 75, WHITE, true);
-        gui.blit(FRAME, x + 40, y + 73, 17, 54, 12, 12, ATLAS_W, ATLAS_H);
+        // Armor stays immediately below the face. Hunger is already shown
+        // inside its own gauge, so do not repeat the same number below.
+        // Preserve the actual modded armor value rather than capping at 20.
+        gui.blit(FRAME, x + 13, y + 51, 17, 54, 12, 12, ATLAS_W, ATLAS_H);
         gui.drawString(font, Integer.toString(player.getArmorValue()),
-                x + 53, y + 75, WHITE, true);
+                x + 28, y + 53, WHITE, true);
     }
 
     /**
@@ -127,7 +129,7 @@ public final class PlayerRpgHudOverlay {
      * interpolation affects this sprite.
      */
     private static void drawStaticFace(GuiGraphics gui, LocalPlayer player, int x, int y) {
-        final int size = 44;
+        final int size = 38;
 
         // Simple 1-pixel stepped stone border, consistent with Minecraft UI.
         gui.fill(x - 4, y - 4, x + size + 4, y + size + 4, 0xFF241E1B);
@@ -146,25 +148,30 @@ public final class PlayerRpgHudOverlay {
     }
 
     private static void gauge(GuiGraphics gui, Font font,
-                              int x, int y, int v, int width, float fraction,
-                              String text, int base, int highlight) {
-        // Entire background/frame is native 1:1 nearest-neighbour pixel art,
-        // never scaled or blurred.
-        gui.blit(FRAME, x, y, 0, v, width, 13, ATLAS_W, ATLAS_H);
+                              int x, int y, int v, int originalWidth, int iconU,
+                              float fraction, String text, int base, int highlight) {
+        // Preserve the native pixel-art left trim and far-right end cap when
+        // shortening the three differently sized source sprites to one width.
+        // Never scale the artwork: nearest-neighbor 1:1 pixels stay crisp.
+        gui.blit(FRAME, x, y, 0, v, GAUGE_WIDTH - 8, 13, ATLAS_W, ATLAS_H);
+        gui.blit(FRAME, x + GAUGE_WIDTH - 8, y,
+                originalWidth - 8, v, 8, 13, ATLAS_W, ATLAS_H);
 
-        int length = Mth.clamp(Math.round((width - 15)
-                * Mth.clamp(fraction, 0.0F, 1.0F)), 0, width - 15);
+        int length = Mth.clamp(Math.round((GAUGE_WIDTH - 16)
+                * Mth.clamp(fraction, 0.0F, 1.0F)), 0, GAUGE_WIDTH - 16);
         if (length > 0) {
             gui.fill(x + 8, y + 4, x + 8 + length, y + 9, base);
             gui.fill(x + 8, y + 4, x + 8 + length, y + 5, highlight);
-            // Subtle discrete Minecraft pixel shading; no smooth gradients.
-            for (int dx = 12; dx < length; dx += 18) {
+            for (int dx = 12; dx < length - 1; dx += 18) {
                 gui.fill(x + 8 + dx, y + 8, x + 9 + dx, y + 9,
                         0x60201B12);
             }
         }
 
-        gui.drawString(font, text, x + 13, y + 2, WHITE, true);
+        // Original 9x9 pixel sprites stored alongside the existing armour and
+        // food icons. Icons sit above the fill but within the stone frame.
+        gui.blit(FRAME, x + 9, y + 2, iconU, 70, 9, 9, ATLAS_W, ATLAS_H);
+        gui.drawString(font, text, x + 24, y + 2, WHITE, true);
     }
 
     private PlayerRpgHudOverlay() {}
