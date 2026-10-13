@@ -34,7 +34,7 @@ public final class PlayerRpgHudOverlay {
     private static final int HUNGER_FRAME_WIDTH = 152;
     private static final int MANA_FRAME_WIDTH = 184;
     private static final int GAUGE_WIDTH = 140;
-    private static final int MAX_W = 200;
+    private static final int MAX_W = 214;
     private static final int MAX_H = 68;
 
     private static final int RED_DARK = 0xFF77322C;
@@ -93,7 +93,10 @@ public final class PlayerRpgHudOverlay {
             drawStaticFace(gui, player, x + 6, y + 8);
         }
 
-        int bx = x + 54;
+        // Give the nine-pixel icons a clear column between portrait and bars.
+        // They cannot sit inside a five-pixel-high bar fill without covering
+        // the decorative frame rails.
+        int bx = x + 68;
         int currentHealthMax = Math.max(1, Mth.ceil(player.getMaxHealth()));
         float health = Math.max(0, Math.min(player.getHealth(), currentHealthMax));
         gauge(gui, font, bx, y + 8, 0, HEALTH_FRAME_WIDTH, 0, health / currentHealthMax,
@@ -168,10 +171,11 @@ public final class PlayerRpgHudOverlay {
             }
         }
 
-        // Original 9x9 pixel sprites stored alongside the existing armour and
-        // food icons. Icons sit above the fill but within the stone frame.
-        gui.blit(FRAME, x + 9, y + 2, iconU, 70, 9, 9, ATLAS_W, ATLAS_H);
-        gui.drawString(font, text, x + 24, y + 2, WHITE, true);
+        // Place the original nine-pixel atlas sprites just to the left of
+        // each bar rather than on top of its trim. At the HUD's left edge
+        // this clears the portrait frame by six pixels and the bar by five.
+        gui.blit(FRAME, x - 14, y + 2, iconU, 70, 9, 9, ATLAS_W, ATLAS_H);
+        gui.drawString(font, text, x + 13, y + 2, WHITE, true);
     }
 
     private PlayerRpgHudOverlay() {}
