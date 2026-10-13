@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current version: 0.44.57** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current version: 0.44.58** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
@@ -15,6 +15,21 @@ and client V-key binding. Existing world items referencing
 This does not change NPC AI, data, dialogue, typed-chat speech bubbles, or
 the ordinary tools used to register towns and houses. The separate
 voice-to-bubble experimental feature remains reverted.
+
+## Mana gauge visibility (0.44.58)
+
+The player HUD now hides its blue mana gauge when the effective Iron's Spells
+max-mana attribute is zero or lower. This includes non-magic CyberClasses
+paths with `ManaTier.NONE`, plus any future race/ability that produces an
+actual zero-capacity mana pool. CyberClasses already applies the class mana
+tier to that attribute server-side, so no new class packets or dependencies
+are needed. The original Iron's mana overlay is also suppressed for this
+known zero-capacity state, while missing or incompatible optional APIs are
+left alone. Magic-capable characters continue showing their true synced
+current/max mana; the health, food, armour, face and other UI remain unchanged.
+
+Only CyberNpc is updated. Replace the old CyberNpc JAR on both server and
+client with 0.44.58, and keep other Cyber mods at their existing versions.
 
 ## Static player face HUD (0.44.57)
 
