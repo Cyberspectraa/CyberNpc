@@ -458,6 +458,8 @@ public class CyberNpcEntity extends PathfinderMob {
 
     public CyberNpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
+        // Limit on-foot navigation to vanilla player walking/sprinting pace.
+        this.moveControl = new NpcPlayerPacedMoveControl(this);
         corralBrain = new WildNpcCorralBrain(this);
         sleepBrain = new WildNpcSleepBrain(this);
         playerInteractions = new NpcPlayerInteractionController(this);
