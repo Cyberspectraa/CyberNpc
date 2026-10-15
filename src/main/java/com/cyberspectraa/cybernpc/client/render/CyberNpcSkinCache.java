@@ -315,7 +315,7 @@ public final class CyberNpcSkinCache {
             if (!zombie && mainOutfit > 0) {
                 // Combine with the original appearance rather than replacing
                 // the skin: unpainted areas retain hair, eyes and skin tone.
-                try (NativeImage clothing = loadMainOutfit(mainOutfit)) {
+                try (NativeImage clothing = loadMainOutfit(mainOutfit, gender.slim())) {
                     blend(composed, clothing);
                 }
             }
@@ -473,7 +473,8 @@ public final class CyberNpcSkinCache {
         }
     }
 
-    private static NativeImage loadMainOutfit(int number) throws IOException {
+    private static NativeImage loadMainOutfit(int number, boolean targetSlim)
+            throws IOException {
         String path = "outfits/" + number + ".png";
         byte[] bytes = mainOutfits().get(path);
         if (bytes == null) {
@@ -481,7 +482,121 @@ public final class CyberNpcSkinCache {
         }
 
         try (ByteArrayInputStream input = new ByteArrayInputStream(bytes)) {
-            return NativeImage.read(input);
+            NativeImage outfit = NativeImage.read(input);
+            if (outfit.getWidth() != 64 || outfit.getHeight() != 64) {
+                outfit.close();
+                throw new IOException("Main NPC outfit must be 64x64: " + path);
+            }
+
+            // The supplied outfit pack mixes Alex (3-pixel) and Steve
+            // (4-pixel) arm UVs. Styles 1 and 4 were authored as slim; the
+            // other four styles use classic arms. Their clothing must be
+            // remapped to match the NPC model, including both sleeve layers.
+            boolean sourceSlim = number == 1 || number == 4;
+            if (sourceSlim != targetSlim) {
+                remapOutfitArms(outfit, sourceSlim, targetSlim);
+            }
+            return outfit;
+        }
+    }
+
+    /**
+     * Adapt only the four arm UV islands. Every non-arm pixel, including
+     * hats, hair, torso and trousers, stays byte-for-byte unchanged.
+     * Called only while building each cached composite, not every frame.
+     */
+    private static void remapOutfitArms(
+            NativeImage outfit,
+            boolean sourceSlim,
+            boolean targetSlim
+    ) {
+        remapOutfitArm(outfit, 40, 16, sourceSlim, targetSlim, false);
+        remapOutfitArm(outfit, 40, 32, sourceSlim, targetSlim, false);
+        remapOutfitArm(outfit, 32, 48, sourceSlim, targetSlim, true);
+        remapOutfitArm(outfit, 48, 48, sourceSlim, targetSlim, true);
+    }
+
+    private static void remapOutfitArm(
+            NativeImage outfit,
+            int x,
+            int y,
+            boolean sourceSlim,
+            boolean targetSlim,
+            boolean leftArm
+    ) {
+        int sourceWidth = sourceSlim ? 3 : 4;
+        int targetWidth = targetSlim ? 3 : 4;
+
+        // Snapshot before rewriting: faces shift horizontally between arm
+        // formats, and in-place shifting would overwrite neighbouring faces.
+        int[][] original = new int[16][16];
+        for (int row = 0; row < 16; row++) {
+            for (int col = 0; col < 16; col++) {
+                original[row][col] = outfit.getPixelRGBA(x + col, y + row);
+                outfit.setPixelRGBA(x + col, y + row, 0x00000000);
+            }
+        }
+
+        // On the character's right arm, the inner edge is the last front
+        // column; on the left arm it is the first. Keep the outer edge when
+        // narrowing, or repeat the inner edge when widening.
+        boolean keepFirst = !leftArm;
+
+        // Top and bottom faces.
+        copyOutfitArmFace(outfit, original, x, y,
+                4, 0, sourceWidth, 4,
+                4, 0, targetWidth, keepFirst);
+        copyOutfitArmFace(outfit, original, x, y,
+                4 + sourceWidth, 0, sourceWidth, 4,
+                4 + targetWidth, 0, targetWidth, keepFirst);
+
+        // Outer side, front, inner side and back.
+        copyOutfitArmFace(outfit, original, x, y,
+                0, 4, 4, 12,
+                0, 4, 4, true);
+        copyOutfitArmFace(outfit, original, x, y,
+                4, 4, sourceWidth, 12,
+                4, 4, targetWidth, keepFirst);
+        copyOutfitArmFace(outfit, original, x, y,
+                4 + sourceWidth, 4, 4, 12,
+                4 + targetWidth, 4, 4, true);
+        copyOutfitArmFace(outfit, original, x, y,
+                8 + sourceWidth, 4, sourceWidth, 12,
+                8 + targetWidth, 4, targetWidth, !keepFirst);
+    }
+
+    private static void copyOutfitArmFace(
+            NativeImage outfit,
+            int[][] original,
+            int originX,
+            int originY,
+            int sourceX,
+            int sourceY,
+            int sourceWidth,
+            int height,
+            int targetX,
+            int targetY,
+            int targetWidth,
+            boolean keepFirst
+    ) {
+        for (int row = 0; row < height; row++) {
+            for (int col = 0; col < targetWidth; col++) {
+                int sourceCol;
+                if (sourceWidth == targetWidth) {
+                    sourceCol = col;
+                } else if (sourceWidth > targetWidth) {
+                    sourceCol = keepFirst ? col : col + 1;
+                } else {
+                    sourceCol = keepFirst
+                            ? Math.min(col, sourceWidth - 1)
+                            : Math.max(0, col - 1);
+                }
+                outfit.setPixelRGBA(
+                        originX + targetX + col,
+                        originY + targetY + row,
+                        original[sourceY + row][sourceX + sourceCol]
+                );
+            }
         }
     }
 
