@@ -62,8 +62,8 @@ public final class NpcDialogueController {
         SESSIONS.put(player.getUUID(),
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
         npc.getLookControl().setLookAt(player, 25.0F, 25.0F);
-        send(player, npc, page, "", "Welcome, summoned one. The world has called you here. "
-                + "I am the Pope, and I'll help you find your place in our town.");
+        send(player, npc, page, "", "The summoning worked. Welcome. "
+                + "I'm the Pope here. Let me show you where to start.");
     }
 
     public static void choose(ServerPlayer player, int npcId, String action) {
@@ -100,15 +100,15 @@ public final class NpcDialogueController {
             };
             if (next == null) return;
             String response = switch (next) {
-                case "intro_1" -> "You stand in a town built to shelter travellers. "
-                    + "The church offers guidance, the square leads to its markets, "
-                    + "and our guards protect the people.";
-                case "intro_2" -> "At the Adventurers' Guild, speak to the receptionist "
-                    + "and check their notice board for contracts. Your journal "
-                    + "records the leads you discover.";
-                default -> "The shopkeeper trades for physical copper, silver and "
-                    + "gold coins. Earn coins by trading and completing tasks. "
-                    + "Now go, and write your own story.";
+                case "intro_1" -> "You're in town now. "
+                    + "The church is here if you need help, shops are by the square, "
+                    + "and guards keep watch in the streets.";
+                case "intro_2" -> "Looking for work? Go to the Adventurers' Guild "
+                    + "and check the board. Register contracts at the desk. Your journal "
+                    + "keeps track of your leads.";
+                default -> "Shops take copper, silver and "
+                    + "gold coins, not emeralds. Trade or finish jobs to earn them. "
+                    + "That's all from me. Go have a look around.";
             };
             SESSIONS.put(player.getUUID(),
                 new Session(npc.getUUID(), next, player.level().getGameTime() + SESSION_LIFETIME));
@@ -135,28 +135,28 @@ public final class NpcDialogueController {
             }
             case "who" -> reply = "I'm " + npc.getName().getString()
                     + ". " + (npc.getRole().isBlank()
-                    ? "Just making a living here." : "I work as a " + npc.getRole() + ".");
-            case "rumours" -> reply = "The roads are never as quiet as they seem. "
-                    + "Ask around if you're looking for work.";
-            case "how_are_you" -> reply = "Still standing, thank you. "
-                    + "A peaceful day would be a welcome change.";
+                    ? "Getting by." : "I work as a " + npc.getRole() + ".");
+            case "rumours" -> reply = "For news, try the guild. "
+                    + "They hear plenty.";
+            case "how_are_you" -> reply = "Can't complain. "
+                    + "How about you?";
             case "work" -> {
                 if (ModList.get().isLoaded("cyberquest")) {
                     invokeQuestWork(player, npc);
-                    reply = "I've told you what I know. Check your journal for any new leads.";
+                    reply = "That's all I've heard. Check your journal for leads.";
                 } else {
-                    reply = "The guild may know of work for an adventurer.";
+                    reply = "Try the guild board if you need work.";
                 }
             }
             case "shop" -> {
                 page = "shop";
-                reply = "All prices are paid with CyberNpc coins from your inventory. "
-                        + "Your wallet: " + NpcShopService.walletDescription(player) + ".";
+                reply = "Prices are in coins, not emeralds. "
+                        + "You have: " + NpcShopService.walletDescription(player) + ".";
 
             }
-            case "shop_about" -> reply = "I only accept CyberNpc coins, not emeralds or bank credit. "
-                    + "10 copper = 1 silver, 10 silver = 1 gold; platinum and dragon coins "
-                    + "work too. I'll give change in coins.";
+            case "shop_about" -> reply = "Coins only, please. "
+                    + "Ten copper make a silver, ten silver make a gold. Platinum and dragon coins "
+                    + "work too. I'll give change.";
 
             case "shop_sell" -> reply = NpcShopService.sellHeld(player);
             case "buy_bread", "buy_torches", "buy_beef", "buy_arrows",
@@ -165,14 +165,14 @@ public final class NpcDialogueController {
             case "guild_register" -> {
                 boolean success = invokeGuild(player, "registerHeldContract");
                 reply = success
-                    ? "Your contract is registered. Follow the lead in your journal."
-                    : "Hold an unregistered guild contract and ask me to register it.";
+                    ? "Right, it's registered. The details are in your journal."
+                    : "Hold the contract you want me to register.";
             }
             case "guild_claim" -> {
                 boolean success = invokeGuild(player, "claimReadyContracts");
                 reply = success
-                    ? "The guild has recorded your completed contracts."
-                    : "There are no completed guild contracts ready to claim.";
+                    ? "All done. Your completed contracts are settled."
+                    : "Nothing ready to collect just now.";
             }
             case "guild_card" -> {
                 // CyberQuest opens its own membership screen. Do not overwrite it.
@@ -180,16 +180,16 @@ public final class NpcDialogueController {
                     SESSIONS.remove(player.getUUID());
                     return;
                 }
-                reply = "Guild membership cards are issued here to adventurers.";
+                reply = "I handle guild cards here. Ask if you need yours.";
             }
-            case "guild_info" -> reply = "Take a notice from the board and bring it here "
-                    + "to register. Return after completing the work to receive payment.";
-            case "mail" -> reply = "Letters travel through the post office. "
-                    + "Address and seal them, then use a drop box to send them.";
-            case "guard" -> reply = "Stay clear of trouble, traveller. "
-                    + "The guards are watching the roads.";
-            case "church" -> reply = "All are welcome beneath this roof. "
-                    + "May your travels be safe.";
+            case "guild_info" -> reply = "Pick a contract from the board and bring it here "
+                    + "to register. Come back when you're done for payment.";
+            case "mail" -> reply = "Address and seal your letter, "
+                    + "then drop it in a post box. I'll take it from there.";
+            case "guard" -> reply = "Keep your eyes open out there. "
+                    + "The roads aren't always safe.";
+            case "church" -> reply = "Come in. You're welcome here. "
+                    + "May your journey be a safe one.";
             default -> {
                 return;
             }
@@ -235,10 +235,10 @@ public final class NpcDialogueController {
                 default -> "intro_finish";
             };
             String label = switch (next) {
-                case "intro_town" -> "Where have I been summoned?";
-                case "intro_guild" -> "How do I find work?";
-                case "intro_trade" -> "How do shops and coins work?";
-                default -> "I'm ready to begin.";
+                case "intro_town" -> "Where am I?";
+                case "intro_guild" -> "Where can I find work?";
+                case "intro_trade" -> "How do I pay for things?";
+                default -> "Thanks. I'll take it from here.";
             };
             options.add(option(next, label));
             options.add(option("intro_skip", "Skip introduction"));
@@ -250,21 +250,21 @@ public final class NpcDialogueController {
                     options.add(option(item.action(), item.label()));
                 }
             }
-            options.add(option("back", "I'd like to ask something else."));
+            options.add(option("back", "Something else..."));
             return List.copyOf(options);
         }
 
         switch (role) {
             case GUILD_RECEPTIONIST -> {
-                options.add(option("guild_register", "I'd like to register this contract."));
-                options.add(option("guild_claim", "I'd like to collect my rewards."));
-                options.add(option("guild_card", "May I see my guild card?"));
+                options.add(option("guild_register", "Can you register this contract?"));
+                options.add(option("guild_claim", "I'm here for my payment."));
+                options.add(option("guild_card", "Can I see my guild card?"));
                 options.add(option("guild_info", "How does the guild work?"));
             }
             case SHOPKEEPER -> {
-                options.add(option("shop", "Show me what you have for sale."));
-                options.add(option("shop_sell", "I'd like to sell these materials."));
-                options.add(option("shop_about", "How do your prices work?"));
+                options.add(option("shop", "What have you got for sale?"));
+                options.add(option("shop_sell", "Can I sell these?"));
+                options.add(option("shop_about", "What coins do you take?"));
             }
             case BANKER -> {
                 // Legacy banker NPCs may still exist in older saves.
@@ -281,7 +281,7 @@ public final class NpcDialogueController {
                 options.add(option("rumours", "Has there been any trouble?"));
             }
             case POPE -> {
-                options.add(option("church", "Could I have a blessing?"));
+                options.add(option("church", "Could you give me a blessing?"));
                 options.add(option("rumours", "Have you heard any news?"));
             }
             default -> {
@@ -300,14 +300,14 @@ public final class NpcDialogueController {
 
     private static String greeting(CyberNpcEntity npc) {
         return switch (NpcServiceRole.fromRole(npc.getRole())) {
-            case GUILD_RECEPTIONIST -> "Welcome to the Adventurers' Guild. "
-                    + "Are you here to register a contract or collect payment?";
-            case SHOPKEEPER -> "Welcome! Take a look at what I've got for sale.";
-            case BANKER -> "Greetings! The bank is no longer in service.";
-            case COURIER -> "Letters, packages, deliveries. Can I help?";
-            case GUARD -> "Halt a moment, traveller. Everything all right?";
-            case POPE -> "Peace be with you. What troubles your heart?";
-            default -> "Greetings, traveller. What can I do for you?";
+            case GUILD_RECEPTIONIST -> "Welcome to the guild. "
+                    + "Registering a contract, or collecting payment?";
+            case SHOPKEEPER -> "Come in. Have a look around.";
+            case BANKER -> "Sorry, the bank's closed for good.";
+            case COURIER -> "Post going out? What do you need?";
+            case GUARD -> "Hold there, traveller. Need something?";
+            case POPE -> "Welcome to the church. Anything I can help with?";
+            default -> "Hello there. Need a hand with something?";
         };
     }
 
