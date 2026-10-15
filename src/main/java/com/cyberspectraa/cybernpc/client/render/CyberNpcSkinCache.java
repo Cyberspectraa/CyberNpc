@@ -3,6 +3,7 @@ package com.cyberspectraa.cybernpc.client.render;
 import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.entity.NpcAppearance;
+import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.entity.ZombieCyberNpcEntity;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
 import com.mojang.blaze3d.platform.NativeImage;
@@ -49,6 +50,10 @@ public final class CyberNpcSkinCache {
                     "appearance/pope.b64"
             );
 
+    private static final ResourceLocation MAIN_OUTFITS_ARCHIVE =
+            new ResourceLocation(CyberNpc.MOD_ID, "appearance/main_outfits.zip");
+    private static final int MAIN_OUTFIT_COUNT = 6;
+
     private static final ResourceLocation FALLBACK_STEVE =
             new ResourceLocation("minecraft", "textures/entity/player/wide/steve.png");
 
@@ -62,6 +67,7 @@ public final class CyberNpcSkinCache {
     private static Map<String, byte[]> packedAssets;
     private static Boolean justExpressionsPresent;
     private static byte[] popeOutfitPng;
+    private static Map<String, byte[]> mainOutfitPngs;
 
     private enum ZombieExpression {
         NORMAL,
@@ -93,6 +99,20 @@ public final class CyberNpcSkinCache {
                 || "Priest".equalsIgnoreCase(entity.getRole())
                 || "Pontiff".equalsIgnoreCase(entity.getRole())) {
             return getRoleOutfitTexture(entity, false);
+        }
+
+        if (entity.getNpcType() == NpcType.MAIN) {
+            // Main NPCs get a consistent, UUID-selected clothing style on top
+            // of their normal randomized face, skin tone, eyes and hair.
+            return getTexture(
+                    false,
+                    entity.getAppearanceGender(),
+                    entity.getSkinToneIndex(),
+                    entity.getEyeStyleIndex(),
+                    entity.getHairStyleIndex(),
+                    ZombieExpression.NORMAL,
+                    Math.floorMod(entity.getUUID().hashCode(), MAIN_OUTFIT_COUNT) + 1
+            );
         }
 
         return getTexture(
@@ -235,6 +255,18 @@ public final class CyberNpcSkinCache {
             int hairStyle,
             ZombieExpression expression
     ) {
+        return getTexture(zombie, gender, skinTone, eyeStyle, hairStyle, expression, 0);
+    }
+
+    private static ResourceLocation getTexture(
+            boolean zombie,
+            NpcAppearance.Gender gender,
+            int skinTone,
+            int eyeStyle,
+            int hairStyle,
+            ZombieExpression expression,
+            int mainOutfit
+    ) {
         int tone = NpcAppearance.sanitizeSkinTone(skinTone);
         int eyes = NpcAppearance.sanitizeEyeStyle(eyeStyle);
         int hair = NpcAppearance.sanitizeHairStyle(hairStyle);
@@ -244,7 +276,8 @@ public final class CyberNpcSkinCache {
                 + "_" + tone
                 + "_" + eyes
                 + "_" + hair
-                + (zombie ? "_" + expression.name().toLowerCase() : "");
+                + (zombie ? "_" + expression.name().toLowerCase() : "")
+                + (mainOutfit > 0 ? "_mainoutfit_" + mainOutfit : "");
 
         ResourceLocation existing = CACHE.get(key);
         if (existing != null) {
@@ -277,6 +310,14 @@ public final class CyberNpcSkinCache {
                  )) {
                 blend(composed, eyeLayer);
                 blend(composed, hairLayer);
+            }
+
+            if (!zombie && mainOutfit > 0) {
+                // Combine with the original appearance rather than replacing
+                // the skin: unpainted areas retain hair, eyes and skin tone.
+                try (NativeImage clothing = loadMainOutfit(mainOutfit)) {
+                    blend(composed, clothing);
+                }
             }
 
             if (zombie
@@ -430,6 +471,48 @@ public final class CyberNpcSkinCache {
                 base.blendPixel(x, y, overlay.getPixelRGBA(x, y));
             }
         }
+    }
+
+    private static NativeImage loadMainOutfit(int number) throws IOException {
+        String path = "outfits/" + number + ".png";
+        byte[] bytes = mainOutfits().get(path);
+        if (bytes == null) {
+            throw new IOException("Missing CyberNpc Main NPC outfit: " + path);
+        }
+
+        try (ByteArrayInputStream input = new ByteArrayInputStream(bytes)) {
+            return NativeImage.read(input);
+        }
+    }
+
+    // Loaded on demand and shared by all Main NPC variants; no per-NPC ZIP
+    // unpacking and no extra model/render passes.
+    private static synchronized Map<String, byte[]> mainOutfits() throws IOException {
+        if (mainOutfitPngs != null) {
+            return mainOutfitPngs;
+        }
+
+        Resource resource = Minecraft.getInstance()
+                .getResourceManager()
+                .getResource(MAIN_OUTFITS_ARCHIVE)
+                .orElseThrow(() -> new IOException(
+                        "Missing CyberNpc Main NPC outfits " + MAIN_OUTFITS_ARCHIVE
+                ));
+
+        Map<String, byte[]> loaded = new HashMap<>();
+        try (InputStream input = resource.open();
+             ZipInputStream zip = new ZipInputStream(input)) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                if (!entry.isDirectory()) {
+                    loaded.put(entry.getName(), zip.readAllBytes());
+                }
+                zip.closeEntry();
+            }
+        }
+
+        mainOutfitPngs = loaded;
+        return loaded;
     }
 
     private static NativeImage loadImage(String path) throws IOException {
