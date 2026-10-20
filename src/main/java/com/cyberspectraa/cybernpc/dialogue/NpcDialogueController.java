@@ -46,7 +46,7 @@ public final class NpcDialogueController {
         SESSIONS.put(player.getUUID(),
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
         npc.getLookControl().setLookAt(player, 25.0F, 25.0F);
-        send(player, npc, page, "", "");
+        send(player, npc, page, "", pope(npc) ? popeGreeting() : "");
     }
 
     public static void openIntro(ServerPlayer player, CyberNpcEntity npc) {
@@ -60,7 +60,7 @@ public final class NpcDialogueController {
         SESSIONS.put(player.getUUID(),
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
         npc.getLookControl().setLookAt(player, 25.0F, 25.0F);
-        send(player, npc, page, "", "");
+        send(player, npc, page, "", popeIntroLine(page));
     }
 
     public static void choose(ServerPlayer player, int npcId, String action) {
@@ -91,15 +91,19 @@ public final class NpcDialogueController {
             }
             String next = switch (action) {
                 case "intro_town" -> "intro_1";
-                case "intro_guild" -> "intro_2";
-                case "intro_trade" -> "intro_3";
+                case "intro_wilderness" -> "intro_2";
+                case "intro_north" -> "intro_3";
+                case "intro_guild" -> "intro_4";
+                case "intro_trade" -> "intro_5";
+                case "intro_advice" -> "intro_6";
                 default -> null;
             };
             if (next == null) return;
             SESSIONS.put(player.getUUID(),
                 new Session(npc.getUUID(), next, player.level().getGameTime() + SESSION_LIFETIME));
             send(player, npc, next, validOptions.stream()
-                    .filter(o -> o.id().equals(action)).findFirst().orElseThrow().label(), "");
+                    .filter(o -> o.id().equals(action)).findFirst().orElseThrow().label(),
+                    popeIntroLine(next));
             return;
         }
 
@@ -116,11 +120,23 @@ public final class NpcDialogueController {
         // This is an intentional blank-slate dialogue pass: NPCs no longer
         // deliver any written speech. Only player choices and server-side
         // actions stay available for the future dialogue rewrite.
+        String npcReply = "";
         switch (action) {
-            case "back" -> page = "root";
+            case "back" -> {
+                page = "root";
+                if (pope(npc)) npcReply = popeGreeting();
+            }
+            case "pope_arrival", "pope_north", "pope_begin",
+                 "pope_dangers", "pope_trade" -> {
+                if (!pope(npc)) return;
+                npcReply = popeInformation(action);
+            }
             case "who", "rumours", "how_are_you", "shop_about",
-                 "guild_info", "mail", "guard", "church" -> {
-                // Dialogue slot deliberately empty.
+                 "guild_info", "mail", "guard" -> {
+                // Other NPCs remain silent until their dialogue is written.
+            }
+            case "church" -> {
+                if (pope(npc)) npcReply = "These doors are open to anyone in need of a quiet moment. I can offer guidance, but I cannot promise miracles.";
             }
             case "work" -> {
                 if (ModList.get().isLoaded("cyberquest")) {
@@ -164,7 +180,7 @@ public final class NpcDialogueController {
         SESSIONS.put(player.getUUID(),
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
         npc.getLookControl().setLookAt(player, 25.0F, 25.0F);
-        send(player, npc, page, playerLine, "");
+        send(player, npc, page, playerLine, npcReply);
     }
 
     private static boolean valid(ServerPlayer player, CyberNpcEntity npc) {
@@ -195,16 +211,21 @@ public final class NpcDialogueController {
         if (page.startsWith("intro_")) {
             String next = switch (page) {
                 case "intro_0" -> "intro_town";
-                case "intro_1" -> "intro_guild";
-                case "intro_2" -> "intro_trade";
-                case "intro_3" -> "intro_finish";
+                case "intro_1" -> "intro_wilderness";
+                case "intro_2" -> "intro_north";
+                case "intro_3" -> "intro_guild";
+                case "intro_4" -> "intro_trade";
+                case "intro_5" -> "intro_advice";
                 default -> "intro_finish";
             };
             String label = switch (next) {
                 case "intro_town" -> "Where am I?";
-                case "intro_guild" -> "Where can I find work?";
+                case "intro_wilderness" -> "What lies beyond town?";
+                case "intro_north" -> "What's wrong with the north?";
+                case "intro_guild" -> "Where should I begin?";
                 case "intro_trade" -> "How do I pay for things?";
-                default -> "Thanks. I'll take it from here.";
+                case "intro_advice" -> "Any last advice?";
+                default -> "Thank you. I'll be careful.";
             };
             options.add(option(next, label));
             options.add(option("intro_skip", "Skip introduction"));
@@ -247,8 +268,12 @@ public final class NpcDialogueController {
                 options.add(option("rumours", "Has there been any trouble?"));
             }
             case POPE -> {
-                options.add(option("church", "Could you give me a blessing?"));
-                options.add(option("rumours", "Have you heard any news?"));
+                options.add(option("pope_arrival", "Why was I summoned?"));
+                options.add(option("pope_north", "What lies to the north?"));
+                options.add(option("pope_begin", "Where should I start?"));
+                options.add(option("pope_dangers", "What dangers should I expect?"));
+                options.add(option("pope_trade", "How does trading work?"));
+                options.add(option("church", "Tell me about the church."));
             }
             default -> {
                 options.add(option("who", "Who are you?"));
@@ -262,6 +287,45 @@ public final class NpcDialogueController {
         }
         options.add(option("leave", "Farewell."));
         return List.copyOf(options);
+    }
+
+    private static boolean pope(CyberNpcEntity npc) {
+        return NpcServiceRole.fromRole(npc.getRole()) == NpcServiceRole.POPE;
+    }
+
+    private static String popeGreeting() {
+        return "Welcome back. If you have questions about the island or our town, ask. I'll share what I know.";
+    }
+
+    /**
+     * Fixed, grounded first-arrival information from the island's Pope.
+     * He witnessed the summoning but DID NOT cause it and DOES NOT know why.
+     * The north warning is the island's story placement of Aquamirae content.
+     * Keep the intro linear so the existing Skip/Finish controls stay reliable.
+     */
+    private static String popeIntroLine(String page) {
+        return switch (page) {
+            case "intro_0" -> "Easy now. I saw you arrive in that light, but I did not summon you. I wish I knew who did, or why.";
+            case "intro_1" -> "You're on a vast island. Our town is a place to rest, trade, and find help before travelling into the wilds.";
+            case "intro_2" -> "Much of this island is dangerous. Take food and proper equipment. Above all, don't wander too far north.";
+            case "intro_3" -> "Beyond the northern ice lie wrecked ships. Something they call the Shipbreaker moves through those waters. Stay clear of it.";
+            case "intro_4" -> "The Adventurers' Guild is a good first stop. Ask about work, and see what supplies you can afford before leaving.";
+            case "intro_5" -> "Our shops take coins, not emeralds. You can earn them through contracts and trade. Don't set off empty-handed.";
+            case "intro_6" -> "Strange beasts and dangerous magic roam this island. Begin close to town, and come back if you need guidance.";
+            default -> "";
+        };
+    }
+
+    /** Informational only: these responses never grant items or trigger quests. */
+    private static String popeInformation(String action) {
+        return switch (action) {
+            case "pope_arrival" -> "I didn't perform the summoning, nor do I know who called you here. All I can say is that I saw the light.";
+            case "pope_north" -> "Avoid the frozen waters far to the north. A terror called the Shipbreaker haunts the wrecks. Don't go looking for it.";
+            case "pope_begin" -> "Visit the Adventurers' Guild for work. Find food, armour and a weapon before you venture far from town.";
+            case "pope_dangers" -> "Travellers speak of fierce beasts, strange creatures and dangerous magic. Some tales may be exaggerated. Be cautious all the same.";
+            case "pope_trade" -> "Merchants trade in copper, silver and gold coins, not emeralds. Work and trade are good ways to earn your first few.";
+            default -> "";
+        };
     }
 
     private static boolean invokeGuild(ServerPlayer player, String methodName) {
