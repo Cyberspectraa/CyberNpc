@@ -105,9 +105,21 @@ public final class CyberIntroService {
     }
 
     private static boolean customised(ServerPlayer player) {
-        if (!created(player)) return false;
-        return !ModList.get().isLoaded("cyberclasses")
-                || player.getPersistentData().getCompound("CyberClasses").getBoolean("ClassChosen");
+        // Race creation is all that's required for summoning. A class is
+        // chosen after meeting the Pope, inside the Adventurers' Guild.
+        return created(player);
+    }
+
+    /** CyberClasses reflection hook: configured intro moves class choice to the Guild. */
+    public static boolean guildRegistrationEnabled(ServerPlayer player) {
+        return player != null && configured(player);
+    }
+
+    /** Don't allow class registration before the actual first arrival finishes. */
+    public static boolean guildRegistrationAvailable(ServerPlayer player) {
+        return guildRegistrationEnabled(player)
+                && state(player).getBoolean(DONE)
+                && !state(player).getBoolean(PENDING);
     }
 
     private static void mark(ServerPlayer player, boolean pending, boolean done) {

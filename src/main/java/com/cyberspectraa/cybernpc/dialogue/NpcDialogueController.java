@@ -91,11 +91,12 @@ public final class NpcDialogueController {
             }
             String next = switch (action) {
                 case "intro_town" -> "intro_1";
-                case "intro_wilderness" -> "intro_2";
-                case "intro_north" -> "intro_3";
-                case "intro_guild" -> "intro_4";
-                case "intro_trade" -> "intro_5";
-                case "intro_advice" -> "intro_6";
+                case "intro_curse" -> "intro_2";
+                case "intro_wilderness" -> "intro_3";
+                case "intro_north" -> "intro_4";
+                case "intro_guild" -> "intro_5";
+                case "intro_trade" -> "intro_6";
+                case "intro_advice" -> "intro_7";
                 default -> null;
             };
             if (next == null) return;
@@ -126,7 +127,7 @@ public final class NpcDialogueController {
                 page = "root";
                 if (pope(npc)) npcReply = popeGreeting();
             }
-            case "pope_arrival", "pope_north", "pope_begin",
+            case "pope_arrival", "pope_curse", "pope_north", "pope_begin",
                  "pope_dangers", "pope_trade" -> {
                 if (!pope(npc)) return;
                 npcReply = popeInformation(action);
@@ -154,6 +155,16 @@ public final class NpcDialogueController {
                  "buy_apples", "buy_leather_cap", "buy_iron_pickaxe" ->
                     player.sendSystemMessage(
                             Component.literal(NpcShopService.buy(player, action)));
+            case "guild_class" -> {
+                // Opening the class screen replaces the dialogue screen.
+                // Do not send a second dialogue packet over it.
+                if (openGuildClass(player)) {
+                    SESSIONS.remove(player.getUUID());
+                    return;
+                }
+                player.sendSystemMessage(Component.literal(
+                        "Guild class registration is not available right now."));
+            }
             case "guild_register" -> {
                 boolean registered = invokeGuild(player, "registerHeldContract");
                 player.sendSystemMessage(Component.literal(registered
@@ -211,15 +222,17 @@ public final class NpcDialogueController {
         if (page.startsWith("intro_")) {
             String next = switch (page) {
                 case "intro_0" -> "intro_town";
-                case "intro_1" -> "intro_wilderness";
-                case "intro_2" -> "intro_north";
-                case "intro_3" -> "intro_guild";
-                case "intro_4" -> "intro_trade";
-                case "intro_5" -> "intro_advice";
+                case "intro_1" -> "intro_curse";
+                case "intro_2" -> "intro_wilderness";
+                case "intro_3" -> "intro_north";
+                case "intro_4" -> "intro_guild";
+                case "intro_5" -> "intro_trade";
+                case "intro_6" -> "intro_advice";
                 default -> "intro_finish";
             };
             String label = switch (next) {
                 case "intro_town" -> "Where am I?";
+                case "intro_curse" -> "Why do people look different?";
                 case "intro_wilderness" -> "What lies beyond town?";
                 case "intro_north" -> "What's wrong with the north?";
                 case "intro_guild" -> "Where should I begin?";
@@ -243,6 +256,11 @@ public final class NpcDialogueController {
 
         switch (role) {
             case GUILD_RECEPTIONIST -> {
+                // The receptionist handles class registration for new
+                // arrivals. CyberClasses validates eligibility server-side.
+                if (ModList.get().isLoaded("cyberclasses")) {
+                    options.add(option("guild_class", "I'd like to register my class."));
+                }
                 options.add(option("guild_register", "Can you register this contract?"));
                 options.add(option("guild_claim", "I'm here for my payment."));
                 options.add(option("guild_card", "Can I see my guild card?"));
@@ -269,6 +287,7 @@ public final class NpcDialogueController {
             }
             case POPE -> {
                 options.add(option("pope_arrival", "Why was I summoned?"));
+                options.add(option("pope_curse", "Why aren't we human?"));
                 options.add(option("pope_north", "What lies to the north?"));
                 options.add(option("pope_begin", "Where should I start?"));
                 options.add(option("pope_dangers", "What dangers should I expect?"));
@@ -307,11 +326,12 @@ public final class NpcDialogueController {
         return switch (page) {
             case "intro_0" -> "Easy now. I saw you arrive in that light, but I did not summon you. I wish I knew who did, or why.";
             case "intro_1" -> "You're on a vast island. Our town is a place to rest, trade, and find help before travelling into the wilds.";
-            case "intro_2" -> "Much of this island is dangerous. Take food and proper equipment. Above all, don't wander too far north.";
-            case "intro_3" -> "Beyond the northern ice lie wrecked ships. Something they call the Shipbreaker moves through those waters. Stay clear of it.";
-            case "intro_4" -> "The Adventurers' Guild is a good first stop. Ask about work, and see what supplies you can afford before leaving.";
-            case "intro_5" -> "Our shops take coins, not emeralds. You can earn them through contracts and trade. Don't set off empty-handed.";
-            case "intro_6" -> "Strange beasts and dangerous magic roam this island. Begin close to town, and come back if you need guidance.";
+            case "intro_2" -> "We were all human once. This island changes us over time, though none of us knows why. I remember people before they changed. They're still themselves.";
+            case "intro_3" -> "Much of this island is dangerous. Take food and proper equipment. Above all, don't wander too far north.";
+            case "intro_4" -> "Beyond the northern ice lie wrecked ships. Something they call the Shipbreaker moves through those waters. Stay clear of it.";
+            case "intro_5" -> "Before leaving town, register a class at the Adventurers' Guild. You may take starter equipment or refuse it; the choice is yours.";
+            case "intro_6" -> "Our shops take coins, not emeralds. You can earn them through contracts and trade. Don't set off empty-handed.";
+            case "intro_7" -> "Strange beasts and dangerous magic roam this island. Start near town. Ask the guild for training and come back if you need guidance.";
             default -> "";
         };
     }
@@ -320,12 +340,25 @@ public final class NpcDialogueController {
     private static String popeInformation(String action) {
         return switch (action) {
             case "pope_arrival" -> "I didn't perform the summoning, nor do I know who called you here. All I can say is that I saw the light.";
+            case "pope_curse" -> "Every one of us was human once. The island slowly changes people, but it does not erase our memories. I have seen it happen and still cannot tell you why.";
             case "pope_north" -> "Avoid the frozen waters far to the north. A terror called the Shipbreaker haunts the wrecks. Don't go looking for it.";
-            case "pope_begin" -> "Visit the Adventurers' Guild for work. Find food, armour and a weapon before you venture far from town.";
+            case "pope_begin" -> "Register your class at the Adventurers' Guild before leaving town. They offer basic supplies, but you need not take them. Training comes first.";
             case "pope_dangers" -> "Travellers speak of fierce beasts, strange creatures and dangerous magic. Some tales may be exaggerated. Be cautious all the same.";
             case "pope_trade" -> "Merchants trade in copper, silver and gold coins, not emeralds. Work and trade are good ways to earn your first few.";
             default -> "";
         };
+    }
+
+    private static boolean openGuildClass(ServerPlayer player) {
+        if (!ModList.get().isLoaded("cyberclasses")) return false;
+        try {
+            Class<?> manager = Class.forName(
+                    "com.cyberspectraa.cyberclasses.classdata.ClassCreationManager");
+            return Boolean.TRUE.equals(manager
+                    .getMethod("openAtGuild", ServerPlayer.class).invoke(null, player));
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return false;
+        }
     }
 
     private static boolean invokeGuild(ServerPlayer player, String methodName) {
