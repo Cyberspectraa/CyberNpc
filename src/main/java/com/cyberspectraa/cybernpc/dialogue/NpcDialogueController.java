@@ -1,8 +1,8 @@
 package com.cyberspectraa.cybernpc.dialogue;
 
 import net.minecraft.commands.arguments.EntityAnchorArgument;
+import net.minecraft.network.chat.Component;
 
-import com.cyberspectraa.cybernpc.compat.CyberServerCompat;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.intro.CyberIntroService;
@@ -10,8 +10,6 @@ import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.network.DialogueOpenPacket;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -48,7 +46,7 @@ public final class NpcDialogueController {
         SESSIONS.put(player.getUUID(),
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
         npc.getLookControl().setLookAt(player, 25.0F, 25.0F);
-        send(player, npc, page, "", greeting(npc));
+        send(player, npc, page, "", "");
     }
 
     public static void openIntro(ServerPlayer player, CyberNpcEntity npc) {
@@ -62,8 +60,7 @@ public final class NpcDialogueController {
         SESSIONS.put(player.getUUID(),
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
         npc.getLookControl().setLookAt(player, 25.0F, 25.0F);
-        send(player, npc, page, "", "The summoning worked. Welcome. "
-                + "I'm the Pope here. Let me show you where to start.");
+        send(player, npc, page, "", "");
     }
 
     public static void choose(ServerPlayer player, int npcId, String action) {
@@ -99,21 +96,10 @@ public final class NpcDialogueController {
                 default -> null;
             };
             if (next == null) return;
-            String response = switch (next) {
-                case "intro_1" -> "You're in town now. "
-                    + "The church is here if you need help, shops are by the square, "
-                    + "and guards keep watch in the streets.";
-                case "intro_2" -> "Looking for work? Go to the Adventurers' Guild "
-                    + "and check the board. Register contracts at the desk. Your journal "
-                    + "keeps track of your leads.";
-                default -> "Shops take copper, silver and "
-                    + "gold coins, not emeralds. Trade or finish jobs to earn them. "
-                    + "That's all from me. Go have a look around.";
-            };
             SESSIONS.put(player.getUUID(),
                 new Session(npc.getUUID(), next, player.level().getGameTime() + SESSION_LIFETIME));
             send(player, npc, next, validOptions.stream()
-                    .filter(o -> o.id().equals(action)).findFirst().orElseThrow().label(), response);
+                    .filter(o -> o.id().equals(action)).findFirst().orElseThrow().label(), "");
             return;
         }
 
@@ -126,70 +112,50 @@ public final class NpcDialogueController {
             .filter(o -> o.id().equals(action))
             .findFirst().orElseThrow().label();
         String page = session.page();
-        String reply;
 
+        // This is an intentional blank-slate dialogue pass: NPCs no longer
+        // deliver any written speech. Only player choices and server-side
+        // actions stay available for the future dialogue rewrite.
         switch (action) {
-            case "back" -> {
-                page = "root";
-                reply = greeting(npc);
+            case "back" -> page = "root";
+            case "who", "rumours", "how_are_you", "shop_about",
+                 "guild_info", "mail", "guard", "church" -> {
+                // Dialogue slot deliberately empty.
             }
-            case "who" -> reply = "I'm " + npc.getName().getString()
-                    + ". " + (npc.getRole().isBlank()
-                    ? "Getting by." : "I work as a " + npc.getRole() + ".");
-            case "rumours" -> reply = "For news, try the guild. "
-                    + "They hear plenty.";
-            case "how_are_you" -> reply = "Can't complain. "
-                    + "How about you?";
             case "work" -> {
                 if (ModList.get().isLoaded("cyberquest")) {
                     invokeQuestWork(player, npc);
-                    reply = "That's all I've heard. Check your journal for leads.";
-                } else {
-                    reply = "Try the guild board if you need work.";
                 }
             }
             case "shop" -> {
                 page = "shop";
-                reply = "Prices are in coins, not emeralds. "
-                        + "You have: " + NpcShopService.walletDescription(player) + ".";
-
+                player.sendSystemMessage(Component.literal(
+                        "Coins: " + NpcShopService.walletDescription(player)));
             }
-            case "shop_about" -> reply = "Coins only, please. "
-                    + "Ten copper make a silver, ten silver make a gold. Platinum and dragon coins "
-                    + "work too. I'll give change.";
-
-            case "shop_sell" -> reply = NpcShopService.sellHeld(player);
+            case "shop_sell" -> player.sendSystemMessage(
+                    Component.literal(NpcShopService.sellHeld(player)));
             case "buy_bread", "buy_torches", "buy_beef", "buy_arrows",
                  "buy_apples", "buy_leather_cap", "buy_iron_pickaxe" ->
-                    reply = NpcShopService.buy(player, action);
+                    player.sendSystemMessage(
+                            Component.literal(NpcShopService.buy(player, action)));
             case "guild_register" -> {
-                boolean success = invokeGuild(player, "registerHeldContract");
-                reply = success
-                    ? "Right, it's registered. The details are in your journal."
-                    : "Hold the contract you want me to register.";
+                boolean registered = invokeGuild(player, "registerHeldContract");
+                player.sendSystemMessage(Component.literal(registered
+                        ? "Contract registered." : "Hold a contract to register."));
             }
             case "guild_claim" -> {
-                boolean success = invokeGuild(player, "claimReadyContracts");
-                reply = success
-                    ? "All done. Your completed contracts are settled."
-                    : "Nothing ready to collect just now.";
+                boolean claimed = invokeGuild(player, "claimReadyContracts");
+                player.sendSystemMessage(Component.literal(claimed
+                        ? "Contract payments collected." : "No completed contracts to collect."));
             }
             case "guild_card" -> {
-                // CyberQuest opens its own membership screen. Do not overwrite it.
+                // The CyberQuest membership screen still opens as before.
                 if (invokeGuild(player, "issueOrShowGuildCard")) {
                     SESSIONS.remove(player.getUUID());
                     return;
                 }
-                reply = "I handle guild cards here. Ask if you need yours.";
+                player.sendSystemMessage(Component.literal("Guild card unavailable."));
             }
-            case "guild_info" -> reply = "Pick a contract from the board and bring it here "
-                    + "to register. Come back when you're done for payment.";
-            case "mail" -> reply = "Address and seal your letter, "
-                    + "then drop it in a post box. I'll take it from there.";
-            case "guard" -> reply = "Keep your eyes open out there. "
-                    + "The roads aren't always safe.";
-            case "church" -> reply = "Come in. You're welcome here. "
-                    + "May your journey be a safe one.";
             default -> {
                 return;
             }
@@ -198,7 +164,7 @@ public final class NpcDialogueController {
         SESSIONS.put(player.getUUID(),
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
         npc.getLookControl().setLookAt(player, 25.0F, 25.0F);
-        send(player, npc, page, playerLine, reply);
+        send(player, npc, page, playerLine, "");
     }
 
     private static boolean valid(ServerPlayer player, CyberNpcEntity npc) {
@@ -296,19 +262,6 @@ public final class NpcDialogueController {
         }
         options.add(option("leave", "Farewell."));
         return List.copyOf(options);
-    }
-
-    private static String greeting(CyberNpcEntity npc) {
-        return switch (NpcServiceRole.fromRole(npc.getRole())) {
-            case GUILD_RECEPTIONIST -> "Welcome to the guild. "
-                    + "Registering a contract, or collecting payment?";
-            case SHOPKEEPER -> "Come in. Have a look around.";
-            case BANKER -> "Sorry, the bank's closed for good.";
-            case COURIER -> "Post going out? What do you need?";
-            case GUARD -> "Hold there, traveller. Need something?";
-            case POPE -> "Welcome to the church. Anything I can help with?";
-            default -> "Hello there. Need a hand with something?";
-        };
     }
 
     private static boolean invokeGuild(ServerPlayer player, String methodName) {

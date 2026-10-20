@@ -56,14 +56,13 @@ public final class NpcShopService {
         Stock offer = GOODS.stream().filter(x -> x.action().equals(action))
                 .findFirst().orElse(null);
         if (offer == null || offer.cost() <= 0L || offer.count() <= 0)
-            return "I don't have that item for sale.";
+            return "Item unavailable.";
 
         long available = wallet(player);
         if (available < offer.cost()) {
             player.playNotifySound(SoundEvents.VILLAGER_NO, SoundSource.PLAYERS, 0.45F, 1.0F);
-            return "That costs " + CurrencyValue.formatCoins(offer.cost())
-                + ", but you only have " + CurrencyValue.formatCoins(available)
-                + ". Bring more CyberNpc coins.";
+            return "Insufficient coins. Cost: " + CurrencyValue.formatCoins(offer.cost())
+                + " | Available: " + CurrencyValue.formatCoins(available) + ".";
         }
 
         // Plan the entire payment first: never take partial coins for a failed buy.
@@ -71,7 +70,7 @@ public final class NpcShopService {
         // payment isn't possible, use one larger physical coin and give change.
         long change = chargeCoins(player, offer.cost());
         if (change < 0L) {
-            return "I couldn't count your coins. Please try again.";
+            return "Payment failed. No coins were charged.";
         }
 
         if (change > 0L) pay(player, change);
@@ -82,8 +81,8 @@ public final class NpcShopService {
         }
         player.getInventory().setChanged();
         player.playNotifySound(SoundEvents.VILLAGER_YES, SoundSource.PLAYERS, 0.45F, 1.0F);
-        return "Sold for " + CurrencyValue.formatCoins(offer.cost())
-                + ". You now have " + walletDescription(player) + ".";
+        return "Purchase complete. Cost: " + CurrencyValue.formatCoins(offer.cost())
+                + " | Balance: " + walletDescription(player) + ".";
     }
 
     /**
@@ -163,7 +162,7 @@ public final class NpcShopService {
             default -> 0;
         };
         if (unit == 0 || held.isEmpty()) {
-            return "I'll buy wheat, coal, timber, leather or iron. Hold what you want to sell.";
+            return "Accepted sale items: wheat, coal, logs, leather and iron. Hold the item to sell.";
         }
 
         long payment = unit * held.getCount();
@@ -171,8 +170,8 @@ public final class NpcShopService {
         pay(player, payment);
         player.getInventory().setChanged();
         player.playNotifySound(SoundEvents.VILLAGER_YES, SoundSource.PLAYERS, 0.45F, 1.0F);
-        return "Sold for " + CurrencyValue.formatCoins(payment)
-                + ". Wallet: " + walletDescription(player) + ".";
+        return "Sale complete. Received: " + CurrencyValue.formatCoins(payment)
+                + " | Balance: " + walletDescription(player) + ".";
     }
 
     private static void pay(ServerPlayer player, long amount) {
