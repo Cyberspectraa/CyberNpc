@@ -6,6 +6,7 @@ import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -36,8 +37,7 @@ public final class CyberNpcCommands {
                                 .then(Commands.literal("setarrival")
                                         .executes(ctx -> CyberIntroService.setArrival(ctx.getSource())))
                                 .then(Commands.literal("setpopewait")
-                                        .executes(ctx -> CyberIntroService.setPopeWait(ctx.getSource())))
-
+                                        .executes(ctx -> CyberIntroService.setPopeWait(ctx.getSource()))))
                         .then(Commands.literal("admin")
                         .then(Commands.literal("role")
                                 .then(Commands.argument("target", EntityArgument.entity())
