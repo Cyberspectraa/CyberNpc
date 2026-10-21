@@ -2,8 +2,6 @@ package com.cyberspectraa.cybernpc.command;
 
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.intro.CyberIntroService;
-import com.cyberspectraa.cybernpc.intro.IntroSettings;
-import net.minecraft.core.BlockPos;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.mojang.brigadier.arguments.BoolArgumentType;
@@ -39,13 +37,7 @@ public final class CyberNpcCommands {
                                         .executes(ctx -> CyberIntroService.setArrival(ctx.getSource())))
                                 .then(Commands.literal("setpopewait")
                                         .executes(ctx -> CyberIntroService.setPopeWait(ctx.getSource())))
-                                .then(Commands.literal("setclassgate")
-                                        .then(Commands.argument("radius",
-                                                IntegerArgumentType.integer(16, 4096))
-                                                .executes(ctx -> setClassGate(ctx.getSource(),
-                                                        IntegerArgumentType.getInteger(ctx, "radius")))))
-                                .then(Commands.literal("disableclassgate")
-                                        .executes(ctx -> disableClassGate(ctx.getSource()))))
+
                         .then(Commands.literal("admin")
                         .then(Commands.literal("role")
                                 .then(Commands.argument("target", EntityArgument.entity())
@@ -79,22 +71,6 @@ public final class CyberNpcCommands {
                                                 EntityArgument.getEntity(context, "target")
                                         ))))
         );
-    }
-
-    private static int setClassGate(CommandSourceStack source, int radius) {
-        IntroSettings.get(source.getServer()).setClassGate(
-                source.getLevel(), BlockPos.containing(source.getPosition()), radius);
-        source.sendSuccess(() -> Component.literal(
-                "Guild class boundary set to " + radius + " blocks from this position."
-                + " Classless players cannot leave until registered."), true);
-        return 1;
-    }
-
-    private static int disableClassGate(CommandSourceStack source) {
-        IntroSettings.get(source.getServer()).disableClassGate();
-        source.sendSuccess(() -> Component.literal(
-                "Guild class boundary disabled. Class selection remains available at the Guild."), true);
-        return 1;
     }
 
     private static int spawn(CommandSourceStack source, String requestedName) {

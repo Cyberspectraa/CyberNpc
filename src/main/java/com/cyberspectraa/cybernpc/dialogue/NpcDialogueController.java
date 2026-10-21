@@ -40,13 +40,25 @@ public final class NpcDialogueController {
 
     private NpcDialogueController() {}
 
+    /**
+     * Only NPCs with approved dialogue or a required live service can open
+     * the dialogue UI. All other unfinished NPCs have no right-click menu.
+     */
+    public static boolean canInteract(CyberNpcEntity npc) {
+        if (npc == null || npc.getNpcType() == NpcType.WILD) return false;
+        NpcServiceRole role = NpcServiceRole.fromRole(npc.getRole());
+        return role == NpcServiceRole.POPE
+                || role == NpcServiceRole.GUILD_RECEPTIONIST;
+    }
+
     public static void open(ServerPlayer player, CyberNpcEntity npc) {
-        if (!valid(player, npc)) return;
+        if (!valid(player, npc) || !canInteract(npc)) return;
         String page = "root";
         SESSIONS.put(player.getUUID(),
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
         npc.getLookControl().setLookAt(player, 25.0F, 25.0F);
-        send(player, npc, page, "", pope(npc) ? popeGreeting() : "");
+        send(player, npc, page, "", pope(npc) ? popeGreeting()
+                : guildGreeting(player));
     }
 
     public static void openIntro(ServerPlayer player, CyberNpcEntity npc) {
@@ -79,7 +91,7 @@ public final class NpcDialogueController {
 
         // Never execute a client-supplied action without confirming that the
         // currently active, server-generated page actually offered it.
-        List<DialogueView.Option> validOptions = options(npc, session.page());
+        List<DialogueView.Option> validOptions = options(player, npc, session.page());
         if (validOptions.stream().noneMatch(o -> o.id().equals(action))) return;
 
         if (session.page().startsWith("intro_")) {
@@ -209,14 +221,15 @@ public final class NpcDialogueController {
         CyberNpcNetwork.CHANNEL.send(
             PacketDistributor.PLAYER.with(() -> player),
             new DialogueOpenPacket(new DialogueView(npc.getId(),
-                npc.getName().getString(), role, playerLine, speech, options(npc, page))));
+                npc.getName().getString(), role, playerLine, speech, options(player, npc, page))));
     }
 
     private static DialogueView.Option option(String id, String label) {
         return new DialogueView.Option(id, label);
     }
 
-    private static List<DialogueView.Option> options(CyberNpcEntity npc, String page) {
+    private static List<DialogueView.Option> options(
+            ServerPlayer player, CyberNpcEntity npc, String page) {
         NpcServiceRole role = NpcServiceRole.fromRole(npc.getRole());
         List<DialogueView.Option> options = new ArrayList<>();
         if (page.startsWith("intro_")) {
@@ -258,7 +271,9 @@ public final class NpcDialogueController {
             case GUILD_RECEPTIONIST -> {
                 // The receptionist handles class registration for new
                 // arrivals. CyberClasses validates eligibility server-side.
-                if (ModList.get().isLoaded("cyberclasses")) {
+                if (ModList.get().isLoaded("cyberclasses")
+                        && !player.getPersistentData().getCompound("CyberClasses")
+                                .getBoolean("ClassChosen")) {
                     options.add(option("guild_class", "I'd like to register my class."));
                 }
                 options.add(option("guild_register", "Can you register this contract?"));
@@ -312,6 +327,13 @@ public final class NpcDialogueController {
         return NpcServiceRole.fromRole(npc.getRole()) == NpcServiceRole.POPE;
     }
 
+    private static String guildGreeting(ServerPlayer player) {
+        return player.getPersistentData().getCompound("CyberClasses")
+                .getBoolean("ClassChosen")
+                ? "Welcome to the guild. Have a contract to register or a reward to collect?"
+                : "New to the island? Register your class here. Starter supplies are optional.";
+    }
+
     private static String popeGreeting() {
         return "Welcome back. If you have questions about the island or our town, ask. I'll share what I know.";
     }
@@ -329,7 +351,7 @@ public final class NpcDialogueController {
             case "intro_2" -> "We were all human once. This island changes us over time, though none of us knows why. I remember people before they changed. They're still themselves.";
             case "intro_3" -> "Much of this island is dangerous. Take food and proper equipment. Above all, don't wander too far north.";
             case "intro_4" -> "Beyond the northern ice lie wrecked ships. Something they call the Shipbreaker moves through those waters. Stay clear of it.";
-            case "intro_5" -> "Before leaving town, register a class at the Adventurers' Guild. You may take starter equipment or refuse it; the choice is yours.";
+            case "intro_5" -> "Your first task should be to register a class at the Adventurers' Guild. They'll offer basic equipment, though you're free to refuse it.";
             case "intro_6" -> "Our shops take coins, not emeralds. You can earn them through contracts and trade. Don't set off empty-handed.";
             case "intro_7" -> "Strange beasts and dangerous magic roam this island. Start near town. Ask the guild for training and come back if you need guidance.";
             default -> "";
@@ -342,7 +364,7 @@ public final class NpcDialogueController {
             case "pope_arrival" -> "I didn't perform the summoning, nor do I know who called you here. All I can say is that I saw the light.";
             case "pope_curse" -> "Every one of us was human once. The island slowly changes people, but it does not erase our memories. I have seen it happen and still cannot tell you why.";
             case "pope_north" -> "Avoid the frozen waters far to the north. A terror called the Shipbreaker haunts the wrecks. Don't go looking for it.";
-            case "pope_begin" -> "Register your class at the Adventurers' Guild before leaving town. They offer basic supplies, but you need not take them. Training comes first.";
+            case "pope_begin" -> "Your first task is to register at the Adventurers' Guild. They can offer basic supplies, but accepting them is your choice.";
             case "pope_dangers" -> "Travellers speak of fierce beasts, strange creatures and dangerous magic. Some tales may be exaggerated. Be cautious all the same.";
             case "pope_trade" -> "Merchants trade in copper, silver and gold coins, not emeralds. Work and trade are good ways to earn your first few.";
             default -> "";

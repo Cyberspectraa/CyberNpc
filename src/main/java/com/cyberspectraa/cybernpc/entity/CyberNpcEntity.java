@@ -7945,6 +7945,13 @@ public class CyberNpcEntity extends PathfinderMob {
             return InteractionResult.sidedSuccess(level().isClientSide);
         }
 
+        // Unwritten NPCs are intentionally non-interactable until their
+        // dialogue is authored. The Pope and Guild Receptionist remain live.
+        // Town Register/removal tools were handled above and still work.
+        if (!NpcDialogueController.canInteract(this)) {
+            return InteractionResult.PASS;
+        }
+
         if (!level().isClientSide
                 && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
             NpcDialogueController.open(serverPlayer, this);
