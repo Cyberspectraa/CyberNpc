@@ -2,11 +2,14 @@ package com.cyberspectraa.cybernpc.client;
 
 import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.client.render.CyberNpcRenderer;
+import com.cyberspectraa.cybernpc.client.render.CyberNpcSkinLayersCompat;
 import com.cyberspectraa.cybernpc.client.render.ZombieCyberNpcRenderer;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
+import net.minecraftforge.client.event.RegisterClientReloadListenersEvent;
+import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -22,6 +25,12 @@ public final class ClientModEvents {
     public static void registerKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(WorkplaceMultiselectKey.TOGGLE);
         event.register(WorkplaceMultiselectKey.REMOVE);
+    }
+
+    @SubscribeEvent
+    public static void registerReloadListeners(RegisterClientReloadListenersEvent event) {
+        event.registerReloadListener((ResourceManagerReloadListener) resourceManager ->
+                CyberNpcSkinLayersCompat.clearCache());
     }
 
     private ClientModEvents() {

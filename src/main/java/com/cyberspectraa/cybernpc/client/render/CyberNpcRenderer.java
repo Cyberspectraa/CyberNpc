@@ -59,7 +59,13 @@ public final class CyberNpcRenderer extends MobRenderer<CyberNpcEntity, CyberNpc
     ) {
         this.model = entity.isSlimModel() ? slimModel : wideModel;
         setPlayerModelProperties(entity);
-        super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
+        // Skin Layers 3D is entirely optional and can be absent on servers.
+        CyberNpcSkinLayersCompat.prepare(entity, getModel(), getTextureLocation(entity));
+        try {
+            super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
+        } finally {
+            CyberNpcSkinLayersCompat.clearModel(getModel());
+        }
         renderReactionBubble(
                 entity,
                 partialTicks,
