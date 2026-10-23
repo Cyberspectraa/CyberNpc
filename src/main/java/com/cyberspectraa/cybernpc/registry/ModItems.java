@@ -6,6 +6,7 @@ import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.item.AddressedLetterItem;
 import com.cyberspectraa.cybernpc.item.BuildingMarkerItem;
 import com.cyberspectraa.cybernpc.item.BuildingPlannerItem;
+import com.cyberspectraa.cybernpc.item.HomeAssignmentToolItem;
 import com.cyberspectraa.cybernpc.item.CyberNpcSpawnEggItem;
 import com.cyberspectraa.cybernpc.item.ChosoPlushItem;
 import com.cyberspectraa.cybernpc.item.LetterPaperItem;
@@ -219,6 +220,12 @@ public final class ModItems {
     public static final RegistryObject<Item> TOWN_REGISTER =
             ITEMS.register("town_register", () ->
                     new TownRegisterItem(
+                            new Item.Properties().stacksTo(1)
+                    ));
+
+    public static final RegistryObject<Item> HOME_ASSIGNMENT_TOOL =
+            ITEMS.register("home_assignment_tool", () ->
+                    new HomeAssignmentToolItem(
                             new Item.Properties().stacksTo(1)
                     ));
 

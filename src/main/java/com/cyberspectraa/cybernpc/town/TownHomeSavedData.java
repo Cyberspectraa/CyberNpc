@@ -24,6 +24,8 @@ import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.BlockState;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -46,6 +48,10 @@ public final class TownHomeSavedData extends SavedData {
             new DustParticleOptions(new Vector3f(0.22F, 0.95F, 0.65F), 1.25F);
     private final Map<UUID, Town> towns = new LinkedHashMap<>();
     private final Map<UUID, Home> homes = new LinkedHashMap<>();
+    // Per-NPC floor rooms share the same saved housing registry; legacy
+    // front-door homes remain intact and act as fallback until changed.
+    private final Map<UUID, RoomHome> roomHomes = new LinkedHashMap<>();
+    private static final int MAX_ROOMS_PER_NPC = 10;
     private int nextTown = 1;
     private int nextHome = 1;
 
@@ -88,6 +94,30 @@ public final class TownHomeSavedData extends SavedData {
                 }
             }
             data.homes.put(home.id, home);
+        }
+        // Added as an optional field: existing worlds keep their original
+        // front-door houses, beds, residents and town references unchanged.
+        ListTag roomsByNpc = tag.getList("NpcRoomHomes", Tag.TAG_COMPOUND);
+        for (int i = 0; i < roomsByNpc.size(); i++) {
+            CompoundTag row = roomsByNpc.getCompound(i);
+            if (!row.hasUUID("Npc")) continue;
+            RoomHome roomHome = new RoomHome(row.getString("Dimension"));
+            ListTag claims = row.getList("Rooms", Tag.TAG_COMPOUND);
+            for (int k = 0; k < claims.size() && k < MAX_ROOMS_PER_NPC; k++) {
+                CompoundTag room = claims.getCompound(k);
+                if (!room.contains("Inside", Tag.TAG_LONG)) continue;
+                Set<Long> floor = readCellSet(room, "Floor", 1600);
+                if (floor.isEmpty()) continue;
+                roomHome.rooms.add(new RoomClaim(BlockPos.of(room.getLong("Inside")),
+                        floor, readCellSet(room, "Doors", 32),
+                        readCellSet(room, "Beds", 1600)));
+            }
+            if (row.contains("AssignedBed", Tag.TAG_LONG)) {
+                roomHome.assignedBed = row.getLong("AssignedBed");
+            }
+            if (!roomHome.rooms.isEmpty() && !roomHome.dimension.isBlank()) {
+                data.roomHomes.put(row.getUUID("Npc"), roomHome);
+            }
         }
         data.nextTown = Math.max(data.nextTown, data.towns.size() + 1);
         data.nextHome = Math.max(data.nextHome, data.homes.size() + 1);
@@ -132,6 +162,27 @@ public final class TownHomeSavedData extends SavedData {
             homeList.add(t);
         }
         tag.put("Homes", homeList);
+        ListTag roomHomesTag = new ListTag();
+        for (Map.Entry<UUID, RoomHome> entry : roomHomes.entrySet()) {
+            RoomHome home = entry.getValue();
+            if (home.rooms.isEmpty()) continue;
+            CompoundTag row = new CompoundTag();
+            row.putUUID("Npc", entry.getKey());
+            row.putString("Dimension", home.dimension);
+            if (home.assignedBed != null) row.putLong("AssignedBed", home.assignedBed);
+            ListTag claims = new ListTag();
+            for (RoomClaim room : home.rooms) {
+                CompoundTag claim = new CompoundTag();
+                claim.putLong("Inside", room.inside.asLong());
+                claim.putLongArray("Floor", toArray(room.floor));
+                claim.putLongArray("Doors", toArray(room.doors));
+                claim.putLongArray("Beds", toArray(room.beds));
+                claims.add(claim);
+            }
+            row.put("Rooms", claims);
+            roomHomesTag.add(row);
+        }
+        tag.put("NpcRoomHomes", roomHomesTag);
         return tag;
     }
 
@@ -530,11 +581,137 @@ public final class TownHomeSavedData extends SavedData {
         }
     }
 
+    /**
+     * One selected NPC owns up to ten explicitly clicked rooms, all at their
+     * original floor heights. No new house entity or alternate save file is
+     * created. Each room has its own exact footprint, doorways and beds.
+     */
+    public String addFloorRoom(ServerLevel level, UUID npcId, FloorRoomScanner.Result scan) {
+        String dimension = level.dimension().location().toString();
+        RoomHome home = roomHomes.get(npcId);
+        if (home != null && !home.dimension.equals(dimension)) {
+            return "This NPC already has rooms in another dimension. Remove those rooms before moving them.";
+        }
+        if (home != null) {
+            for (RoomClaim existing : home.rooms) {
+                if (existing.floor.contains(scan.inside().asLong())) {
+                    return "This room is already assigned to this NPC (" + home.rooms.size()
+                            + "/10). Sneak-click its floor to remove it.";
+                }
+                for (Long cell : scan.cells()) {
+                    if (existing.floor.contains(cell)) {
+                        return "This overlaps another saved room. Click a separate room beyond a door.";
+                    }
+                }
+            }
+            if (home.rooms.size() >= MAX_ROOMS_PER_NPC) {
+                return "This NPC already has the maximum of 10 rooms. Sneak-click a room to remove it first.";
+            }
+        }
+        if (home == null) {
+            home = new RoomHome(dimension);
+            roomHomes.put(npcId, home);
+        }
+        home.rooms.add(new RoomClaim(scan.inside(), scan.cells(), scan.doors(), scan.beds()));
+        refreshAssignedBed(npcId, home);
+        setDirty();
+        return "Room " + home.rooms.size() + "/10 saved (" + scan.cells().size()
+                + " floor spaces, " + scan.doors().size() + " doors, "
+                + scan.beds().size() + " beds)."
+                + (home.assignedBed == null
+                ? " No free bed yet; the NPC can still use the room as a home."
+                : " Sleeping bed assigned.");
+    }
+
+    /** Remove a registered room without rescanning: walls may have changed. */
+    public String removeFloorRoom(ServerLevel level, UUID npcId, BlockPos floorPos) {
+        RoomHome home = roomHomes.get(npcId);
+        if (home == null || !home.dimension.equals(level.dimension().location().toString())) {
+            return "This NPC has no saved rooms in this dimension.";
+        }
+        boolean removed = home.rooms.removeIf(room -> room.floor.contains(floorPos.asLong()));
+        if (!removed) return "This floor is not part of any room saved for that NPC.";
+        if (home.rooms.isEmpty()) {
+            roomHomes.remove(npcId);
+            setDirty();
+            return "Last saved room removed. Older house assignments remain available as fallback.";
+        }
+        refreshAssignedBed(npcId, home);
+        setDirty();
+        return "Room removed. " + home.rooms.size() + "/10 rooms remain.";
+    }
+
+    public int roomCount(UUID npcId) {
+        RoomHome home = roomHomes.get(npcId);
+        return home == null ? 0 : home.rooms.size();
+    }
+
+    private void refreshAssignedBed(UUID npcId, RoomHome home) {
+        Set<Long> available = new LinkedHashSet<>();
+        for (RoomClaim room : home.rooms) available.addAll(room.beds);
+        if (home.assignedBed != null && available.contains(home.assignedBed)
+                && !bedClaimedByAnother(npcId, home.assignedBed)) return;
+        home.assignedBed = null;
+        for (Long bed : available) {
+            if (!bedClaimedByAnother(npcId, bed)) {
+                home.assignedBed = bed;
+                return;
+            }
+        }
+    }
+
+    private boolean bedClaimedByAnother(UUID owner, long bed) {
+        for (Home home : homes.values()) {
+            for (Map.Entry<UUID, Long> resident : home.residents.entrySet()) {
+                if (!resident.getKey().equals(owner) && resident.getValue() == bed) return true;
+            }
+        }
+        for (Map.Entry<UUID, RoomHome> member : roomHomes.entrySet()) {
+            if (!member.getKey().equals(owner)
+                    && member.getValue().assignedBed != null
+                    && member.getValue().assignedBed == bed) return true;
+        }
+        return false;
+    }
+
+    private static Set<Long> readCellSet(CompoundTag tag, String key, int max) {
+        Set<Long> values = new LinkedHashSet<>();
+        long[] saved = tag.getLongArray(key);
+        for (int i = 0; i < saved.length && i < max; i++) values.add(saved[i]);
+        return values;
+    }
+
+    private static long[] toArray(Set<Long> values) {
+        long[] array = new long[values.size()];
+        int i = 0;
+        for (long value : values) array[i++] = value;
+        return array;
+    }
+
+    private record RoomClaim(BlockPos inside, Set<Long> floor,
+                             Set<Long> doors, Set<Long> beds) { }
+
+    private static final class RoomHome {
+        final String dimension;
+        final List<RoomClaim> rooms = new ArrayList<>();
+        @Nullable Long assignedBed;
+
+        RoomHome(String dimension) {
+            this.dimension = dimension;
+        }
+    }
+
     /** A home is either in the new registry or still on legacy marker data. */
     @Nullable
     public HomeAssignment assignedHome(ServerLevel level, UUID npcId) {
-        if (npcId == null || homes.isEmpty()) return null;
+        if (npcId == null) return null;
         String dimension = level.dimension().location().toString();
+        RoomHome rooms = roomHomes.get(npcId);
+        if (rooms != null && !rooms.rooms.isEmpty()
+                && rooms.dimension.equals(dimension)) {
+            return new HomeAssignment(rooms.assignedBed == null ? null
+                    : BlockPos.of(rooms.assignedBed), rooms.rooms.get(0).inside);
+        }
         for (Home home : homes.values()) {
             Town town = towns.get(home.townId);
             if (town == null || !town.dimension.equals(dimension)) continue;
@@ -556,6 +733,11 @@ public final class TownHomeSavedData extends SavedData {
     public UUID residentTownId(ServerLevel level, UUID npcId) {
         if (npcId == null) return null;
         String dimension = level.dimension().location().toString();
+        RoomHome rooms = roomHomes.get(npcId);
+        if (rooms != null && rooms.dimension.equals(dimension) && !rooms.rooms.isEmpty()) {
+            Town town = nearestTown(level, rooms.rooms.get(0).inside);
+            return town == null ? null : town.id;
+        }
         for (Home home : homes.values()) {
             Town town = towns.get(home.townId);
             if (town != null && town.dimension.equals(dimension)
@@ -631,7 +813,7 @@ public final class TownHomeSavedData extends SavedData {
     }
 
     public void onNpcDeath(CyberNpcEntity npc) {
-        boolean modified = false;
+        boolean modified = roomHomes.remove(npc.getUUID()) != null;
         for (Home home : homes.values()) {
             if (home.residents.remove(npc.getUUID()) != null) {
                 modified = true;
