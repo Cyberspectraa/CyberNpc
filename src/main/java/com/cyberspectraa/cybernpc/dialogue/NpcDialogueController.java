@@ -130,23 +130,29 @@ public final class NpcDialogueController {
             .findFirst().orElseThrow().label();
         String page = session.page();
 
-        // This is an intentional blank-slate dialogue pass: NPCs no longer
-        // deliver any written speech. Only player choices and server-side
-        // actions stay available for the future dialogue rewrite.
+        // Written dialogue is restored only for the authored Pope and
+        // Guild Receptionist. Other NPC roles still have no right-click menu.
         String npcReply = "";
         switch (action) {
             case "back" -> {
                 page = "root";
                 if (pope(npc)) npcReply = popeGreeting();
+                else if (guildReceptionist(npc)) npcReply = guildGreeting(player);
             }
             case "pope_arrival", "pope_curse", "pope_north", "pope_begin",
                  "pope_dangers", "pope_trade" -> {
                 if (!pope(npc)) return;
                 npcReply = popeInformation(action);
             }
+            case "guild_info" -> {
+                if (!guildReceptionist(npc)) return;
+                npcReply = "Take a notice from the guild board and hold it in your main hand. "
+                        + "I'll register it for you. You can have two at a time. "
+                        + "Finish the work, then return here to collect your reward.";
+            }
             case "who", "rumours", "how_are_you", "shop_about",
-                 "guild_info", "mail", "guard" -> {
-                // Other NPCs remain silent until their dialogue is written.
+                 "mail", "guard" -> {
+                // Other NPCs remain without authored spoken dialogue.
             }
             case "church" -> {
                 if (pope(npc)) npcReply = "These doors are open to anyone in need of a quiet moment. I can offer guidance, but I cannot promise miracles.";
@@ -168,32 +174,45 @@ public final class NpcDialogueController {
                     player.sendSystemMessage(
                             Component.literal(NpcShopService.buy(player, action)));
             case "guild_class" -> {
-                // Opening the class screen replaces the dialogue screen.
-                // Do not send a second dialogue packet over it.
+                if (!guildReceptionist(npc)) return;
+                // CyberClasses opens its own class creation screen and handles
+                // the optional starter kit. Do not overwrite that screen.
                 if (openGuildClass(player)) {
                     SESSIONS.remove(player.getUUID());
                     return;
                 }
-                player.sendSystemMessage(Component.literal(
-                        "Guild class registration is not available right now."));
+                npcReply = "I can't open class registration yet. You'll need to "
+                        + "finish the arrival introduction first. If that's already "
+                        + "done, please speak to the guild again.";
             }
             case "guild_register" -> {
+                if (!guildReceptionist(npc)) return;
                 boolean registered = invokeGuild(player, "registerHeldContract");
-                player.sendSystemMessage(Component.literal(registered
-                        ? "Contract registered." : "Hold a contract to register."));
+                npcReply = registered
+                        ? "It's on the books. Your contract is now active. "
+                            + "Check your journal for its objectives, and return to me when it's done."
+                        : "I couldn't register that notice. Hold an unused guild "
+                            + "contract in your main hand. If you already are, "
+                            + "check your contract limit and the notice's validity.";
             }
             case "guild_claim" -> {
+                if (!guildReceptionist(npc)) return;
                 boolean claimed = invokeGuild(player, "claimReadyContracts");
-                player.sendSystemMessage(Component.literal(claimed
-                        ? "Contract payments collected." : "No completed contracts to collect."));
+                npcReply = claimed
+                        ? "Well done! Your completed contract has been recorded, "
+                            + "and the guild has paid your reward. Safe travels."
+                        : "I don't have any finished contracts to pay out just yet. "
+                            + "Check your journal and come back once the work is complete.";
             }
             case "guild_card" -> {
-                // The CyberQuest membership screen still opens as before.
+                if (!guildReceptionist(npc)) return;
+                // The CyberQuest guild card screen replaces this conversation.
                 if (invokeGuild(player, "issueOrShowGuildCard")) {
                     SESSIONS.remove(player.getUUID());
                     return;
                 }
-                player.sendSystemMessage(Component.literal("Guild card unavailable."));
+                npcReply = "I can't reach the guild records just now. "
+                        + "Please try again in a moment.";
             }
             default -> {
                 return;
@@ -327,11 +346,19 @@ public final class NpcDialogueController {
         return NpcServiceRole.fromRole(npc.getRole()) == NpcServiceRole.POPE;
     }
 
+    private static boolean guildReceptionist(CyberNpcEntity npc) {
+        return NpcServiceRole.fromRole(npc.getRole())
+                == NpcServiceRole.GUILD_RECEPTIONIST;
+    }
+
     private static String guildGreeting(ServerPlayer player) {
         return player.getPersistentData().getCompound("CyberClasses")
                 .getBoolean("ClassChosen")
-                ? "Welcome to the guild. Have a contract to register or a reward to collect?"
-                : "New to the island? Register your class here. Starter supplies are optional.";
+                ? "Welcome back to the Adventurers' Guild! Need to register a "
+                    + "contract, collect your payment, or look at your guild card?"
+                : "Welcome to the Adventurers' Guild! I can register your "
+                    + "first class. Starter equipment is offered, but "
+                    + "accepting it is entirely your choice.";
     }
 
     private static String popeGreeting() {
