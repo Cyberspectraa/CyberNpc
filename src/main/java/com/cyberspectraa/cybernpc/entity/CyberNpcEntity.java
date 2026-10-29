@@ -1486,6 +1486,7 @@ public class CyberNpcEntity extends PathfinderMob {
         String name = switch (getNpcType()) {
             case MAIN -> "Main NPC";
             case QUEST -> "Quest NPC";
+            case TOWN -> "Town NPC";
             case WILD -> CyberNpcNameGenerator.randomWildName(
                     getRandom(),
                     getAppearanceGender()

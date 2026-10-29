@@ -5,7 +5,8 @@ import java.util.Locale;
 public enum NpcType {
     MAIN,
     QUEST,
-    WILD;
+    WILD,
+    TOWN;
 
     public String serializedName() {
         return name().toLowerCase(Locale.ROOT);

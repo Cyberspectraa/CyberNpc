@@ -77,7 +77,14 @@ public final class ModCreativeTabs {
                                 output.accept(ModItems.GUILD_RECEPTIONIST_NPC_SPAWN_EGG.get());
                                 output.accept(ModItems.SHOPKEEPER_NPC_SPAWN_EGG.get());
 
+                                // Seven authored town characters: existing Mason plus six slots.
                                 output.accept(ModItems.MASON_NPC_SPAWN_EGG.get());
+                                output.accept(ModItems.TOWN_NPC_1_SPAWN_EGG.get());
+                                output.accept(ModItems.TOWN_NPC_2_SPAWN_EGG.get());
+                                output.accept(ModItems.TOWN_NPC_3_SPAWN_EGG.get());
+                                output.accept(ModItems.TOWN_NPC_4_SPAWN_EGG.get());
+                                output.accept(ModItems.TOWN_NPC_5_SPAWN_EGG.get());
+                                output.accept(ModItems.TOWN_NPC_6_SPAWN_EGG.get());
                                 output.accept(ModItems.ZOMBIE_NPC_SPAWN_EGG.get());
                             })
                             .build()

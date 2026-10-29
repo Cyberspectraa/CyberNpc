@@ -56,5 +56,11 @@
   "item.cybernpc.shopkeeper_npc_spawn_egg": "Shopkeeper Spawn Egg",
   "key.cybernpc.group_workstations": "Toggle Workstation Multiselect",
   "key.cybernpc.remove_workstation": "Remove Registered Workstation",
-  "item.cybernpc.home_assignment_tool": "Home Assignment Tool"
+  "item.cybernpc.home_assignment_tool": "Home Assignment Tool",
+  "item.cybernpc.town_npc_1_spawn_egg": "Town NPC 1 Spawn Egg",
+  "item.cybernpc.town_npc_2_spawn_egg": "Town NPC 2 Spawn Egg",
+  "item.cybernpc.town_npc_3_spawn_egg": "Town NPC 3 Spawn Egg",
+  "item.cybernpc.town_npc_4_spawn_egg": "Town NPC 4 Spawn Egg",
+  "item.cybernpc.town_npc_5_spawn_egg": "Town NPC 5 Spawn Egg",
+  "item.cybernpc.town_npc_6_spawn_egg": "Town NPC 6 Spawn Egg"
 }

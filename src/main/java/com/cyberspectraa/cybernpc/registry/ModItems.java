@@ -144,6 +144,115 @@ public final class ModItems {
                             new Item.Properties()
                     ));
 
+
+    /**
+     * Persistent, individually identifiable town character slot 1.
+     * Name, role, appearance and authored dialogue will be specified later.
+     */
+    public static final RegistryObject<Item> TOWN_NPC_1_SPAWN_EGG =
+            ITEMS.register("town_npc_1_spawn_egg", () ->
+                    new CyberNpcSpawnEggItem(
+                            ModEntities.CYBER_NPC,
+                            0x4D4636,
+                            0xD6B984,
+                            NpcType.TOWN,
+                            "Citizen",
+                            false,
+                            "Town NPC 1",
+                            "town_npc_1",
+                            new Item.Properties()
+                    ));
+
+    /**
+     * Persistent, individually identifiable town character slot 2.
+     * Name, role, appearance and authored dialogue will be specified later.
+     */
+    public static final RegistryObject<Item> TOWN_NPC_2_SPAWN_EGG =
+            ITEMS.register("town_npc_2_spawn_egg", () ->
+                    new CyberNpcSpawnEggItem(
+                            ModEntities.CYBER_NPC,
+                            0x54453E,
+                            0xC8A8A0,
+                            NpcType.TOWN,
+                            "Citizen",
+                            false,
+                            "Town NPC 2",
+                            "town_npc_2",
+                            new Item.Properties()
+                    ));
+
+    /**
+     * Persistent, individually identifiable town character slot 3.
+     * Name, role, appearance and authored dialogue will be specified later.
+     */
+    public static final RegistryObject<Item> TOWN_NPC_3_SPAWN_EGG =
+            ITEMS.register("town_npc_3_spawn_egg", () ->
+                    new CyberNpcSpawnEggItem(
+                            ModEntities.CYBER_NPC,
+                            0x394D4D,
+                            0x9DC9BD,
+                            NpcType.TOWN,
+                            "Citizen",
+                            false,
+                            "Town NPC 3",
+                            "town_npc_3",
+                            new Item.Properties()
+                    ));
+
+    /**
+     * Persistent, individually identifiable town character slot 4.
+     * Name, role, appearance and authored dialogue will be specified later.
+     */
+    public static final RegistryObject<Item> TOWN_NPC_4_SPAWN_EGG =
+            ITEMS.register("town_npc_4_spawn_egg", () ->
+                    new CyberNpcSpawnEggItem(
+                            ModEntities.CYBER_NPC,
+                            0x504261,
+                            0xC4B4DF,
+                            NpcType.TOWN,
+                            "Citizen",
+                            false,
+                            "Town NPC 4",
+                            "town_npc_4",
+                            new Item.Properties()
+                    ));
+
+    /**
+     * Persistent, individually identifiable town character slot 5.
+     * Name, role, appearance and authored dialogue will be specified later.
+     */
+    public static final RegistryObject<Item> TOWN_NPC_5_SPAWN_EGG =
+            ITEMS.register("town_npc_5_spawn_egg", () ->
+                    new CyberNpcSpawnEggItem(
+                            ModEntities.CYBER_NPC,
+                            0x5B423A,
+                            0xDDB596,
+                            NpcType.TOWN,
+                            "Citizen",
+                            false,
+                            "Town NPC 5",
+                            "town_npc_5",
+                            new Item.Properties()
+                    ));
+
+    /**
+     * Persistent, individually identifiable town character slot 6.
+     * Name, role, appearance and authored dialogue will be specified later.
+     */
+    public static final RegistryObject<Item> TOWN_NPC_6_SPAWN_EGG =
+            ITEMS.register("town_npc_6_spawn_egg", () ->
+                    new CyberNpcSpawnEggItem(
+                            ModEntities.CYBER_NPC,
+                            0x465039,
+                            0xB3CC94,
+                            NpcType.TOWN,
+                            "Citizen",
+                            false,
+                            "Town NPC 6",
+                            "town_npc_6",
+                            new Item.Properties()
+                    ));
+
     public static final RegistryObject<Item> ZOMBIE_NPC_SPAWN_EGG =
             ITEMS.register("zombie_npc_spawn_egg", () ->
                     new ForgeSpawnEggItem(
