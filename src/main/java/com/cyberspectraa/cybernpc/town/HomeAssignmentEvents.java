@@ -18,6 +18,7 @@ import net.minecraftforge.fml.common.Mod;
 public final class HomeAssignmentEvents {
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onFloorClick(PlayerInteractEvent.RightClickBlock event) {
+        if (!TownSystems.housingAndJobsEnabled()) return;
         if (event.getHand() != InteractionHand.MAIN_HAND
                 || !(event.getEntity().getMainHandItem().getItem()
                     instanceof HomeAssignmentToolItem)) return;

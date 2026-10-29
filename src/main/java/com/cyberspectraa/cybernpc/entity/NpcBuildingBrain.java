@@ -5,6 +5,7 @@ import com.cyberspectraa.cybernpc.building.BuildingSavedData;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
 import com.cyberspectraa.cybernpc.town.TownHomeSavedData;
 import com.cyberspectraa.cybernpc.town.TownWorkSavedData;
+import com.cyberspectraa.cybernpc.town.TownSystems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -39,6 +40,12 @@ final class NpcBuildingBrain {
     }
 
     boolean tick() {
+        // Retired town homes and NPC workplaces stay saved but do not drive AI.
+        if (!TownSystems.housingAndJobsEnabled()) {
+            wakeIfNeeded(levelOrNull());
+            busy = false;
+            return false;
+        }
         if (!(npc.level() instanceof ServerLevel level)
                 || npc.getNpcType() != NpcType.MAIN
                 || NpcServiceRole.fromRole(npc.getRole())

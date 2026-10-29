@@ -223,6 +223,8 @@ public final class NpcDialogueController {
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
         npc.getLookControl().setLookAt(player, 25.0F, 25.0F);
         send(player, npc, page, playerLine, npcReply);
+        // Only validated, authored dialogue choices may advance onboarding.
+        invokeTownIntroduction(player, action);
     }
 
     private static boolean valid(ServerPlayer player, CyberNpcEntity npc) {
@@ -420,6 +422,18 @@ public final class NpcDialogueController {
             return result instanceof Boolean && (Boolean) result;
         } catch (ReflectiveOperationException | RuntimeException ignored) {
             return false;
+        }
+    }
+
+    private static void invokeTownIntroduction(ServerPlayer player, String action) {
+        if (!ModList.get().isLoaded("cyberquest")) return;
+        try {
+            Class<?> type = Class.forName(
+                    "com.cyberspectraa.cyberquest.quest.TownIntroductionQuests");
+            type.getMethod("recordDialogue", ServerPlayer.class, String.class)
+                    .invoke(null, player, action);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            // CyberQuest is optional; normal dialogue must work without it.
         }
     }
 

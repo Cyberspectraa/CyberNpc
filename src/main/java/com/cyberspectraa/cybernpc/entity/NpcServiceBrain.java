@@ -11,6 +11,7 @@ import com.cyberspectraa.cybernpc.registry.ModSounds;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
 import com.cyberspectraa.cybernpc.intro.CyberIntroService;
 import com.cyberspectraa.cybernpc.service.GuardPostSavedData;
+import com.cyberspectraa.cybernpc.town.TownSystems;
 import com.cyberspectraa.cybernpc.service.SpecialNpcSavedData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -994,7 +995,7 @@ final class NpcServiceBrain {
             }
         }
 
-        if (tickGuardPostDuty(level, record)) {
+        if (TownSystems.guardPostsEnabled() && tickGuardPostDuty(level, record)) {
             return;
         }
 

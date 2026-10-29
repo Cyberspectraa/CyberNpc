@@ -9,6 +9,7 @@ import com.cyberspectraa.cybernpc.building.NpcMarkerManager;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
 import com.cyberspectraa.cybernpc.service.SpecialNpcSavedData;
+import com.cyberspectraa.cybernpc.town.TownSystems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -73,6 +74,7 @@ public final class TownRegisterItem extends Item {
     }
 
     public static boolean isWorkMode(ItemStack register) {
+        if (!TownSystems.housingAndJobsEnabled()) return false;
         var tag = register.getTagElement(ROOT);
         return tag != null && tag.getBoolean(WORK_MODE);
     }
@@ -82,6 +84,11 @@ public final class TownRegisterItem extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack register = player.getItemInHand(hand);
         if (!player.isShiftKeyDown()) return super.use(level, player, hand);
+        if (!TownSystems.housingAndJobsEnabled()) {
+            if (!level.isClientSide) player.displayClientMessage(Component.literal(
+                    "Ordinary town homes and jobs are disabled. Special NPC anchors remain available."), true);
+            return InteractionResultHolder.sidedSuccess(register, level.isClientSide);
+        }
         if (!level.isClientSide) {
             boolean workMode = !isWorkMode(register);
             var tag = register.getOrCreateTagElement(ROOT);
@@ -116,6 +123,10 @@ public final class TownRegisterItem extends Item {
 
         NpcServiceRole role = NpcServiceRole.fromRole(npc.getRole());
         boolean special = role != NpcServiceRole.NONE;
+        if (!special && !TownSystems.housingAndJobsEnabled()) {
+            player.displayClientMessage(Component.literal("Ordinary NPC home/job assignments are disabled."), true);
+            return InteractionResult.CONSUME;
+        }
 
         UUID identity = special
                 ? SpecialNpcSavedData.get(level).ensureRegistered(npc)
@@ -181,6 +192,11 @@ public final class TownRegisterItem extends Item {
                     ),
                     true
             );
+            return InteractionResult.CONSUME;
+        }
+
+        if (!TownSystems.housingAndJobsEnabled() && !isSelectedSpecial(stack, level, identity)) {
+            player.displayClientMessage(Component.literal("Ordinary town homes and jobs are disabled."), true);
             return InteractionResult.CONSUME;
         }
 
@@ -494,6 +510,12 @@ public final class TownRegisterItem extends Item {
             );
         }
 
+        if (!TownSystems.housingAndJobsEnabled()) {
+            tooltip.add(Component.literal("Ordinary town housing/jobs are paused."));
+            tooltip.add(Component.literal("Select a special service NPC to set its anchors."));
+            tooltip.add(Component.literal("Right-click block: work anchor; sneak-click: home anchor."));
+            return;
+        }
         tooltip.add(Component.literal("Mode: "
                 + (isWorkMode(stack)
                         ? (isGrouping(stack) ? "WORK / MULTISELECT" : "WORK") : "HOME")));

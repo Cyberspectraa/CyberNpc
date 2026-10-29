@@ -23,8 +23,7 @@ public final class ClientModEvents {
 
     @SubscribeEvent
     public static void registerKeyMappings(RegisterKeyMappingsEvent event) {
-        event.register(WorkplaceMultiselectKey.TOGGLE);
-        event.register(WorkplaceMultiselectKey.REMOVE);
+        // Town workstation controls are retired; preserve packet IDs for old clients.
     }
 
     @SubscribeEvent

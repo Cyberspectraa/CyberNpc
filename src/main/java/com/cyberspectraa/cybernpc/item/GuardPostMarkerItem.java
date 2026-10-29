@@ -43,7 +43,13 @@ public final class GuardPostMarkerItem extends BlockItem {
             }
         }
 
-        InteractionResult result = super.useOn(context);
+        // Existing posts can still be removed, but new ones cannot be placed.
+        if (!level.isClientSide && player != null) {
+            player.displayClientMessage(Component.literal("Guard posts are retired; guards patrol normally."), true);
+        }
+        return InteractionResult.sidedSuccess(level.isClientSide);
+
+        /* InteractionResult result = super.useOn(context);
 
         if (result.consumesAction()
                 && player != null
@@ -56,6 +62,6 @@ public final class GuardPostMarkerItem extends BlockItem {
             );
         }
 
-        return result;
+        return result; */
     }
 }

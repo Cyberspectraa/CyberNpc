@@ -4,6 +4,7 @@ import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.town.FloorRoomScanner;
 import com.cyberspectraa.cybernpc.town.TownHomeSavedData;
+import com.cyberspectraa.cybernpc.town.TownSystems;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -41,6 +42,10 @@ public final class HomeAssignmentToolItem extends Item {
     @Override
     public InteractionResult interactLivingEntity(ItemStack stack, Player player,
                                                    LivingEntity target, InteractionHand hand) {
+        if (!TownSystems.housingAndJobsEnabled()) {
+            if (!player.level().isClientSide) tell(player, "Home assignment is currently disabled.");
+            return InteractionResult.sidedSuccess(player.level().isClientSide);
+        }
         if (!(target instanceof CyberNpcEntity npc)) return InteractionResult.PASS;
         if (!player.level().isClientSide) {
             if (npc.getNpcType() != NpcType.MAIN || npc.isSpecialServiceNpc()) {
@@ -65,6 +70,10 @@ public final class HomeAssignmentToolItem extends Item {
     public static void handleFloorClick(ServerPlayer player, ItemStack stack,
                                          BlockPos clickedFloor, boolean upwardFace,
                                          boolean removing) {
+        if (!TownSystems.housingAndJobsEnabled()) {
+            tell(player, "Home assignment is currently disabled.");
+            return;
+        }
         CompoundTag tag = stack.getTagElement(DATA);
         if (tag == null || !tag.hasUUID(NPC)) {
             tell(player, "First right-click an ordinary Main NPC with the Home Assignment Tool.");
@@ -100,6 +109,10 @@ public final class HomeAssignmentToolItem extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player,
                                                    InteractionHand hand) {
         ItemStack tool = player.getItemInHand(hand);
+        if (!TownSystems.housingAndJobsEnabled()) {
+            if (!level.isClientSide) tell(player, "Home assignment is currently disabled.");
+            return InteractionResultHolder.sidedSuccess(tool, level.isClientSide);
+        }
         if (!level.isClientSide) {
             CompoundTag tag = tool.getTagElement(DATA);
             if (player.isShiftKeyDown()) {
@@ -124,6 +137,10 @@ public final class HomeAssignmentToolItem extends Item {
     @Override
     public void appendHoverText(ItemStack stack, @Nullable Level level,
                                 List<Component> tooltip, TooltipFlag flag) {
+        if (!TownSystems.housingAndJobsEnabled()) {
+            tooltip.add(Component.literal("Housing and room assignment temporarily disabled.").withStyle(ChatFormatting.GRAY));
+            return;
+        }
         tooltip.add(Component.literal("Right-click NPC: select").withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.literal("Right-click floor: add room (up to 10)").withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.literal("Sneak + floor: remove room").withStyle(ChatFormatting.GRAY));

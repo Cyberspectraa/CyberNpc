@@ -1,6 +1,7 @@
 package com.cyberspectraa.cybernpc.block;
 
 import com.cyberspectraa.cybernpc.service.GuardPostSavedData;
+import com.cyberspectraa.cybernpc.town.TownSystems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -78,7 +79,7 @@ public final class GuardPostBlock extends HorizontalDirectionalBlock {
     ) {
         super.onPlace(state, level, pos, oldState, movedByPiston);
 
-        if (!level.isClientSide
+        if (TownSystems.guardPostsEnabled() && !level.isClientSide
                 && level instanceof ServerLevel serverLevel
                 && !oldState.is(this)) {
             GuardPostSavedData.get(serverLevel).register(

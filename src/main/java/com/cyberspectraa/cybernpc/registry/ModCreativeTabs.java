@@ -45,17 +45,10 @@ public final class ModCreativeTabs {
                                 output.accept(ModItems.LETTER_BOX.get());
 
                                 // Town defence / special-NPC utilities.
-                                output.accept(ModItems.GUARD_POST.get());
                                 output.accept(ModItems.TOWN_REGISTER.get());
-                                output.accept(ModItems.HOME_ASSIGNMENT_TOOL.get());
                                 output.accept(ModItems.GUILD_MARKER.get());
 
-                                // Simple building setup. These four
-                                // blocks are invisible after placement.
-                                output.accept(ModItems.BUILDING_MARKER.get());
-                                output.accept(ModItems.ROOM_MARKER.get());
-                                output.accept(ModItems.BED_MARKER.get());
-                                output.accept(ModItems.WORK_MARKER.get());
+                                // Retired housing/work markers retain registry IDs for saved worlds.
 
                                 output.accept(ModItems.SPECIAL_NPC_REMOVAL_STICK.get());
                             })

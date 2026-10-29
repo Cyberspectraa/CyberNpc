@@ -33,6 +33,7 @@ import java.util.UUID;
 public final class TownHomeEvents {
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onRegister(PlayerInteractEvent.RightClickBlock event) {
+        if (!TownSystems.housingAndJobsEnabled()) return;
         if (event.getHand() != InteractionHand.MAIN_HAND) return;
         ItemStack stack = event.getEntity().getMainHandItem();
         if (!(stack.getItem() instanceof TownRegisterItem)) return;
@@ -85,6 +86,7 @@ public final class TownHomeEvents {
 
     @SubscribeEvent
     public static void onWorldTick(TickEvent.LevelTickEvent event) {
+        if (!TownSystems.housingAndJobsEnabled()) return;
         if (event.phase != TickEvent.Phase.END
                 || !(event.level instanceof ServerLevel level)
                 || level.getGameTime() % 1200L != 200L) return;
@@ -94,6 +96,7 @@ public final class TownHomeEvents {
 
     @SubscribeEvent
     public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (!TownSystems.housingAndJobsEnabled()) return;
         if (event.phase != TickEvent.Phase.END
                 || !(event.player instanceof ServerPlayer player)
                 || player.tickCount % 12 != 0
@@ -111,6 +114,7 @@ public final class TownHomeEvents {
 
     @SubscribeEvent
     public static void onNpcDeath(LivingDeathEvent event) {
+        if (!TownSystems.housingAndJobsEnabled()) return;
         if (event.getEntity() instanceof CyberNpcEntity npc
                 && npc.getNpcType() == NpcType.MAIN
                 && npc.level() instanceof ServerLevel level) {
