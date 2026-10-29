@@ -49,19 +49,6 @@ public final class GuardPostMarkerItem extends BlockItem {
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
 
-        /* InteractionResult result = super.useOn(context);
 
-        if (result.consumesAction()
-                && player != null
-                && !level.isClientSide) {
-            player.displayClientMessage(
-                    Component.literal(
-                            "Guard Post placed. Guards can rotate onto it."
-                    ),
-                    true
-            );
-        }
-
-        return result; */
     }
 }
