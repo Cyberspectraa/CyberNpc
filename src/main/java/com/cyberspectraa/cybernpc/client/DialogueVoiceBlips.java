@@ -19,8 +19,8 @@ public final class DialogueVoiceBlips {
     private record Voice(RegistryObject<SoundEvent> sample,
                          float pitch, float gain, int letters, int minMillis) { }
 
-    private static final Voice KAI = new Voice(ModSounds.DIALOGUE_VOICE_KAI, 0.98F, 0.80F, 5, 160);
-    private static final Voice KATIE = new Voice(ModSounds.DIALOGUE_VOICE_KATIE, 1.04F, 0.90F, 5, 155);
+    private static final Voice KAI = new Voice(ModSounds.DIALOGUE_VOICE_KAI, 1.00F, 1.00F, 2, 95);
+    private static final Voice KATIE = new Voice(ModSounds.DIALOGUE_VOICE_KATIE, 1.00F, 1.00F, 2, 90);
     private static final Voice ELARA = new Voice(ModSounds.DIALOGUE_VOICE_ELARA, 1.03F, 0.78F, 4, 100);
     private static final Voice ROWAN = new Voice(ModSounds.DIALOGUE_VOICE_ROWAN, 0.78F, 0.70F, 5, 140);
     private static final Voice FELIX = new Voice(ModSounds.DIALOGUE_VOICE_FELIX, 1.12F, 0.80F, 3, 100);
@@ -32,7 +32,7 @@ public final class DialogueVoiceBlips {
 
     // Constant client-side level; no separate mod config is required.
     // Players can still use Minecraft's normal sound settings.
-    private static final float DEFAULT_VOLUME = 0.30F;
+    private static final float DEFAULT_VOLUME = 0.60F;
 
     private DialogueVoiceBlips() { }
 
@@ -48,12 +48,19 @@ public final class DialogueVoiceBlips {
         Voice voice = resolve(npc);
         if (count - lastPlayedIndex < voice.letters()
                 || now - lastPlayedMillis < voice.minMillis()) return false;
+        // One render frame can reveal multiple characters. If it happens to
+        // finish on whitespace or punctuation, use the latest real letter in
+        // this newly revealed section rather than silently skipping a grunt.
         int i = Math.min(count, speech.length()) - 1;
-        if (i < 0 || !Character.isLetterOrDigit(speech.charAt(i))) return false;
+        int lower = Math.max(previousCount, i - 7);
+        while (i >= lower && !Character.isLetterOrDigit(speech.charAt(i))) i--;
+        if (i < lower) return false;
 
         // Vary pitch subtly between grunts, but give each NPC a consistent tone.
         int variation = (i * 31 + speech.length() * 7 + npc.getId() * 13) & 7;
-        float pitch = voice.pitch() * (1.0F + (variation - 3.5F) * 0.011F);
+        // Keep supplied recordings near their original pitch (especially Katie).
+        float pitchSpread = (voice == KAI || voice == KATIE) ? 0.004F : 0.011F;
+        float pitch = voice.pitch() * (1.0F + (variation - 3.5F) * pitchSpread);
         if (isGeneric(voice)) {
             // Stable per-entity personality for future authored dialogue NPCs.
             pitch *= 1.0F + (Math.floorMod(npc.getUUID().hashCode(), 9) - 4) * 0.018F;
