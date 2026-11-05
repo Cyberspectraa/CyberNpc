@@ -54,7 +54,7 @@
           "to": "jjk_others"
         },
         {
-          "text": "I think Choso's overrated.",
+          "text": "Choso's a terrible character.",
           "to": "choso_insult",
           "effect": "kai_choso"
         }
@@ -130,8 +130,7 @@
         },
         {
           "text": "He's not real, though.",
-          "to": "choso_insult",
-          "effect": "kai_choso"
+          "to": "choso_reality"
         }
       ]
     },
@@ -698,6 +697,19 @@
         {
           "text": "Can we change the subject?",
           "to": "root"
+        }
+      ]
+    },
+    "choso_reality": {
+      "speech": "I know. Doesn't change that I like him.",
+      "choices": [
+        {
+          "text": "Fair enough.",
+          "to": "choso_good"
+        },
+        {
+          "text": "What about the actual show?",
+          "to": "jjk_others"
         }
       ]
     }
