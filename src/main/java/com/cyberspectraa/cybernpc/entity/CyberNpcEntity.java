@@ -17,6 +17,7 @@ import com.cyberspectraa.cybernpc.registry.ModItems;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
 import com.cyberspectraa.cybernpc.town.TownWildSpawnProtection;
 import com.cyberspectraa.cybernpc.dialogue.NpcDialogueController;
+import com.cyberspectraa.cybernpc.dialogue.TownCharacterDialogue;
 import com.cyberspectraa.cybernpc.service.SpecialNpcSavedData;
 import com.cyberspectraa.cybernpc.world.CyberNpcWorldClaims;
 import net.minecraft.core.BlockPos;
@@ -8067,6 +8068,14 @@ public class CyberNpcEntity extends PathfinderMob {
         }
 
         setStoryNpcId(loadedStoryNpcId);
+        // Existing saved characters retain stable story IDs, but adopt their
+        // authored display names unless a player renamed them explicitly.
+        String oldName = TownCharacterDialogue.originalName(getStoryNpcId());
+        if (oldName != null && getCustomName() != null
+                && oldName.equals(getCustomName().getString())) {
+            setCustomName(Component.literal(TownCharacterDialogue.displayName(getStoryNpcId())));
+            setCustomNameVisible(true);
+        }
 
         // Mason used to double as a CyberQuest NPC simply because its story
         // identity was "mason". Story identity and quest binding are separate

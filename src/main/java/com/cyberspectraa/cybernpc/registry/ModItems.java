@@ -139,7 +139,7 @@ public final class ModItems {
                             NpcType.MAIN,
                             "Citizen",
                             false,
-                            "Mason",
+                            "Kai",
                             "mason",
                             new Item.Properties()
                     ));
@@ -158,7 +158,7 @@ public final class ModItems {
                             NpcType.TOWN,
                             "Citizen",
                             false,
-                            "Town NPC 1",
+                            "Katie",
                             "town_npc_1",
                             new Item.Properties()
                     ));
@@ -176,7 +176,7 @@ public final class ModItems {
                             NpcType.TOWN,
                             "Citizen",
                             false,
-                            "Town NPC 2",
+                            "Elara",
                             "town_npc_2",
                             new Item.Properties()
                     ));
@@ -194,7 +194,7 @@ public final class ModItems {
                             NpcType.TOWN,
                             "Citizen",
                             false,
-                            "Town NPC 3",
+                            "Rowan",
                             "town_npc_3",
                             new Item.Properties()
                     ));
@@ -212,7 +212,7 @@ public final class ModItems {
                             NpcType.TOWN,
                             "Citizen",
                             false,
-                            "Town NPC 4",
+                            "Felix",
                             "town_npc_4",
                             new Item.Properties()
                     ));
@@ -230,7 +230,7 @@ public final class ModItems {
                             NpcType.TOWN,
                             "Citizen",
                             false,
-                            "Town NPC 5",
+                            "Nadia",
                             "town_npc_5",
                             new Item.Properties()
                     ));
@@ -248,7 +248,7 @@ public final class ModItems {
                             NpcType.TOWN,
                             "Citizen",
                             false,
-                            "Town NPC 6",
+                            "Orin",
                             "town_npc_6",
                             new Item.Properties()
                     ));
@@ -261,6 +261,10 @@ public final class ModItems {
                             0x7A8F67,
                             new Item.Properties()
                     ));
+
+    public static final RegistryObject<Item> YARN =
+            ITEMS.register("yarn", () ->
+                    new Item(new Item.Properties().stacksTo(64)));
 
     public static final RegistryObject<Item> CHOSO_PLUSH =
             ITEMS.register("choso_plush", () ->

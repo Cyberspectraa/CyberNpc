@@ -46,6 +46,7 @@ public final class NpcDialogueController {
      */
     public static boolean canInteract(CyberNpcEntity npc) {
         if (npc == null || npc.getNpcType() == NpcType.WILD) return false;
+        if (TownCharacterDialogue.recognises(npc)) return true;
         NpcServiceRole role = NpcServiceRole.fromRole(npc.getRole());
         return role == NpcServiceRole.POPE
                 || role == NpcServiceRole.GUILD_RECEPTIONIST;
@@ -57,8 +58,9 @@ public final class NpcDialogueController {
         SESSIONS.put(player.getUUID(),
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
         npc.getLookControl().setLookAt(player, 25.0F, 25.0F);
-        send(player, npc, page, "", pope(npc) ? popeGreeting()
-                : guildGreeting(player));
+        send(player, npc, page, "", TownCharacterDialogue.recognises(npc)
+                ? TownCharacterDialogue.greeting(player, npc)
+                : (pope(npc) ? popeGreeting() : guildGreeting(player)));
     }
 
     public static void openIntro(ServerPlayer player, CyberNpcEntity npc) {
@@ -129,6 +131,15 @@ public final class NpcDialogueController {
             .filter(o -> o.id().equals(action))
             .findFirst().orElseThrow().label();
         String page = session.page();
+
+        if (TownCharacterDialogue.recognises(npc)) {
+            TownCharacterDialogue.Transition reply =
+                    TownCharacterDialogue.advance(player, npc, page, action);
+            SESSIONS.put(player.getUUID(), new Session(npc.getUUID(), reply.page(),
+                    player.level().getGameTime() + SESSION_LIFETIME));
+            send(player, npc, reply.page(), playerLine, reply.speech());
+            return;
+        }
 
         // Written dialogue is restored only for the authored Pope and
         // Guild Receptionist. Other NPC roles still have no right-click menu.
@@ -253,6 +264,9 @@ public final class NpcDialogueController {
             ServerPlayer player, CyberNpcEntity npc, String page) {
         NpcServiceRole role = NpcServiceRole.fromRole(npc.getRole());
         List<DialogueView.Option> options = new ArrayList<>();
+        if (TownCharacterDialogue.recognises(npc)) {
+            return TownCharacterDialogue.options(player, npc, page);
+        }
         if (page.startsWith("intro_")) {
             String next = switch (page) {
                 case "intro_0" -> "intro_town";

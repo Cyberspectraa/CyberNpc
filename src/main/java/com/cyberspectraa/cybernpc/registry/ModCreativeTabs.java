@@ -28,6 +28,7 @@ public final class ModCreativeTabs {
                             .displayItems((parameters, output) -> {
                                 // Story / quest items.
                                 output.accept(ModItems.CHOSO_PLUSH.get());
+                                output.accept(ModItems.YARN.get());
 
                                 // Economy.
                                 output.accept(ModItems.COPPER_COIN.get());
@@ -77,7 +78,7 @@ public final class ModCreativeTabs {
                                 output.accept(ModItems.GUILD_RECEPTIONIST_NPC_SPAWN_EGG.get());
                                 output.accept(ModItems.SHOPKEEPER_NPC_SPAWN_EGG.get());
 
-                                // Seven authored town characters: existing Mason plus six slots.
+                                // Seven authored town characters, preserving existing spawn egg IDs.
                                 output.accept(ModItems.MASON_NPC_SPAWN_EGG.get());
                                 output.accept(ModItems.TOWN_NPC_1_SPAWN_EGG.get());
                                 output.accept(ModItems.TOWN_NPC_2_SPAWN_EGG.get());
