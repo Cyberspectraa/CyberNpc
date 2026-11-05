@@ -1,0 +1,554 @@
+{
+  "story_id": "town_npc_5",
+  "name": "Nadia",
+  "first_greeting": "New in town? Try not to break anything.",
+  "repeat_greeting": "Hello. Need something?",
+  "trusted_greeting": "Good to see you. I've got a question for you later.",
+  "cooldown_greeting": "I'm busy. Come back in a bit.",
+  "redirect": "Right. What's next?",
+  "subject_change": "Another problem, if you please.",
+  "nodes": {
+    "root": {
+      "speech": "Do you need something fixed, or are we just talking?",
+      "choices": [
+        {
+          "text": "I've got a building problem.",
+          "to": "build"
+        },
+        {
+          "text": "What do you think of redstone?",
+          "to": "redstone"
+        },
+        {
+          "text": "Got any puzzles for me?",
+          "to": "puzzles"
+        },
+        {
+          "text": "Would you plan a trip with me?",
+          "to": "planning"
+        },
+        {
+          "text": "How's everything going here?",
+          "to": "town"
+        }
+      ]
+    },
+    "build": {
+      "speech": "Describe the problem. Properly, please.",
+      "choices": [
+        {
+          "text": "I want a door that opens automatically.",
+          "to": "door"
+        },
+        {
+          "text": "Something's broken, but I don't know why.",
+          "to": "broken"
+        },
+        {
+          "text": "I haven't actually started building.",
+          "to": "no_plan"
+        }
+      ]
+    },
+    "door": {
+      "speech": "Pressure plates? Redstone? What kind of automatic door do you mean?",
+      "choices": [
+        {
+          "text": "Just a simple pressure plate.",
+          "to": "door_simple",
+          "effect": "trust"
+        },
+        {
+          "text": "I want something elaborate.",
+          "to": "door_fancy"
+        },
+        {
+          "text": "I hadn't thought that far.",
+          "to": "no_plan"
+        }
+      ]
+    },
+    "door_simple": {
+      "speech": "Then start simple. A plate and a door. See if it works before adding more.",
+      "choices": [
+        {
+          "text": "That's sensible.",
+          "to": "build_success",
+          "effect": "trust"
+        },
+        {
+          "text": "But I wanted something impressive.",
+          "to": "door_fancy"
+        }
+      ]
+    },
+    "door_fancy": {
+      "speech": "Fine. Make sure you can still open it when the mechanism breaks.",
+      "choices": [
+        {
+          "text": "I hadn't thought of failure cases.",
+          "to": "build_success",
+          "effect": "trust"
+        },
+        {
+          "text": "It'll never break.",
+          "to": "door_overconfident"
+        }
+      ]
+    },
+    "door_overconfident": {
+      "speech": "Famous last words. Test it anyway.",
+      "choices": [
+        {
+          "text": "Alright, I will.",
+          "to": "build_success"
+        },
+        {
+          "text": "You sound paranoid.",
+          "to": "no_plan"
+        }
+      ]
+    },
+    "broken": {
+      "speech": "Good. At least you're not pretending you know. What changed before it stopped?",
+      "choices": [
+        {
+          "text": "I changed some redstone.",
+          "to": "broken_redstone"
+        },
+        {
+          "text": "I changed nothing I can remember.",
+          "to": "broken_unknown"
+        },
+        {
+          "text": "I hit it a few times.",
+          "to": "broken_hit"
+        }
+      ]
+    },
+    "broken_redstone": {
+      "speech": "Undo the last change, then test each part. One thing at a time.",
+      "choices": [
+        {
+          "text": "I can try that.",
+          "to": "build_success",
+          "effect": "trust"
+        },
+        {
+          "text": "Can't I replace the whole thing?",
+          "to": "broken_replace"
+        }
+      ]
+    },
+    "broken_unknown": {
+      "speech": "Then we begin by observing what it does, not what you hoped it would do.",
+      "choices": [
+        {
+          "text": "Okay, I'll check it carefully.",
+          "to": "build_success",
+          "effect": "trust"
+        },
+        {
+          "text": "That sounds slow.",
+          "to": "no_plan"
+        }
+      ]
+    },
+    "broken_hit": {
+      "speech": "Please tell me you're joking.",
+      "choices": [
+        {
+          "text": "I was. Mostly.",
+          "to": "build_success"
+        },
+        {
+          "text": "No. Did I make it worse?",
+          "to": "broken_unknown"
+        }
+      ]
+    },
+    "broken_replace": {
+      "speech": "You can, but you might recreate the same fault. Find the cause first.",
+      "choices": [
+        {
+          "text": "Fair point.",
+          "to": "build_success",
+          "effect": "trust"
+        },
+        {
+          "text": "I'll take my chances.",
+          "to": "no_plan"
+        }
+      ]
+    },
+    "no_plan": {
+      "speech": "Right. Then you've found the problem before you've even built anything.",
+      "choices": [
+        {
+          "text": "Can you help me plan it?",
+          "to": "planning"
+        },
+        {
+          "text": "I just like improvising.",
+          "to": "improvise"
+        }
+      ]
+    },
+    "improvise": {
+      "speech": "You can improvise. Just don't call it a mystery when it fails.",
+      "choices": [
+        {
+          "text": "Fair.",
+          "to": "planning"
+        },
+        {
+          "text": "You're no fun.",
+          "to": "town"
+        }
+      ]
+    },
+    "build_success": {
+      "speech": "Test it in a small space before you trust it with your house.",
+      "choices": [
+        {
+          "text": "I'll do that.",
+          "to": "redstone",
+          "effect": "warm"
+        },
+        {
+          "text": "What other systems do you build?",
+          "to": "redstone"
+        }
+      ]
+    },
+    "redstone": {
+      "speech": "It's useful. It rewards patience and punishes bad wiring.",
+      "choices": [
+        {
+          "text": "What's the first thing to learn?",
+          "to": "redstone_begin"
+        },
+        {
+          "text": "I made a machine that keeps breaking.",
+          "to": "broken"
+        },
+        {
+          "text": "I prefer doing things by hand.",
+          "to": "redstone_manual"
+        }
+      ]
+    },
+    "redstone_begin": {
+      "speech": "A lever, some dust and a door. Learn what each part does before building a contraption.",
+      "choices": [
+        {
+          "text": "I can start there.",
+          "to": "build_success",
+          "effect": "trust"
+        },
+        {
+          "text": "That's too basic.",
+          "to": "redstone_complex"
+        }
+      ]
+    },
+    "redstone_complex": {
+      "speech": "Then you can explain why it works, can't you?",
+      "choices": [
+        {
+          "text": "Not really.",
+          "to": "redstone_begin"
+        },
+        {
+          "text": "Yes. I just wanted a challenge.",
+          "to": "puzzles"
+        }
+      ]
+    },
+    "redstone_manual": {
+      "speech": "Nothing wrong with that. A system isn't better just because it's complicated.",
+      "choices": [
+        {
+          "text": "Finally, someone agrees.",
+          "to": "planning",
+          "effect": "warm"
+        },
+        {
+          "text": "Still, I'd like to learn.",
+          "to": "redstone_begin"
+        }
+      ]
+    },
+    "puzzles": {
+      "speech": "Alright. A simple one: three levers, one door. How would you find which lever matters?",
+      "choices": [
+        {
+          "text": "Try one lever at a time.",
+          "to": "puzzle_correct"
+        },
+        {
+          "text": "Pull them all and hope.",
+          "to": "puzzle_guess"
+        },
+        {
+          "text": "Ask whoever built it.",
+          "to": "puzzle_ask"
+        }
+      ]
+    },
+    "puzzle_correct": {
+      "speech": "Good. Change one variable at a time. Now you know what caused the result.",
+      "choices": [
+        {
+          "text": "Was that the point of the puzzle?",
+          "to": "puzzle_point"
+        },
+        {
+          "text": "Have you got a harder one?",
+          "to": "puzzle_harder"
+        }
+      ]
+    },
+    "puzzle_guess": {
+      "speech": "And when it opens, you'll have no idea which lever did it.",
+      "choices": [
+        {
+          "text": "I see the problem.",
+          "to": "puzzle_correct",
+          "effect": "trust"
+        },
+        {
+          "text": "At least it'd be quick.",
+          "to": "puzzle_point"
+        }
+      ]
+    },
+    "puzzle_ask": {
+      "speech": "If they're available, sure. But what if they aren't?",
+      "choices": [
+        {
+          "text": "Then test each lever.",
+          "to": "puzzle_correct",
+          "effect": "trust"
+        },
+        {
+          "text": "Then I give up.",
+          "to": "puzzle_point"
+        }
+      ]
+    },
+    "puzzle_point": {
+      "speech": "The point wasn't a clever trick. It was paying attention.",
+      "choices": [
+        {
+          "text": "Alright, that makes sense.",
+          "to": "puzzle_harder",
+          "effect": "trust"
+        },
+        {
+          "text": "I was expecting more of a riddle.",
+          "to": "puzzle_harder"
+        }
+      ]
+    },
+    "puzzle_harder": {
+      "speech": "Harder problems are usually just simple ones you haven't divided up yet.",
+      "choices": [
+        {
+          "text": "You make it sound manageable.",
+          "to": "planning",
+          "effect": "warm"
+        },
+        {
+          "text": "I'll keep practising.",
+          "to": "redstone"
+        }
+      ]
+    },
+    "planning": {
+      "speech": "What are we planning? And don't say 'a trip' like that answers everything.",
+      "choices": [
+        {
+          "text": "A safe route out of town.",
+          "to": "plan_route"
+        },
+        {
+          "text": "A supply run.",
+          "to": "plan_supplies"
+        },
+        {
+          "text": "I just wanted to wander.",
+          "to": "plan_wander"
+        }
+      ]
+    },
+    "plan_route": {
+      "speech": "Distance, food, weather, somewhere to turn back. Those are the basics.",
+      "choices": [
+        {
+          "text": "Should I mark a return point?",
+          "to": "plan_return",
+          "effect": "trust"
+        },
+        {
+          "text": "That seems like a lot.",
+          "to": "plan_wander"
+        }
+      ]
+    },
+    "plan_supplies": {
+      "speech": "List what you need before you leave. Otherwise you'll buy six things and forget the one that matters.",
+      "choices": [
+        {
+          "text": "I can make a list.",
+          "to": "plan_return",
+          "effect": "trust"
+        },
+        {
+          "text": "I'm sure I'll remember.",
+          "to": "plan_forget"
+        }
+      ]
+    },
+    "plan_wander": {
+      "speech": "You can wander. Just take enough food to stop it becoming a rescue operation.",
+      "choices": [
+        {
+          "text": "Fair enough.",
+          "to": "plan_return"
+        },
+        {
+          "text": "You're always this cautious?",
+          "to": "plan_caution"
+        }
+      ]
+    },
+    "plan_forget": {
+      "speech": "Then I look forward to hearing what you forgot.",
+      "choices": [
+        {
+          "text": "I'll write it down.",
+          "to": "plan_return",
+          "effect": "trust"
+        },
+        {
+          "text": "You're impossible.",
+          "to": "plan_caution"
+        }
+      ]
+    },
+    "plan_return": {
+      "speech": "Good. A decent plan leaves room for things to go wrong.",
+      "choices": [
+        {
+          "text": "Thanks. That helped.",
+          "to": "town",
+          "effect": "warm"
+        },
+        {
+          "text": "What about exploring on instinct?",
+          "to": "plan_wander"
+        }
+      ]
+    },
+    "plan_caution": {
+      "speech": "I'm cautious when it matters. I don't enjoy cleaning up avoidable disasters.",
+      "choices": [
+        {
+          "text": "I can see why.",
+          "to": "town",
+          "effect": "trust"
+        },
+        {
+          "text": "Sometimes surprises are fun.",
+          "to": "town"
+        }
+      ]
+    },
+    "town": {
+      "speech": "It works. Most days. It could work a bit better.",
+      "choices": [
+        {
+          "text": "What would you change first?",
+          "to": "town_fix"
+        },
+        {
+          "text": "Do you ever take a break?",
+          "to": "break"
+        },
+        {
+          "text": "You sound pleased for once.",
+          "to": "town_dry"
+        }
+      ]
+    },
+    "town_fix": {
+      "speech": "I'd label storage. People keep putting things wherever there's room.",
+      "choices": [
+        {
+          "text": "I would absolutely do that.",
+          "to": "town_dry"
+        },
+        {
+          "text": "You'd hate my chest room.",
+          "to": "town_mess"
+        }
+      ]
+    },
+    "town_mess": {
+      "speech": "I don't need to see it. I can already imagine it.",
+      "choices": [
+        {
+          "text": "I'll sort it out someday.",
+          "to": "town_fix"
+        },
+        {
+          "text": "It's organised chaos.",
+          "to": "town_dry"
+        }
+      ]
+    },
+    "town_dry": {
+      "speech": "Don't make me regret saying something nice.",
+      "choices": [
+        {
+          "text": "Wouldn't dream of it.",
+          "to": "break",
+          "effect": "warm"
+        },
+        {
+          "text": "I should probably let you work.",
+          "to": "root"
+        }
+      ]
+    },
+    "break": {
+      "speech": "Yes. Sometimes. Usually after someone reminds me.",
+      "choices": [
+        {
+          "text": "Consider this your reminder.",
+          "to": "break_yes",
+          "effect": "trust"
+        },
+        {
+          "text": "You can't keep going forever.",
+          "to": "break_yes"
+        }
+      ]
+    },
+    "break_yes": {
+      "speech": "Fine. Five minutes. You win.",
+      "choices": [
+        {
+          "text": "I'll take the victory.",
+          "to": "root",
+          "effect": "warm"
+        },
+        {
+          "text": "What do you do when you're not working?",
+          "to": "puzzles"
+        }
+      ]
+    }
+  }
+}

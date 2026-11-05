@@ -1,0 +1,394 @@
+{
+  "story_id": "town_npc_3",
+  "name": "Rowan",
+  "first_greeting": "Hello. Welcome to town.",
+  "repeat_greeting": "Hello again.",
+  "trusted_greeting": "I saved you a quiet spot, if you want it.",
+  "cooldown_greeting": "I need some quiet right now.",
+  "redirect": "That's alright. What else?",
+  "subject_change": "Could I ask something else?",
+  "nodes": {
+    "root": {
+      "speech": "Hello. It's nice to see someone stopping for a moment.",
+      "choices": [
+        {
+          "text": "What are you looking at?",
+          "to": "birds"
+        },
+        {
+          "text": "Do you know much about the woods?",
+          "to": "forest"
+        },
+        {
+          "text": "Any food you'd recommend?",
+          "to": "cooking"
+        },
+        {
+          "text": "Can I ask you something?",
+          "to": "talk"
+        },
+        {
+          "text": "It's rather quiet here.",
+          "to": "quiet"
+        }
+      ]
+    },
+    "birds": {
+      "speech": "There are some birds nearby. I'm trying not to scare them.",
+      "choices": [
+        {
+          "text": "Which ones?",
+          "to": "birds_types"
+        },
+        {
+          "text": "Wouldn't it be easier to get closer?",
+          "to": "birds_close"
+        },
+        {
+          "text": "I'll keep my voice down.",
+          "to": "birds_kind",
+          "effect": "trust"
+        }
+      ]
+    },
+    "birds_types": {
+      "speech": "A few little ones. I don't know every name, but I like listening.",
+      "choices": [
+        {
+          "text": "You don't need to know everything.",
+          "to": "birds_kind",
+          "effect": "warm"
+        },
+        {
+          "text": "Could I sit here awhile?",
+          "to": "quiet"
+        }
+      ]
+    },
+    "birds_close": {
+      "speech": "Maybe. But then I'd just be bothering them for my own curiosity.",
+      "choices": [
+        {
+          "text": "That's a good point.",
+          "to": "birds_kind",
+          "effect": "trust"
+        },
+        {
+          "text": "You worry about animals that much?",
+          "to": "animal_care"
+        }
+      ]
+    },
+    "birds_kind": {
+      "speech": "Thank you. Most people don't mean any harm; they just forget to be quiet.",
+      "choices": [
+        {
+          "text": "Do you spend a lot of time out here?",
+          "to": "forest"
+        },
+        {
+          "text": "Have you always liked animals?",
+          "to": "animal_care"
+        }
+      ]
+    },
+    "animal_care": {
+      "speech": "Yes. They're easier to understand when you give them space.",
+      "choices": [
+        {
+          "text": "I think I get what you mean.",
+          "to": "forest",
+          "effect": "trust"
+        },
+        {
+          "text": "People aren't always so simple.",
+          "to": "talk"
+        }
+      ]
+    },
+    "forest": {
+      "speech": "I like it out there. Even the paths everyone uses have something different each day.",
+      "choices": [
+        {
+          "text": "Where do you go to relax?",
+          "to": "forest_rest"
+        },
+        {
+          "text": "Do you ever get lost?",
+          "to": "forest_lost"
+        },
+        {
+          "text": "Is it safe alone?",
+          "to": "forest_safe"
+        }
+      ]
+    },
+    "forest_rest": {
+      "speech": "Usually somewhere with water. I don't need much more than that.",
+      "choices": [
+        {
+          "text": "Sounds peaceful.",
+          "to": "quiet",
+          "effect": "warm"
+        },
+        {
+          "text": "Is that where you fish?",
+          "to": "fishing"
+        }
+      ]
+    },
+    "forest_lost": {
+      "speech": "A few times. It's less frightening if you stop walking in circles.",
+      "choices": [
+        {
+          "text": "That's probably better than panicking.",
+          "to": "forest_safe",
+          "effect": "trust"
+        },
+        {
+          "text": "So you carry a map?",
+          "to": "forest_safe"
+        }
+      ]
+    },
+    "forest_safe": {
+      "speech": "Not always. I leave when the place stops feeling safe. There's no shame in that.",
+      "choices": [
+        {
+          "text": "I'll remember that.",
+          "to": "forest",
+          "effect": "trust"
+        },
+        {
+          "text": "I'd probably just run.",
+          "to": "forest_lost"
+        }
+      ]
+    },
+    "fishing": {
+      "speech": "Sometimes I fish. Mostly I enjoy being near the water.",
+      "choices": [
+        {
+          "text": "What do you do with a catch?",
+          "to": "cooking"
+        },
+        {
+          "text": "Don't you get bored?",
+          "to": "quiet"
+        }
+      ]
+    },
+    "cooking": {
+      "speech": "I cook when I can. It's a pleasant way to look after yourself.",
+      "choices": [
+        {
+          "text": "Can you recommend something simple?",
+          "to": "recipe"
+        },
+        {
+          "text": "Do you cook for other people?",
+          "to": "cook_others"
+        },
+        {
+          "text": "I'd probably burn it.",
+          "to": "cook_fail"
+        }
+      ]
+    },
+    "recipe": {
+      "speech": "Start with something you understand. Bread and a little food over a fire can be plenty.",
+      "choices": [
+        {
+          "text": "That doesn't sound too difficult.",
+          "to": "cook_others",
+          "effect": "warm"
+        },
+        {
+          "text": "What if I ruin it?",
+          "to": "cook_fail"
+        }
+      ]
+    },
+    "cook_others": {
+      "speech": "Sometimes. It's nice when somebody actually sits down and eats with you.",
+      "choices": [
+        {
+          "text": "I'd be happy to sometime.",
+          "to": "cook_invite",
+          "effect": "trust"
+        },
+        {
+          "text": "I don't think I'm very sociable.",
+          "to": "quiet"
+        }
+      ]
+    },
+    "cook_invite": {
+      "speech": "I'd like that. We don't need to make a big event of it.",
+      "choices": [
+        {
+          "text": "That's the best kind.",
+          "to": "quiet",
+          "effect": "warm"
+        },
+        {
+          "text": "Can I ask something else?",
+          "to": "talk"
+        }
+      ]
+    },
+    "cook_fail": {
+      "speech": "Then you try again. A burnt meal isn't a moral failing.",
+      "choices": [
+        {
+          "text": "Good to know.",
+          "to": "recipe",
+          "effect": "warm"
+        },
+        {
+          "text": "You make it sound easy.",
+          "to": "cook_others"
+        }
+      ]
+    },
+    "talk": {
+      "speech": "Of course. Is something on your mind?",
+      "choices": [
+        {
+          "text": "I'm still not used to this world.",
+          "to": "homesick"
+        },
+        {
+          "text": "Do you find people difficult sometimes?",
+          "to": "people"
+        },
+        {
+          "text": "Not really. Just wanted to talk.",
+          "to": "smalltalk"
+        }
+      ]
+    },
+    "homesick": {
+      "speech": "That makes sense. You don't have to feel at home straight away.",
+      "choices": [
+        {
+          "text": "Thanks. I needed to hear that.",
+          "to": "support",
+          "effect": "trust"
+        },
+        {
+          "text": "Do you ever miss things?",
+          "to": "rowan_miss"
+        }
+      ]
+    },
+    "rowan_miss": {
+      "speech": "Sometimes. Quiet doesn't mean I never think about the past.",
+      "choices": [
+        {
+          "text": "You can tell me, if you want.",
+          "to": "boundary",
+          "effect": "trust"
+        },
+        {
+          "text": "I understand.",
+          "to": "support"
+        }
+      ]
+    },
+    "boundary": {
+      "speech": "Thank you. I'm not ready to talk about all of it yet.",
+      "choices": [
+        {
+          "text": "No need to explain.",
+          "to": "support",
+          "effect": "trust"
+        },
+        {
+          "text": "That's fine.",
+          "to": "quiet"
+        }
+      ]
+    },
+    "people": {
+      "speech": "I don't mind people. I just need a little quiet between conversations.",
+      "choices": [
+        {
+          "text": "I can respect that.",
+          "to": "support",
+          "effect": "trust"
+        },
+        {
+          "text": "I get restless if it's too quiet.",
+          "to": "smalltalk"
+        }
+      ]
+    },
+    "support": {
+      "speech": "I appreciate it.",
+      "choices": [
+        {
+          "text": "Want to sit here for a bit?",
+          "to": "quiet"
+        },
+        {
+          "text": "How about something lighter?",
+          "to": "birds"
+        }
+      ]
+    },
+    "smalltalk": {
+      "speech": "That's alright. We don't need a reason to speak.",
+      "choices": [
+        {
+          "text": "What have you been up to today?",
+          "to": "cooking"
+        },
+        {
+          "text": "Can we just be quiet for a moment?",
+          "to": "quiet"
+        }
+      ]
+    },
+    "quiet": {
+      "speech": "We can just sit here, if you'd like. No need to fill every silence.",
+      "choices": [
+        {
+          "text": "I'd like that.",
+          "to": "quiet_yes",
+          "effect": "trust"
+        },
+        {
+          "text": "I think I'd rather keep moving.",
+          "to": "quiet_no"
+        }
+      ]
+    },
+    "quiet_yes": {
+      "speech": "Alright. That's nice.",
+      "choices": [
+        {
+          "text": "I'll see you again.",
+          "to": "root"
+        },
+        {
+          "text": "One more question?",
+          "to": "talk"
+        }
+      ]
+    },
+    "quiet_no": {
+      "speech": "Of course. I'll be here.",
+      "choices": [
+        {
+          "text": "Thanks.",
+          "to": "root"
+        },
+        {
+          "text": "Maybe I'll join you another time.",
+          "to": "forest_rest"
+        }
+      ]
+    }
+  }
+}

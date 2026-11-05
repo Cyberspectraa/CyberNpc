@@ -1,0 +1,520 @@
+{
+  "story_id": "town_npc_4",
+  "name": "Felix",
+  "first_greeting": "Oh, a new face. This town needed one.",
+  "repeat_greeting": "There you are. Miss me?",
+  "trusted_greeting": "I was hoping you'd show up. Don't let it go to your head.",
+  "cooldown_greeting": "I'm not in the mood for an audience just now.",
+  "redirect": "What else have you got for me?",
+  "subject_change": "Before we wander too far off...",
+  "nodes": {
+    "root": {
+      "speech": "Well, look who decided to be interesting. What can I do for you?",
+      "choices": [
+        {
+          "text": "You said you had a story.",
+          "to": "story"
+        },
+        {
+          "text": "You play card games?",
+          "to": "cards"
+        },
+        {
+          "text": "What's the news around town?",
+          "to": "rumours"
+        },
+        {
+          "text": "Why are you dressed like that?",
+          "to": "style"
+        },
+        {
+          "text": "Do you ever take anything seriously?",
+          "to": "serious"
+        }
+      ]
+    },
+    "story": {
+      "speech": "I have several stories. Would you prefer the believable one or the good one?",
+      "choices": [
+        {
+          "text": "Tell me the true version.",
+          "to": "story_truth",
+          "effect": "trust"
+        },
+        {
+          "text": "I'll take the entertaining one.",
+          "to": "story_tall"
+        },
+        {
+          "text": "Is there a difference?",
+          "to": "story_difference"
+        }
+      ]
+    },
+    "story_truth": {
+      "speech": "I once got lost outside town because I followed a trail that wasn't there. There. Humiliating and true.",
+      "choices": [
+        {
+          "text": "How'd you find your way back?",
+          "to": "story_return"
+        },
+        {
+          "text": "You actually admitted that?",
+          "to": "story_honesty",
+          "effect": "warm"
+        },
+        {
+          "text": "That doesn't sound very impressive.",
+          "to": "story_brush"
+        }
+      ]
+    },
+    "story_tall": {
+      "speech": "I fought off a dozen beasts with nothing but a spoon. Heroic, really.",
+      "choices": [
+        {
+          "text": "You're making that up.",
+          "to": "story_caught"
+        },
+        {
+          "text": "What happened to the spoon?",
+          "to": "story_spoon"
+        },
+        {
+          "text": "I'd rather hear the real one.",
+          "to": "story_truth"
+        }
+      ]
+    },
+    "story_difference": {
+      "speech": "The good ones tend to improve every time I tell them.",
+      "choices": [
+        {
+          "text": "So you're a liar?",
+          "to": "story_defence"
+        },
+        {
+          "text": "Alright, give me the true version.",
+          "to": "story_truth",
+          "effect": "trust"
+        },
+        {
+          "text": "Let's hear the improved version.",
+          "to": "story_tall"
+        }
+      ]
+    },
+    "story_return": {
+      "speech": "I stopped walking and found the road. I know. Terribly unromantic.",
+      "choices": [
+        {
+          "text": "Smartest thing you've said all day.",
+          "to": "story_honesty",
+          "effect": "warm"
+        },
+        {
+          "text": "I guess that was lucky.",
+          "to": "story_brush"
+        }
+      ]
+    },
+    "story_honesty": {
+      "speech": "I do tell the truth occasionally. It surprises people.",
+      "choices": [
+        {
+          "text": "I'll keep that in mind.",
+          "to": "cards",
+          "effect": "trust"
+        },
+        {
+          "text": "Any more stories?",
+          "to": "story"
+        }
+      ]
+    },
+    "story_brush": {
+      "speech": "Not everything in life has to be impressive.",
+      "choices": [
+        {
+          "text": "Fair point.",
+          "to": "story_honesty"
+        },
+        {
+          "text": "Tell me another one, then.",
+          "to": "story"
+        }
+      ]
+    },
+    "story_caught": {
+      "speech": "Well spotted. You have an excellent eye for the obvious.",
+      "choices": [
+        {
+          "text": "It was a decent story, though.",
+          "to": "story_spoon",
+          "effect": "warm"
+        },
+        {
+          "text": "Do you ever tell a true one?",
+          "to": "story_truth"
+        }
+      ]
+    },
+    "story_spoon": {
+      "speech": "Lost in the heroic struggle. I still mourn it.",
+      "choices": [
+        {
+          "text": "A tragic loss.",
+          "to": "story_caught",
+          "effect": "warm"
+        },
+        {
+          "text": "I can't believe I asked.",
+          "to": "story_truth"
+        }
+      ]
+    },
+    "story_defence": {
+      "speech": "I prefer 'creative historian'. But yes, you should check my facts.",
+      "choices": [
+        {
+          "text": "At least you're admitting it.",
+          "to": "story_truth",
+          "effect": "trust"
+        },
+        {
+          "text": "I'll be careful what I believe.",
+          "to": "rumours"
+        }
+      ]
+    },
+    "cards": {
+      "speech": "I do. A little competition keeps things lively.",
+      "choices": [
+        {
+          "text": "Are you any good?",
+          "to": "cards_skill"
+        },
+        {
+          "text": "Do you play fair?",
+          "to": "cards_fair"
+        },
+        {
+          "text": "What would we play for?",
+          "to": "cards_stakes"
+        }
+      ]
+    },
+    "cards_skill": {
+      "speech": "I'm magnificent. My opponents would probably disagree.",
+      "choices": [
+        {
+          "text": "Sounds like you lose a lot.",
+          "to": "cards_lose"
+        },
+        {
+          "text": "One day I'll challenge you.",
+          "to": "cards_future",
+          "effect": "warm"
+        }
+      ]
+    },
+    "cards_fair": {
+      "speech": "Of course. It's much more satisfying winning fairly.",
+      "choices": [
+        {
+          "text": "So no cheating?",
+          "to": "cards_rules",
+          "effect": "trust"
+        },
+        {
+          "text": "Good. I can't stand cheats.",
+          "to": "cards_future"
+        }
+      ]
+    },
+    "cards_rules": {
+      "speech": "I might bluff. That's the whole point of some games. Stealing cards is another matter.",
+      "choices": [
+        {
+          "text": "Fair distinction.",
+          "to": "cards_future",
+          "effect": "trust"
+        },
+        {
+          "text": "I'll keep an eye on you.",
+          "to": "cards_skill"
+        }
+      ]
+    },
+    "cards_stakes": {
+      "speech": "Pride, mostly. I'm not about to take your last coin.",
+      "choices": [
+        {
+          "text": "I'd rather not gamble at all.",
+          "to": "cards_future"
+        },
+        {
+          "text": "Then let's play for bragging rights.",
+          "to": "cards_future",
+          "effect": "warm"
+        }
+      ]
+    },
+    "cards_lose": {
+      "speech": "Only when I let other people feel better about themselves.",
+      "choices": [
+        {
+          "text": "Sure you do.",
+          "to": "cards_future"
+        },
+        {
+          "text": "I'll test that claim sometime.",
+          "to": "cards_future"
+        }
+      ]
+    },
+    "cards_future": {
+      "speech": "Excellent. I'll practise looking humble in advance.",
+      "choices": [
+        {
+          "text": "Don't strain yourself.",
+          "to": "serious",
+          "effect": "warm"
+        },
+        {
+          "text": "What else do you do for fun?",
+          "to": "style"
+        }
+      ]
+    },
+    "rumours": {
+      "speech": "I hear things. That doesn't mean I'm repeating them as facts.",
+      "choices": [
+        {
+          "text": "Anything actually confirmed?",
+          "to": "rumours_facts",
+          "effect": "trust"
+        },
+        {
+          "text": "Give me the dramatic version.",
+          "to": "rumours_drama"
+        },
+        {
+          "text": "You should be careful with gossip.",
+          "to": "rumours_care"
+        }
+      ]
+    },
+    "rumours_facts": {
+      "speech": "People come and go, the guild keeps busy, and the town hasn't collapsed. That's all I've verified.",
+      "choices": [
+        {
+          "text": "I appreciate the honesty.",
+          "to": "story_truth",
+          "effect": "trust"
+        },
+        {
+          "text": "That was incredibly boring.",
+          "to": "rumours_drama"
+        }
+      ]
+    },
+    "rumours_drama": {
+      "speech": "Well, someone did claim the fountain is haunted. No, I have not checked.",
+      "choices": [
+        {
+          "text": "That sounds made up.",
+          "to": "rumours_facts"
+        },
+        {
+          "text": "Would you investigate it?",
+          "to": "rumours_check"
+        }
+      ]
+    },
+    "rumours_check": {
+      "speech": "Not without a reason. I'm curious, not a fool.",
+      "choices": [
+        {
+          "text": "Finally, a sensible answer.",
+          "to": "rumours_facts",
+          "effect": "warm"
+        },
+        {
+          "text": "I thought you'd go for the story.",
+          "to": "story"
+        }
+      ]
+    },
+    "rumours_care": {
+      "speech": "You're right. A funny story can still hurt somebody if you get it wrong.",
+      "choices": [
+        {
+          "text": "Glad you understand.",
+          "to": "serious",
+          "effect": "trust"
+        },
+        {
+          "text": "That's unusually thoughtful.",
+          "to": "serious"
+        }
+      ]
+    },
+    "style": {
+      "speech": "Because looking ordinary is a terrible use of an afternoon.",
+      "choices": [
+        {
+          "text": "You actually put thought into your clothes?",
+          "to": "style_why"
+        },
+        {
+          "text": "I like the look.",
+          "to": "style_good",
+          "effect": "warm"
+        },
+        {
+          "text": "Seems impractical.",
+          "to": "style_practical"
+        }
+      ]
+    },
+    "style_why": {
+      "speech": "Obviously. A decent outfit tells people you're awake.",
+      "choices": [
+        {
+          "text": "Doesn't comfort matter?",
+          "to": "style_practical"
+        },
+        {
+          "text": "You must like music too.",
+          "to": "music"
+        }
+      ]
+    },
+    "style_practical": {
+      "speech": "It can be both. I'm not wearing something I can't run in.",
+      "choices": [
+        {
+          "text": "Fair enough.",
+          "to": "style_good"
+        },
+        {
+          "text": "I still prefer simple clothes.",
+          "to": "style_good"
+        }
+      ]
+    },
+    "style_good": {
+      "speech": "At last, someone with some appreciation.",
+      "choices": [
+        {
+          "text": "Anything you listen to?",
+          "to": "music"
+        },
+        {
+          "text": "Can you tell another story?",
+          "to": "story"
+        }
+      ]
+    },
+    "music": {
+      "speech": "I like a song with a bit of flair. Helps a dull day feel less dull.",
+      "choices": [
+        {
+          "text": "Do you perform?",
+          "to": "music_perform"
+        },
+        {
+          "text": "I prefer quieter music.",
+          "to": "music_quiet"
+        }
+      ]
+    },
+    "music_perform": {
+      "speech": "Sometimes. More often I just sing when nobody asks.",
+      "choices": [
+        {
+          "text": "That sounds about right.",
+          "to": "music_quiet",
+          "effect": "warm"
+        },
+        {
+          "text": "Is it actually any good?",
+          "to": "style_good"
+        }
+      ]
+    },
+    "music_quiet": {
+      "speech": "Fair enough. Someone has to balance me out.",
+      "choices": [
+        {
+          "text": "Do you have any quieter moments?",
+          "to": "serious"
+        },
+        {
+          "text": "What about those cards?",
+          "to": "cards"
+        }
+      ]
+    },
+    "serious": {
+      "speech": "More often than I let on. Jokes are easier than explaining everything.",
+      "choices": [
+        {
+          "text": "You don't have to explain.",
+          "to": "serious_trust",
+          "effect": "trust"
+        },
+        {
+          "text": "Does it bother you when people don't laugh?",
+          "to": "serious_rejection"
+        },
+        {
+          "text": "You don't seem like it.",
+          "to": "serious_no"
+        }
+      ]
+    },
+    "serious_trust": {
+      "speech": "Thanks. I'll remember that.",
+      "choices": [
+        {
+          "text": "We can leave it there.",
+          "to": "root"
+        },
+        {
+          "text": "What's something fun, then?",
+          "to": "story"
+        }
+      ]
+    },
+    "serious_rejection": {
+      "speech": "Sometimes. But that's my problem, not theirs.",
+      "choices": [
+        {
+          "text": "It's okay to care what people think.",
+          "to": "serious_trust",
+          "effect": "trust"
+        },
+        {
+          "text": "Then tell fewer bad jokes.",
+          "to": "serious_no"
+        }
+      ]
+    },
+    "serious_no": {
+      "speech": "You'd be surprised. But I don't need you to believe me.",
+      "choices": [
+        {
+          "text": "Fair enough.",
+          "to": "root"
+        },
+        {
+          "text": "Sorry. That came out wrong.",
+          "to": "serious_trust",
+          "effect": "repair"
+        }
+      ]
+    }
+  }
+}

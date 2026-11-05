@@ -1,0 +1,549 @@
+{
+  "story_id": "town_npc_6",
+  "name": "Orin",
+  "first_greeting": "Oh. Hello. I was thinking about something.",
+  "repeat_greeting": "Hello again. Still curious?",
+  "trusted_greeting": "Good. I hoped you'd have more questions.",
+  "cooldown_greeting": "Not at the moment. I need to think.",
+  "redirect": "Anyway. What else were you wondering?",
+  "subject_change": "Could we follow a different thought?",
+  "nodes": {
+    "root": {
+      "speech": "Oh. I was thinking about something. Do you need me?",
+      "choices": [
+        {
+          "text": "What were you thinking about?",
+          "to": "thought"
+        },
+        {
+          "text": "Have you been watching the sky?",
+          "to": "sky"
+        },
+        {
+          "text": "Do you know anything about magic?",
+          "to": "magic"
+        },
+        {
+          "text": "Have you found any strange objects?",
+          "to": "objects"
+        },
+        {
+          "text": "Does this place ever feel unreal?",
+          "to": "world"
+        }
+      ]
+    },
+    "thought": {
+      "speech": "How different something can look when you stop expecting it to be ordinary.",
+      "choices": [
+        {
+          "text": "That sounds a little vague.",
+          "to": "thought_explain"
+        },
+        {
+          "text": "You mean how people here have changed?",
+          "to": "world"
+        },
+        {
+          "text": "Are you always thinking like that?",
+          "to": "mind"
+        }
+      ]
+    },
+    "thought_explain": {
+      "speech": "A stone is a stone until somebody tells you it belonged to a ruined city.",
+      "choices": [
+        {
+          "text": "So you're interested in history?",
+          "to": "objects"
+        },
+        {
+          "text": "Or maybe it's just a stone.",
+          "to": "stone",
+          "effect": "trust"
+        }
+      ]
+    },
+    "stone": {
+      "speech": "Exactly. I like knowing which, not pretending they're all magical.",
+      "choices": [
+        {
+          "text": "That's more sensible than I expected.",
+          "to": "mind",
+          "effect": "warm"
+        },
+        {
+          "text": "Have you ever found something unusual?",
+          "to": "objects"
+        }
+      ]
+    },
+    "mind": {
+      "speech": "Not always. Sometimes I'm thinking about lunch.",
+      "choices": [
+        {
+          "text": "That's reassuring.",
+          "to": "root",
+          "effect": "warm"
+        },
+        {
+          "text": "What about the moon?",
+          "to": "sky"
+        }
+      ]
+    },
+    "sky": {
+      "speech": "The sky is clearer when nobody's trying to light up the whole street.",
+      "choices": [
+        {
+          "text": "What do you look for?",
+          "to": "stars"
+        },
+        {
+          "text": "Does the moon mean anything to you?",
+          "to": "moon"
+        },
+        {
+          "text": "I never look up much.",
+          "to": "sky_look"
+        }
+      ]
+    },
+    "stars": {
+      "speech": "Patterns. Changes. Sometimes just somewhere to look while I think.",
+      "choices": [
+        {
+          "text": "Do you know the constellations?",
+          "to": "constellations"
+        },
+        {
+          "text": "That sounds peaceful.",
+          "to": "sky_quiet",
+          "effect": "warm"
+        }
+      ]
+    },
+    "constellations": {
+      "speech": "Some. I don't assume the stars here match what I remember from stories.",
+      "choices": [
+        {
+          "text": "So you aren't sure?",
+          "to": "stars_uncertain",
+          "effect": "trust"
+        },
+        {
+          "text": "What would you name one?",
+          "to": "star_name"
+        }
+      ]
+    },
+    "stars_uncertain": {
+      "speech": "Not yet. I'd rather say 'I don't know' than invent an answer.",
+      "choices": [
+        {
+          "text": "I appreciate that.",
+          "to": "sky_quiet",
+          "effect": "trust"
+        },
+        {
+          "text": "But theorising is fun.",
+          "to": "star_name"
+        }
+      ]
+    },
+    "star_name": {
+      "speech": "Something useful. 'That group above the eastern hill' isn't poetic, but you'd find it again.",
+      "choices": [
+        {
+          "text": "You're not much of a poet.",
+          "to": "poetry"
+        },
+        {
+          "text": "Actually, that's clever.",
+          "to": "sky_quiet",
+          "effect": "warm"
+        }
+      ]
+    },
+    "poetry": {
+      "speech": "I never said I was. I just like things with a little mystery.",
+      "choices": [
+        {
+          "text": "What's mysterious about the moon?",
+          "to": "moon"
+        },
+        {
+          "text": "Do you believe all the old stories?",
+          "to": "folklore"
+        }
+      ]
+    },
+    "moon": {
+      "speech": "Sometimes I wonder whether it looks the same to everyone on this island.",
+      "choices": [
+        {
+          "text": "You could just ask people.",
+          "to": "moon_ask"
+        },
+        {
+          "text": "Maybe that's not how the sky works.",
+          "to": "moon_science"
+        }
+      ]
+    },
+    "moon_ask": {
+      "speech": "I could. I suspect the answers would be more interesting than the moon.",
+      "choices": [
+        {
+          "text": "What would you ask them?",
+          "to": "moon_questions"
+        },
+        {
+          "text": "I think I'd just enjoy the view.",
+          "to": "sky_quiet"
+        }
+      ]
+    },
+    "moon_questions": {
+      "speech": "What do they remember? Does the sky remind them of somewhere else?",
+      "choices": [
+        {
+          "text": "That sounds a bit personal.",
+          "to": "moon_private",
+          "effect": "trust"
+        },
+        {
+          "text": "I'd answer if you asked me.",
+          "to": "world"
+        }
+      ]
+    },
+    "moon_private": {
+      "speech": "It is. I'd ask before expecting an answer.",
+      "choices": [
+        {
+          "text": "Good. People deserve privacy.",
+          "to": "sky_quiet",
+          "effect": "trust"
+        },
+        {
+          "text": "I suppose so.",
+          "to": "world"
+        }
+      ]
+    },
+    "moon_science": {
+      "speech": "Maybe not. That's why I'd like to test the idea rather than believe it immediately.",
+      "choices": [
+        {
+          "text": "How would you test it?",
+          "to": "moon_ask",
+          "effect": "trust"
+        },
+        {
+          "text": "Fair enough.",
+          "to": "sky_quiet"
+        }
+      ]
+    },
+    "sky_look": {
+      "speech": "Try it sometime. Not everything has to be useful.",
+      "choices": [
+        {
+          "text": "Maybe tonight.",
+          "to": "sky_quiet"
+        },
+        {
+          "text": "I prefer keeping my eyes on the road.",
+          "to": "world"
+        }
+      ]
+    },
+    "sky_quiet": {
+      "speech": "Silence can be useful too. It gives your thoughts room.",
+      "choices": [
+        {
+          "text": "Not every mystery needs solving.",
+          "to": "stone",
+          "effect": "warm"
+        },
+        {
+          "text": "What else do you wonder about?",
+          "to": "thought"
+        }
+      ]
+    },
+    "magic": {
+      "speech": "There's real magic here, and stories about magic. I'm trying not to confuse them.",
+      "choices": [
+        {
+          "text": "Have you ever seen anything strange?",
+          "to": "magic_sight"
+        },
+        {
+          "text": "Do you believe the folklore?",
+          "to": "folklore"
+        },
+        {
+          "text": "Can you actually use magic?",
+          "to": "magic_self"
+        }
+      ]
+    },
+    "magic_sight": {
+      "speech": "A few odd things. Nothing I'd call proof of some grand secret.",
+      "choices": [
+        {
+          "text": "What would count as proof?",
+          "to": "magic_proof"
+        },
+        {
+          "text": "Maybe the unknown is more fun.",
+          "to": "magic_fun"
+        }
+      ]
+    },
+    "magic_proof": {
+      "speech": "Something repeatable. Something you could show someone else.",
+      "choices": [
+        {
+          "text": "So you think like a scientist?",
+          "to": "magic_science",
+          "effect": "trust"
+        },
+        {
+          "text": "What if it only happens once?",
+          "to": "magic_once"
+        }
+      ]
+    },
+    "magic_science": {
+      "speech": "I try. It's better than believing every rumour because it sounds dramatic.",
+      "choices": [
+        {
+          "text": "That's fair.",
+          "to": "folklore",
+          "effect": "trust"
+        },
+        {
+          "text": "I still enjoy a good story.",
+          "to": "magic_fun"
+        }
+      ]
+    },
+    "magic_once": {
+      "speech": "Then you write down what happened and admit you don't understand it yet.",
+      "choices": [
+        {
+          "text": "That's reasonable.",
+          "to": "magic_science",
+          "effect": "trust"
+        },
+        {
+          "text": "Must be frustrating.",
+          "to": "thought"
+        }
+      ]
+    },
+    "magic_fun": {
+      "speech": "Oh, I like stories. I just like knowing they're stories.",
+      "choices": [
+        {
+          "text": "Tell me one sometime.",
+          "to": "folklore"
+        },
+        {
+          "text": "What about strange objects?",
+          "to": "objects"
+        }
+      ]
+    },
+    "magic_self": {
+      "speech": "Not in any impressive way. I prefer learning how something works first.",
+      "choices": [
+        {
+          "text": "You'd make a cautious mage.",
+          "to": "magic_proof"
+        },
+        {
+          "text": "That makes sense.",
+          "to": "magic_science"
+        }
+      ]
+    },
+    "folklore": {
+      "speech": "Some of the old tales are beautiful. It doesn't make them true or false by itself.",
+      "choices": [
+        {
+          "text": "Do you have a favourite?",
+          "to": "folklore_fav"
+        },
+        {
+          "text": "Could a legend hide a fact?",
+          "to": "folklore_fact",
+          "effect": "trust"
+        }
+      ]
+    },
+    "folklore_fav": {
+      "speech": "I like the stories that make you look at a familiar thing differently.",
+      "choices": [
+        {
+          "text": "Like a stone from a ruined city?",
+          "to": "stone"
+        },
+        {
+          "text": "That's not very specific.",
+          "to": "folklore_fact"
+        }
+      ]
+    },
+    "folklore_fact": {
+      "speech": "Certainly. But we'd still need to find the fact underneath the tale.",
+      "choices": [
+        {
+          "text": "I'd enjoy figuring that out.",
+          "to": "objects",
+          "effect": "trust"
+        },
+        {
+          "text": "Maybe the story is enough.",
+          "to": "folklore_fav"
+        }
+      ]
+    },
+    "objects": {
+      "speech": "I've seen a few curious little things, but I won't call them enchanted without evidence.",
+      "choices": [
+        {
+          "text": "How would you examine one?",
+          "to": "object_examine"
+        },
+        {
+          "text": "Do you collect them?",
+          "to": "object_keep"
+        },
+        {
+          "text": "Could one be dangerous?",
+          "to": "object_danger"
+        }
+      ]
+    },
+    "object_examine": {
+      "speech": "Carefully. Look, compare, write things down. Not everything needs to be poked.",
+      "choices": [
+        {
+          "text": "That sounds safer than guessing.",
+          "to": "object_danger",
+          "effect": "trust"
+        },
+        {
+          "text": "What if it doesn't do anything?",
+          "to": "stone"
+        }
+      ]
+    },
+    "object_keep": {
+      "speech": "Only if there's a reason. I don't need a house full of unidentified rocks.",
+      "choices": [
+        {
+          "text": "That's oddly practical.",
+          "to": "stone",
+          "effect": "warm"
+        },
+        {
+          "text": "So you don't keep souvenirs?",
+          "to": "object_examine"
+        }
+      ]
+    },
+    "object_danger": {
+      "speech": "Possibly. That's a good reason to leave it alone until we know more.",
+      "choices": [
+        {
+          "text": "Thanks. I'll be careful.",
+          "to": "object_examine",
+          "effect": "trust"
+        },
+        {
+          "text": "You're much less reckless than I expected.",
+          "to": "mind"
+        }
+      ]
+    },
+    "world": {
+      "speech": "Sometimes. But the world being strange doesn't mean we should stop treating people as real.",
+      "choices": [
+        {
+          "text": "That's a good way of putting it.",
+          "to": "world_people",
+          "effect": "trust"
+        },
+        {
+          "text": "Do you know why we're here?",
+          "to": "world_reason"
+        },
+        {
+          "text": "What do you mean?",
+          "to": "world_explain"
+        }
+      ]
+    },
+    "world_explain": {
+      "speech": "There are too many things we don't understand. I don't want that to make us careless with each other.",
+      "choices": [
+        {
+          "text": "I understand.",
+          "to": "world_people",
+          "effect": "trust"
+        },
+        {
+          "text": "Let's talk about something simpler.",
+          "to": "sky"
+        }
+      ]
+    },
+    "world_reason": {
+      "speech": "No. Anyone telling you they definitely know is either very lucky or very confident.",
+      "choices": [
+        {
+          "text": "You don't trust confident answers?",
+          "to": "world_confidence"
+        },
+        {
+          "text": "Then what should we do?",
+          "to": "world_people"
+        }
+      ]
+    },
+    "world_confidence": {
+      "speech": "I trust good reasons. Confidence isn't the same thing.",
+      "choices": [
+        {
+          "text": "That makes sense.",
+          "to": "world_people",
+          "effect": "trust"
+        },
+        {
+          "text": "Maybe we'll find out eventually.",
+          "to": "world_people"
+        }
+      ]
+    },
+    "world_people": {
+      "speech": "For now, we can look after each other and keep asking questions. That's enough.",
+      "choices": [
+        {
+          "text": "I like that.",
+          "to": "root",
+          "effect": "warm"
+        },
+        {
+          "text": "I'll keep looking for answers.",
+          "to": "thought",
+          "effect": "trust"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,425 @@
+{
+  "story_id": "town_npc_2",
+  "name": "Elara",
+  "first_greeting": "You're new. Have you explored much yet?",
+  "repeat_greeting": "Found anything interesting?",
+  "trusted_greeting": "Good. I was hoping you'd come back with news.",
+  "cooldown_greeting": "Not now. I'm checking something.",
+  "redirect": "What else have you seen?",
+  "subject_change": "Another question, if you don't mind.",
+  "nodes": {
+    "root": {
+      "speech": "Well? Have you found anything worth talking about?",
+      "choices": [
+        {
+          "text": "I found an odd place outside town.",
+          "to": "ruins"
+        },
+        {
+          "text": "What do you think of this island?",
+          "to": "island"
+        },
+        {
+          "text": "Can you read maps?",
+          "to": "maps"
+        },
+        {
+          "text": "Seen any unusual creatures?",
+          "to": "creatures"
+        },
+        {
+          "text": "Do you ever stay in town?",
+          "to": "rest"
+        }
+      ]
+    },
+    "ruins": {
+      "speech": "An odd place isn't a location. Where exactly?",
+      "choices": [
+        {
+          "text": "Some old stonework in the forest.",
+          "to": "ruins_forest"
+        },
+        {
+          "text": "I didn't note the coordinates.",
+          "to": "ruins_no_map"
+        },
+        {
+          "text": "Could've been ordinary ruins.",
+          "to": "ruins_uncertain"
+        }
+      ]
+    },
+    "ruins_forest": {
+      "speech": "Stonework? That could be worth looking at. What else did you notice?",
+      "choices": [
+        {
+          "text": "It looked abandoned.",
+          "to": "ruins_abandoned"
+        },
+        {
+          "text": "There were signs of people.",
+          "to": "ruins_people"
+        },
+        {
+          "text": "I didn't want to stay long.",
+          "to": "ruins_cautious",
+          "effect": "trust"
+        }
+      ]
+    },
+    "ruins_no_map": {
+      "speech": "Then we're going to have to guess. Next time, write it down.",
+      "choices": [
+        {
+          "text": "I'll bring coordinates next time.",
+          "to": "maps",
+          "effect": "trust"
+        },
+        {
+          "text": "I thought you'd just know.",
+          "to": "ruins_uncertain"
+        }
+      ]
+    },
+    "ruins_uncertain": {
+      "speech": "Good. At least you aren't pretending you know.",
+      "choices": [
+        {
+          "text": "Would you check it out with more information?",
+          "to": "maps"
+        },
+        {
+          "text": "What kind of ruins interest you?",
+          "to": "history"
+        }
+      ]
+    },
+    "ruins_abandoned": {
+      "speech": "That doesn't mean it's safe. Abandoned places have a habit of not staying abandoned.",
+      "choices": [
+        {
+          "text": "I stayed outside.",
+          "to": "ruins_cautious",
+          "effect": "trust"
+        },
+        {
+          "text": "You sound worried.",
+          "to": "ruins_risk"
+        }
+      ]
+    },
+    "ruins_people": {
+      "speech": "Interesting. I wouldn't assume those people are still there, but it's a lead.",
+      "choices": [
+        {
+          "text": "Would you want to investigate?",
+          "to": "ruins_risk"
+        },
+        {
+          "text": "I'll make a note of the location.",
+          "to": "maps",
+          "effect": "trust"
+        }
+      ]
+    },
+    "ruins_cautious": {
+      "speech": "Sensible. Curiosity's useless if you don't survive the trip.",
+      "choices": [
+        {
+          "text": "That's surprisingly cautious of you.",
+          "to": "ruins_risk"
+        },
+        {
+          "text": "I'll tell you if I learn more.",
+          "to": "history",
+          "effect": "trust"
+        }
+      ]
+    },
+    "ruins_risk": {
+      "speech": "I'm curious, not suicidal. There's a difference. Most of the time.",
+      "choices": [
+        {
+          "text": "Glad we agree on that.",
+          "to": "history",
+          "effect": "warm"
+        },
+        {
+          "text": "You'd go anyway, wouldn't you?",
+          "to": "rest"
+        }
+      ]
+    },
+    "history": {
+      "speech": "I want to know who built things, not just how old the stones look.",
+      "choices": [
+        {
+          "text": "What if there aren't any records?",
+          "to": "history_missing"
+        },
+        {
+          "text": "So you care more about the story?",
+          "to": "history_reason"
+        }
+      ]
+    },
+    "history_missing": {
+      "speech": "Then we use what we can find. But guessing isn't the same as knowing.",
+      "choices": [
+        {
+          "text": "I can respect that.",
+          "to": "history_reason",
+          "effect": "trust"
+        },
+        {
+          "text": "Sounds frustrating.",
+          "to": "rest"
+        }
+      ]
+    },
+    "history_reason": {
+      "speech": "Of course. A map shows where something was. History tells you why.",
+      "choices": [
+        {
+          "text": "What about the stories people tell?",
+          "to": "folklore"
+        },
+        {
+          "text": "I'd rather find the next place.",
+          "to": "maps"
+        }
+      ]
+    },
+    "island": {
+      "speech": "It's strange. That's the most honest answer I have.",
+      "choices": [
+        {
+          "text": "Do you know what changed everyone?",
+          "to": "island_curse"
+        },
+        {
+          "text": "What do you make of the northern warning?",
+          "to": "north"
+        },
+        {
+          "text": "Would you want to leave?",
+          "to": "home"
+        }
+      ]
+    },
+    "island_curse": {
+      "speech": "No. I have theories, but that's all they are. I'd rather have proof.",
+      "choices": [
+        {
+          "text": "What evidence would count?",
+          "to": "evidence",
+          "effect": "trust"
+        },
+        {
+          "text": "You don't believe the rumours?",
+          "to": "folklore"
+        }
+      ]
+    },
+    "evidence": {
+      "speech": "Something I can examine twice and still get the same result. That'd be a start.",
+      "choices": [
+        {
+          "text": "That's fair.",
+          "to": "island",
+          "effect": "trust"
+        },
+        {
+          "text": "That sounds slow.",
+          "to": "history_missing"
+        }
+      ]
+    },
+    "north": {
+      "speech": "People warn you away from the frozen waters for a reason. I'm not testing that warning for fun.",
+      "choices": [
+        {
+          "text": "Good. I don't fancy dying either.",
+          "to": "island",
+          "effect": "warm"
+        },
+        {
+          "text": "I thought you liked danger.",
+          "to": "ruins_risk"
+        }
+      ]
+    },
+    "home": {
+      "speech": "I like going somewhere new. That doesn't mean I've decided where home is.",
+      "choices": [
+        {
+          "text": "I hadn't thought of it that way.",
+          "to": "rest",
+          "effect": "trust"
+        },
+        {
+          "text": "Fair enough.",
+          "to": "island"
+        }
+      ]
+    },
+    "folklore": {
+      "speech": "Some of it's nonsense. Some of it's exaggerated. And some might turn out to matter.",
+      "choices": [
+        {
+          "text": "How do you tell which is which?",
+          "to": "evidence"
+        },
+        {
+          "text": "I'd still listen to the stories.",
+          "to": "history_reason"
+        }
+      ]
+    },
+    "maps": {
+      "speech": "Of course. A decent map saves more arguments than a dozen confident guesses.",
+      "choices": [
+        {
+          "text": "What do you mark first?",
+          "to": "map_detail"
+        },
+        {
+          "text": "I usually just wander.",
+          "to": "map_wander"
+        },
+        {
+          "text": "Could you help with a route someday?",
+          "to": "map_route"
+        }
+      ]
+    },
+    "map_detail": {
+      "speech": "Landmarks, then hazards. Otherwise your beautiful map leads someone off a cliff.",
+      "choices": [
+        {
+          "text": "That's actually useful.",
+          "to": "map_route",
+          "effect": "trust"
+        },
+        {
+          "text": "Is that from experience?",
+          "to": "map_wander"
+        }
+      ]
+    },
+    "map_wander": {
+      "speech": "And how often does that work out?",
+      "choices": [
+        {
+          "text": "Not as often as I'd like.",
+          "to": "map_detail"
+        },
+        {
+          "text": "I like finding things by accident.",
+          "to": "map_route"
+        }
+      ]
+    },
+    "map_route": {
+      "speech": "Tell me where you're going first. I can't draw a route to 'somewhere'.",
+      "choices": [
+        {
+          "text": "I'll get the coordinates.",
+          "to": "map_detail",
+          "effect": "trust"
+        },
+        {
+          "text": "You really need everything exact.",
+          "to": "rest"
+        }
+      ]
+    },
+    "creatures": {
+      "speech": "I've heard stories, yes. Most travellers leave out the useful details.",
+      "choices": [
+        {
+          "text": "What details matter?",
+          "to": "creature_details"
+        },
+        {
+          "text": "Do you believe all those stories?",
+          "to": "folklore"
+        },
+        {
+          "text": "You should see one for yourself.",
+          "to": "creature_risk"
+        }
+      ]
+    },
+    "creature_details": {
+      "speech": "Size, behaviour, where it was, whether anyone actually saw it. The basics.",
+      "choices": [
+        {
+          "text": "I'll remember that.",
+          "to": "creatures",
+          "effect": "trust"
+        },
+        {
+          "text": "Sounds like hard work.",
+          "to": "ruins_uncertain"
+        }
+      ]
+    },
+    "creature_risk": {
+      "speech": "Only if I can come back to tell you about it.",
+      "choices": [
+        {
+          "text": "Good answer.",
+          "to": "rest",
+          "effect": "warm"
+        },
+        {
+          "text": "I can understand that.",
+          "to": "creature_details"
+        }
+      ]
+    },
+    "rest": {
+      "speech": "I do rest. Usually when someone makes me.",
+      "choices": [
+        {
+          "text": "Even explorers need a break.",
+          "to": "rest_yes",
+          "effect": "warm"
+        },
+        {
+          "text": "I thought you never stopped.",
+          "to": "rest_no"
+        }
+      ]
+    },
+    "rest_yes": {
+      "speech": "Don't tell everyone I agreed with you.",
+      "choices": [
+        {
+          "text": "Your secret's safe.",
+          "to": "root",
+          "effect": "trust"
+        },
+        {
+          "text": "Back to maps, then?",
+          "to": "maps"
+        }
+      ]
+    },
+    "rest_no": {
+      "speech": "Then you're not paying attention.",
+      "choices": [
+        {
+          "text": "Fair enough.",
+          "to": "root"
+        },
+        {
+          "text": "Want to talk about the island?",
+          "to": "island"
+        }
+      ]
+    }
+  }
+}

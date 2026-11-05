@@ -1,0 +1,705 @@
+{
+  "story_id": "mason",
+  "name": "Kai",
+  "first_greeting": "Oh. You're new.",
+  "repeat_greeting": "Yeah?",
+  "trusted_greeting": "Oh, hey.",
+  "cooldown_greeting": "Cba talking right now.",
+  "redirect": "What else?",
+  "subject_change": "Something else.",
+  "nodes": {
+    "root": {
+      "speech": "Yeah? What did you want?",
+      "choices": [
+        {
+          "text": "Who's that Choso character you keep mentioning?",
+          "to": "choso"
+        },
+        {
+          "text": "Seen any anime worth watching?",
+          "to": "anime"
+        },
+        {
+          "text": "What have you been listening to?",
+          "to": "music"
+        },
+        {
+          "text": "What games did you play back home?",
+          "to": "games"
+        },
+        {
+          "text": "How are you finding this place?",
+          "to": "town"
+        },
+        {
+          "text": "You told me about Choso before.",
+          "to": "choso_why",
+          "when": "flag:knows_choso"
+        }
+      ]
+    },
+    "choso": {
+      "speech": "Choso? He's my favourite. Obviously.",
+      "choices": [
+        {
+          "text": "I've not seen Jujutsu Kaisen. Who is he?",
+          "to": "choso_explain"
+        },
+        {
+          "text": "You talk about him like you're married.",
+          "to": "choso_husband"
+        },
+        {
+          "text": "I know Gojo. What do you think of him?",
+          "to": "jjk_others"
+        },
+        {
+          "text": "I think Choso's overrated.",
+          "to": "choso_insult",
+          "effect": "kai_choso"
+        }
+      ]
+    },
+    "choso_explain": {
+      "speech": "He's in Jujutsu Kaisen. I could tell you a lot, but I'd probably spoil half of it.",
+      "choices": [
+        {
+          "text": "Keep it spoiler-free, then.",
+          "to": "spoiler_free",
+          "effect": "trust"
+        },
+        {
+          "text": "What makes you like him so much?",
+          "to": "choso_why",
+          "effect": "trust"
+        },
+        {
+          "text": "I've already heard enough.",
+          "to": "choso_end"
+        }
+      ],
+      "remember": "knows_choso"
+    },
+    "spoiler_free": {
+      "speech": "He's complicated and he cares about his family. That's enough to start with.",
+      "choices": [
+        {
+          "text": "Fair. I'll watch it myself.",
+          "to": "choso_good",
+          "effect": "warm"
+        },
+        {
+          "text": "Is Gojo your favourite too?",
+          "to": "jjk_others"
+        },
+        {
+          "text": "You can tell me a little more.",
+          "to": "choso_why"
+        }
+      ]
+    },
+    "choso_why": {
+      "speech": "His story's good. And I just like him, alright? I don't need a full argument for it.",
+      "choices": [
+        {
+          "text": "You don't have to justify it.",
+          "to": "choso_good",
+          "effect": "trust"
+        },
+        {
+          "text": "Okay. What about Megumi?",
+          "to": "jjk_others"
+        },
+        {
+          "text": "That's a bit dramatic.",
+          "to": "choso_end"
+        }
+      ]
+    },
+    "choso_husband": {
+      "speech": "He is my husband. Next question.",
+      "choices": [
+        {
+          "text": "Fair enough. I won't argue.",
+          "to": "choso_good",
+          "effect": "warm"
+        },
+        {
+          "text": "What about Gojo and Megumi?",
+          "to": "jjk_others"
+        },
+        {
+          "text": "He's not real, though.",
+          "to": "choso_insult",
+          "effect": "kai_choso"
+        }
+      ]
+    },
+    "choso_insult": {
+      "speech": "Right.",
+      "choices": [
+        {
+          "text": "I wasn't trying to upset you.",
+          "to": "apology",
+          "effect": "repair"
+        },
+        {
+          "text": "I'm just saying what I think.",
+          "to": "cold_end"
+        }
+      ]
+    },
+    "choso_end": {
+      "speech": "Okay. You asked.",
+      "choices": [
+        {
+          "text": "What else have you been watching?",
+          "to": "anime"
+        },
+        {
+          "text": "Got any music recommendations?",
+          "to": "music"
+        }
+      ]
+    },
+    "choso_good": {
+      "speech": "Good. You get it.",
+      "choices": [
+        {
+          "text": "Tell me about the other JJK characters.",
+          "to": "jjk_others"
+        },
+        {
+          "text": "Any other series you'd recommend?",
+          "to": "anime"
+        }
+      ]
+    },
+    "jjk_others": {
+      "speech": "Gojo's good. Megumi too. They're not Choso, though.",
+      "choices": [
+        {
+          "text": "What do you like about Megumi?",
+          "to": "megumi",
+          "effect": "trust"
+        },
+        {
+          "text": "I'll try the show sometime.",
+          "to": "choso_good"
+        },
+        {
+          "text": "Have you seen anything besides JJK?",
+          "to": "anime"
+        }
+      ]
+    },
+    "megumi": {
+      "speech": "He's interesting. There's more going on with him than he lets on.",
+      "choices": [
+        {
+          "text": "That sounds like a good character.",
+          "to": "choso_good",
+          "effect": "warm"
+        },
+        {
+          "text": "No spoilers. I'll watch it.",
+          "to": "spoiler_free"
+        }
+      ]
+    },
+    "anime": {
+      "speech": "SK8 the Infinity, Banana Fish, Blue Lock, Sasaki and Miyano. Depends what you want.",
+      "choices": [
+        {
+          "text": "What's good about SK8?",
+          "to": "sk8"
+        },
+        {
+          "text": "Tell me about Banana Fish.",
+          "to": "banana"
+        },
+        {
+          "text": "What's Sasaki and Miyano like?",
+          "to": "sasaki"
+        },
+        {
+          "text": "Who's your favourite in Blue Lock?",
+          "to": "blue_lock"
+        }
+      ]
+    },
+    "sk8": {
+      "speech": "Reki and Langa. I like both of them. The skating's good too.",
+      "choices": [
+        {
+          "text": "What do you like about them?",
+          "to": "sk8_more",
+          "effect": "trust"
+        },
+        {
+          "text": "That actually sounds fun.",
+          "to": "anime_good",
+          "effect": "warm"
+        },
+        {
+          "text": "Skating anime sounds stupid.",
+          "to": "anime_insult",
+          "effect": "kai_other"
+        }
+      ]
+    },
+    "sk8_more": {
+      "speech": "They're different, but they work well together. That's kind of the point.",
+      "choices": [
+        {
+          "text": "I might give it a go.",
+          "to": "anime_good"
+        },
+        {
+          "text": "What about Banana Fish?",
+          "to": "banana"
+        }
+      ]
+    },
+    "banana": {
+      "speech": "Ash is my favourite. It's not exactly a cheerful watch.",
+      "choices": [
+        {
+          "text": "I'd rather know if it's a heavy story.",
+          "to": "banana_more",
+          "effect": "trust"
+        },
+        {
+          "text": "I don't mind something serious.",
+          "to": "anime_good"
+        },
+        {
+          "text": "What about something lighter?",
+          "to": "sasaki"
+        }
+      ]
+    },
+    "banana_more": {
+      "speech": "Yeah, it's heavy. I'm not spoiling it, though.",
+      "choices": [
+        {
+          "text": "Thanks for the warning.",
+          "to": "anime_good",
+          "effect": "warm"
+        },
+        {
+          "text": "Sasaki and Miyano sounds different.",
+          "to": "sasaki"
+        }
+      ]
+    },
+    "sasaki": {
+      "speech": "I like Sasaki. It's a nice change from everything being a fight.",
+      "choices": [
+        {
+          "text": "Sometimes a quieter story is better.",
+          "to": "anime_good",
+          "effect": "warm"
+        },
+        {
+          "text": "Anything with more action?",
+          "to": "sk8"
+        }
+      ]
+    },
+    "blue_lock": {
+      "speech": "I like Blue Lock. Don't ask me to pick a favourite character yet.",
+      "choices": [
+        {
+          "text": "Fair. I won't make you choose.",
+          "to": "anime_good",
+          "effect": "trust"
+        },
+        {
+          "text": "What's it about?",
+          "to": "blue_more"
+        }
+      ]
+    },
+    "blue_more": {
+      "speech": "Football, competition, and everyone taking it way too seriously. It's entertaining.",
+      "choices": [
+        {
+          "text": "Might be my thing.",
+          "to": "anime_good"
+        },
+        {
+          "text": "I'd rather hear about games.",
+          "to": "games"
+        }
+      ]
+    },
+    "anime_good": {
+      "speech": "Well, you've got some options now.",
+      "choices": [
+        {
+          "text": "Anything you're listening to lately?",
+          "to": "music"
+        },
+        {
+          "text": "Do you play anything?",
+          "to": "games"
+        }
+      ]
+    },
+    "anime_insult": {
+      "speech": "I didn't ask you to like it.",
+      "choices": [
+        {
+          "text": "Fair. That was rude.",
+          "to": "apology",
+          "effect": "repair"
+        },
+        {
+          "text": "Fine. Whatever.",
+          "to": "cold_end"
+        }
+      ]
+    },
+    "music": {
+      "speech": "EPIC: The Musical. Mamma Mia!. Quite a few other things. Depends on my mood.",
+      "choices": [
+        {
+          "text": "What's the appeal of EPIC?",
+          "to": "epic"
+        },
+        {
+          "text": "You like Mamma Mia! too?",
+          "to": "mamma"
+        },
+        {
+          "text": "Do you listen to music when you're annoyed?",
+          "to": "music_mood",
+          "effect": "trust"
+        }
+      ]
+    },
+    "epic": {
+      "speech": "Greek mythology, but done as a musical. I like the story and the songs.",
+      "choices": [
+        {
+          "text": "Are you interested in mythology in general?",
+          "to": "myth"
+        },
+        {
+          "text": "I'll listen to it sometime.",
+          "to": "music_good",
+          "effect": "warm"
+        }
+      ]
+    },
+    "mamma": {
+      "speech": "Yeah. It's fun. Not everything needs a complicated explanation.",
+      "choices": [
+        {
+          "text": "Fair point.",
+          "to": "music_good"
+        },
+        {
+          "text": "What's your favourite kind of story?",
+          "to": "anime"
+        }
+      ]
+    },
+    "music_mood": {
+      "speech": "Sometimes. It helps when I don't wanna deal with people.",
+      "choices": [
+        {
+          "text": "I'll leave you to it when you need space.",
+          "to": "music_good",
+          "effect": "trust"
+        },
+        {
+          "text": "Doesn't everyone do that?",
+          "to": "music_good"
+        }
+      ]
+    },
+    "music_good": {
+      "speech": "Anyway. You wanted to know.",
+      "choices": [
+        {
+          "text": "What games do you play?",
+          "to": "games"
+        },
+        {
+          "text": "What else interests you?",
+          "to": "foxes"
+        }
+      ]
+    },
+    "games": {
+      "speech": "HADES, Fortnite, Roblox. I've played a lot of things.",
+      "choices": [
+        {
+          "text": "HADES? Is that the Greek mythology one?",
+          "to": "hades"
+        },
+        {
+          "text": "Do you miss gaming with people?",
+          "to": "game_friends",
+          "effect": "trust"
+        },
+        {
+          "text": "What about Fortnite?",
+          "to": "fortnite"
+        }
+      ]
+    },
+    "hades": {
+      "speech": "Yeah. Good game. And I already liked the mythology before I played it.",
+      "choices": [
+        {
+          "text": "Which myths are your favourites?",
+          "to": "myth"
+        },
+        {
+          "text": "Could you explain one sometime?",
+          "to": "myth",
+          "effect": "trust"
+        }
+      ]
+    },
+    "fortnite": {
+      "speech": "It's fun with the right people. That's most of it.",
+      "choices": [
+        {
+          "text": "You'd rather play with friends?",
+          "to": "game_friends",
+          "effect": "trust"
+        },
+        {
+          "text": "Fair enough.",
+          "to": "game_good"
+        }
+      ]
+    },
+    "game_friends": {
+      "speech": "It's easier talking to people in games sometimes. You don't have to make it weird.",
+      "choices": [
+        {
+          "text": "I get that. No pressure.",
+          "to": "game_good",
+          "effect": "trust"
+        },
+        {
+          "text": "Want to talk about something else?",
+          "to": "game_good"
+        }
+      ]
+    },
+    "myth": {
+      "speech": "There's a lot more to Greek mythology than the same three gods everyone mentions.",
+      "choices": [
+        {
+          "text": "What about the underworld stories?",
+          "to": "myth_underworld",
+          "effect": "trust"
+        },
+        {
+          "text": "Could you recommend somewhere to start?",
+          "to": "myth_begin"
+        }
+      ]
+    },
+    "myth_underworld": {
+      "speech": "The stories about Hades get misrepresented a lot. Don't just go off one game.",
+      "choices": [
+        {
+          "text": "Alright. I'll actually read about it.",
+          "to": "game_good",
+          "effect": "warm"
+        },
+        {
+          "text": "So the game isn't entirely accurate?",
+          "to": "myth_begin"
+        }
+      ]
+    },
+    "myth_begin": {
+      "speech": "Pick one story and go from there. Otherwise you'll never remember who's related to who.",
+      "choices": [
+        {
+          "text": "Noted.",
+          "to": "game_good"
+        },
+        {
+          "text": "And you still like HADES?",
+          "to": "hades"
+        }
+      ]
+    },
+    "game_good": {
+      "speech": "Yeah.",
+      "choices": [
+        {
+          "text": "Any other interests?",
+          "to": "foxes"
+        },
+        {
+          "text": "How's town been?",
+          "to": "town"
+        }
+      ]
+    },
+    "foxes": {
+      "speech": "Foxes are good. And Lucifer from Hazbin Hotel is another favourite of mine.",
+      "choices": [
+        {
+          "text": "Why foxes?",
+          "to": "fox_more"
+        },
+        {
+          "text": "Lucifer? What do you like about him?",
+          "to": "lucifer",
+          "effect": "trust"
+        },
+        {
+          "text": "You have quite a few interests.",
+          "to": "interest_reply"
+        }
+      ]
+    },
+    "fox_more": {
+      "speech": "Look at them. That should explain it.",
+      "choices": [
+        {
+          "text": "Fair enough.",
+          "to": "interest_reply",
+          "effect": "warm"
+        },
+        {
+          "text": "What about Lucifer?",
+          "to": "lucifer"
+        }
+      ]
+    },
+    "lucifer": {
+      "speech": "He's a good character. Don't start ranking him against Choso.",
+      "choices": [
+        {
+          "text": "Wouldn't dream of it.",
+          "to": "interest_reply"
+        },
+        {
+          "text": "I haven't watched Hazbin Hotel.",
+          "to": "interest_reply"
+        }
+      ]
+    },
+    "interest_reply": {
+      "speech": "Yeah, well. I like what I like.",
+      "choices": [
+        {
+          "text": "What's it been like arriving here?",
+          "to": "town"
+        },
+        {
+          "text": "Tell me more about anime.",
+          "to": "anime"
+        }
+      ]
+    },
+    "town": {
+      "speech": "Still getting used to it. At least I know I'm not the only one who ended up here.",
+      "choices": [
+        {
+          "text": "You came from another world too?",
+          "to": "arrival"
+        },
+        {
+          "text": "Do you like living here?",
+          "to": "town_life"
+        },
+        {
+          "text": "Do you miss anything from before?",
+          "to": "miss_home",
+          "effect": "trust"
+        }
+      ],
+      "remember": "talked_arrival"
+    },
+    "arrival": {
+      "speech": "Yeah. Doesn't mean I knew you back there. I've never met you before.",
+      "choices": [
+        {
+          "text": "I wasn't assuming you did.",
+          "to": "town_life",
+          "effect": "trust"
+        },
+        {
+          "text": "Fair enough. Must be strange.",
+          "to": "miss_home"
+        }
+      ]
+    },
+    "town_life": {
+      "speech": "It's alright. Some days I just want people to leave me alone.",
+      "choices": [
+        {
+          "text": "I'll remember that.",
+          "to": "town_end",
+          "effect": "trust"
+        },
+        {
+          "text": "I can understand that.",
+          "to": "town_end"
+        }
+      ]
+    },
+    "miss_home": {
+      "speech": "Music, games. Normal stuff. Can we not make this a whole thing?",
+      "choices": [
+        {
+          "text": "Sure. We can leave it there.",
+          "to": "town_end",
+          "effect": "trust"
+        },
+        {
+          "text": "Sorry for bringing it up.",
+          "to": "apology"
+        }
+      ]
+    },
+    "town_end": {
+      "speech": "Thanks.",
+      "choices": [
+        {
+          "text": "Want to talk about something lighter?",
+          "to": "games"
+        },
+        {
+          "text": "Maybe another time.",
+          "to": "root"
+        }
+      ]
+    },
+    "apology": {
+      "speech": "Alright. Just don't keep doing it.",
+      "choices": [
+        {
+          "text": "Understood.",
+          "to": "root"
+        },
+        {
+          "text": "Can we start over?",
+          "to": "root"
+        }
+      ]
+    },
+    "cold_end": {
+      "speech": "Okay.",
+      "choices": [
+        {
+          "text": "Can we change the subject?",
+          "to": "root"
+        }
+      ]
+    }
+  }
+}

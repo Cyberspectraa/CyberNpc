@@ -1,0 +1,666 @@
+{
+  "story_id": "town_npc_1",
+  "name": "Katie",
+  "first_greeting": "Oh, you're the new person. Hi.",
+  "repeat_greeting": "Oh, hi again.",
+  "trusted_greeting": "There you are! What've you been doing?",
+  "cooldown_greeting": "Not now. I need a minute.",
+  "redirect": "Anyway, what else?",
+  "subject_change": "Can I ask something else?",
+  "nodes": {
+    "root": {
+      "speech": "Oh, you're here. What are you doing?",
+      "choices": [
+        {
+          "text": "What are you up to?",
+          "to": "current"
+        },
+        {
+          "text": "You said you were making something?",
+          "to": "crochet"
+        },
+        {
+          "text": "Seen any good films lately?",
+          "to": "disney"
+        },
+        {
+          "text": "Why, have you got plans for me?",
+          "to": "plans"
+        },
+        {
+          "text": "Anything strange happening around town?",
+          "to": "town"
+        },
+        {
+          "text": "How's that crochet project going?",
+          "to": "project",
+          "when": "flag:katie_project"
+        },
+        {
+          "text": "About the yarn I'm crafting...",
+          "to": "yarn_status",
+          "when": "quest_active"
+        },
+        {
+          "text": "How did that yarn work out?",
+          "to": "yarn_done",
+          "when": "quest_completed"
+        }
+      ]
+    },
+    "current": {
+      "speech": "Trying to decide what to do next. You busy?",
+      "choices": [
+        {
+          "text": "Not really. What've you got in mind?",
+          "to": "plans"
+        },
+        {
+          "text": "I've got stuff to do, actually.",
+          "to": "busy"
+        },
+        {
+          "text": "Depends. Are you going to tell me?",
+          "to": "plans_tease"
+        }
+      ]
+    },
+    "plans": {
+      "speech": "I might go out and do something. You're coming, obviously.",
+      "choices": [
+        {
+          "text": "You haven't said where we're going.",
+          "to": "plans_where"
+        },
+        {
+          "text": "I can come for a bit.",
+          "to": "plans_yes",
+          "effect": "warm"
+        },
+        {
+          "text": "Not today. Ask me later.",
+          "to": "plans_no"
+        }
+      ]
+    },
+    "plans_tease": {
+      "speech": "Maybe. Maybe I just wanted to know if you're free.",
+      "choices": [
+        {
+          "text": "That's not an answer.",
+          "to": "plans_where"
+        },
+        {
+          "text": "Alright, tell me what you need.",
+          "to": "plans"
+        },
+        {
+          "text": "I'm busy. Sorry.",
+          "to": "plans_no"
+        }
+      ]
+    },
+    "plans_where": {
+      "speech": "Haven't decided. That's part of the fun.",
+      "choices": [
+        {
+          "text": "At least pick a direction first.",
+          "to": "plans_direction"
+        },
+        {
+          "text": "You can't just drag me around all day.",
+          "to": "plans_limits",
+          "effect": "trust"
+        },
+        {
+          "text": "Fine, but no getting us lost.",
+          "to": "plans_yes"
+        }
+      ]
+    },
+    "plans_direction": {
+      "speech": "Right, fine. Somewhere that isn't here. Happy?",
+      "choices": [
+        {
+          "text": "A little more than before.",
+          "to": "plans_yes"
+        },
+        {
+          "text": "We'll do it another day.",
+          "to": "plans_no"
+        }
+      ]
+    },
+    "plans_limits": {
+      "speech": "Okay, okay. I can ask instead of deciding for you.",
+      "choices": [
+        {
+          "text": "Thanks. I do want to hang out sometimes.",
+          "to": "plans_yes",
+          "effect": "trust"
+        },
+        {
+          "text": "Not today, though.",
+          "to": "plans_no"
+        }
+      ]
+    },
+    "plans_yes": {
+      "speech": "Good. I knew you'd say yes. Eventually.",
+      "choices": [
+        {
+          "text": "Still not sure where we're going.",
+          "to": "plans_where"
+        },
+        {
+          "text": "Got any other news?",
+          "to": "town"
+        }
+      ]
+    },
+    "plans_no": {
+      "speech": "Ugh, fine. I'll ask another time.",
+      "choices": [
+        {
+          "text": "Please do.",
+          "to": "busy",
+          "effect": "trust"
+        },
+        {
+          "text": "You sound very disappointed.",
+          "to": "plans_tease"
+        }
+      ]
+    },
+    "busy": {
+      "speech": "Okay. I'll live. Probably.",
+      "choices": [
+        {
+          "text": "What's that supposed to mean?",
+          "to": "busy_joke"
+        },
+        {
+          "text": "Thanks for understanding.",
+          "to": "root"
+        }
+      ]
+    },
+    "busy_joke": {
+      "speech": "I'm joking. Mostly.",
+      "choices": [
+        {
+          "text": "You had me worried for a second.",
+          "to": "root"
+        },
+        {
+          "text": "You're impossible.",
+          "to": "root"
+        }
+      ]
+    },
+    "crochet": {
+      "speech": "Yeah. I've been crocheting something, but it's taking forever.",
+      "choices": [
+        {
+          "text": "What are you making?",
+          "to": "project"
+        },
+        {
+          "text": "How did you get into it?",
+          "to": "crochet_why",
+          "effect": "trust"
+        },
+        {
+          "text": "I don't think I'd have the patience.",
+          "to": "crochet_patience"
+        },
+        {
+          "text": "That sounds like a waste of time.",
+          "to": "crochet_rude",
+          "effect": "rude"
+        }
+      ]
+    },
+    "project": {
+      "speech": "Something I've been working on. I'm not showing you the whole thing unfinished.",
+      "choices": [
+        {
+          "text": "Fair, I won't spoil the surprise.",
+          "to": "project_private",
+          "effect": "trust"
+        },
+        {
+          "text": "Are you short of supplies?",
+          "to": "supply_question"
+        },
+        {
+          "text": "You're being mysterious about yarn now?",
+          "to": "project_tease"
+        }
+      ],
+      "remember": "katie_project"
+    },
+    "project_private": {
+      "speech": "Thank you. Finally, someone with manners.",
+      "choices": [
+        {
+          "text": "Let me know if you need a hand.",
+          "to": "supply_question",
+          "effect": "trust"
+        },
+        {
+          "text": "So what's been hard about making it?",
+          "to": "crochet_patience"
+        }
+      ]
+    },
+    "project_tease": {
+      "speech": "Yes. Deal with it. You'll see it when it's done.",
+      "choices": [
+        {
+          "text": "Alright. Need any help finishing?",
+          "to": "supply_question"
+        },
+        {
+          "text": "I'll stop asking.",
+          "to": "project_private"
+        }
+      ]
+    },
+    "crochet_why": {
+      "speech": "I like making things with my hands. It's nice when the end result looks how I wanted.",
+      "choices": [
+        {
+          "text": "It must feel good finishing something.",
+          "to": "crochet_patience",
+          "effect": "warm"
+        },
+        {
+          "text": "What's the project this time?",
+          "to": "project"
+        }
+      ]
+    },
+    "crochet_patience": {
+      "speech": "Sometimes I don't either. That's when I put it down and come back later.",
+      "choices": [
+        {
+          "text": "That's probably sensible.",
+          "to": "project",
+          "effect": "trust"
+        },
+        {
+          "text": "So are you nearly finished?",
+          "to": "project"
+        }
+      ]
+    },
+    "crochet_rude": {
+      "speech": "Well, I didn't make it for you, did I?",
+      "choices": [
+        {
+          "text": "No, fair point. Sorry.",
+          "to": "apology",
+          "effect": "repair"
+        },
+        {
+          "text": "I was only joking.",
+          "to": "rude_followup"
+        }
+      ]
+    },
+    "rude_followup": {
+      "speech": "Okay, and? It wasn't a good joke.",
+      "choices": [
+        {
+          "text": "Alright. I get it.",
+          "to": "apology",
+          "effect": "repair"
+        },
+        {
+          "text": "Let's talk about something else.",
+          "to": "root"
+        }
+      ]
+    },
+    "supply_question": {
+      "speech": "Actually, I could do with more yarn. I'm running low.",
+      "choices": [
+        {
+          "text": "How much do you need?",
+          "to": "yarn_offer",
+          "when": "quest_available"
+        },
+        {
+          "text": "Hope you can get some soon.",
+          "to": "project_private",
+          "when": "quest_available"
+        },
+        {
+          "text": "Wasn't I making some for you?",
+          "to": "yarn_status",
+          "when": "quest_active"
+        },
+        {
+          "text": "How'd that project turn out?",
+          "to": "yarn_done",
+          "when": "quest_completed"
+        }
+      ]
+    },
+    "yarn_offer": {
+      "speech": "A stack. Sixty-four white yarn should be enough. Could you craft it for me?",
+      "choices": [
+        {
+          "text": "Yeah, I'll craft the sixty-four.",
+          "to": "yarn_accepted",
+          "when": "quest_available",
+          "action": "quest_start"
+        },
+        {
+          "text": "That might take a while. What do I need?",
+          "to": "yarn_recipe",
+          "when": "quest_available"
+        },
+        {
+          "text": "Can't promise anything yet.",
+          "to": "yarn_decline"
+        }
+      ]
+    },
+    "yarn_recipe": {
+      "speech": "String. That's the main thing. I've got the idea; you just need to make it.",
+      "choices": [
+        {
+          "text": "Alright, I'll make the sixty-four.",
+          "to": "yarn_accepted",
+          "when": "quest_available",
+          "action": "quest_start"
+        },
+        {
+          "text": "Let me think about it.",
+          "to": "yarn_decline"
+        }
+      ]
+    },
+    "yarn_accepted": {
+      "speech": "Great. I actually appreciate it. Don't lose count.",
+      "choices": [
+        {
+          "text": "I'll check my quest journal.",
+          "to": "root"
+        },
+        {
+          "text": "Where do I bring it?",
+          "to": "yarn_return"
+        }
+      ]
+    },
+    "yarn_return": {
+      "speech": "Back here, obviously. And yes, I mean all sixty-four.",
+      "choices": [
+        {
+          "text": "Got it.",
+          "to": "root"
+        }
+      ]
+    },
+    "yarn_decline": {
+      "speech": "Fine, no pressure. Ask me again if you change your mind.",
+      "choices": [
+        {
+          "text": "Maybe later.",
+          "to": "root"
+        },
+        {
+          "text": "Actually, what did you need?",
+          "to": "yarn_offer",
+          "when": "quest_available"
+        }
+      ]
+    },
+    "yarn_status": {
+      "speech": "How's the yarn going? I need sixty-four crafted, remember.",
+      "choices": [
+        {
+          "text": "I'm still working on it.",
+          "to": "yarn_wait"
+        },
+        {
+          "text": "I think I've made enough.",
+          "to": "yarn_turnin",
+          "action": "quest_finish"
+        },
+        {
+          "text": "Remind me what to craft.",
+          "to": "yarn_recipe_help"
+        }
+      ]
+    },
+    "yarn_recipe_help": {
+      "speech": "White yarn. String. Sixty-four. That's it.",
+      "choices": [
+        {
+          "text": "Alright. Back to it.",
+          "to": "root"
+        },
+        {
+          "text": "I've finished crafting. Here.",
+          "to": "yarn_turnin",
+          "action": "quest_finish"
+        }
+      ]
+    },
+    "yarn_wait": {
+      "speech": "Okay. Don't rush and make a mess of it.",
+      "choices": [
+        {
+          "text": "I'll be back.",
+          "to": "root"
+        },
+        {
+          "text": "I'll check my progress first.",
+          "to": "root"
+        }
+      ]
+    },
+    "yarn_turnin": {
+      "speech": "If the journal says you've crafted all sixty-four, I'll take that as done.",
+      "choices": [
+        {
+          "text": "Anything else?",
+          "to": "root"
+        }
+      ]
+    },
+    "yarn_done": {
+      "speech": "I can finally get on with the project without worrying about yarn. Thanks.",
+      "choices": [
+        {
+          "text": "I'd like to see it once it's done.",
+          "to": "project_private",
+          "effect": "warm"
+        },
+        {
+          "text": "What else have you been doing?",
+          "to": "current"
+        }
+      ]
+    },
+    "disney": {
+      "speech": "I do love Disney films. Don't ask me to pick just one favourite on the spot.",
+      "choices": [
+        {
+          "text": "What's so good about them for you?",
+          "to": "disney_why",
+          "effect": "trust"
+        },
+        {
+          "text": "I like some of them too.",
+          "to": "disney_agree"
+        },
+        {
+          "text": "Not really my thing.",
+          "to": "disney_diff"
+        },
+        {
+          "text": "They're all rubbish.",
+          "to": "disney_rude",
+          "effect": "rude"
+        }
+      ]
+    },
+    "disney_why": {
+      "speech": "The stories, the music, the whole thing. Sometimes you just want a film you enjoy.",
+      "choices": [
+        {
+          "text": "Do you have a favourite song?",
+          "to": "disney_songs"
+        },
+        {
+          "text": "Fair. It's nice to have that.",
+          "to": "disney_agree",
+          "effect": "warm"
+        }
+      ]
+    },
+    "disney_songs": {
+      "speech": "Depends on the film. Don't make me choose without giving me time to think.",
+      "choices": [
+        {
+          "text": "Alright, I'll ask another day.",
+          "to": "disney_agree",
+          "effect": "trust"
+        },
+        {
+          "text": "You're avoiding the question.",
+          "to": "disney_tease"
+        }
+      ]
+    },
+    "disney_tease": {
+      "speech": "I am. Very successfully, actually.",
+      "choices": [
+        {
+          "text": "I'll accept that answer.",
+          "to": "disney_agree"
+        },
+        {
+          "text": "What else do you like doing?",
+          "to": "current"
+        }
+      ]
+    },
+    "disney_agree": {
+      "speech": "See? There's something we agree on.",
+      "choices": [
+        {
+          "text": "What've you been up to today?",
+          "to": "current"
+        },
+        {
+          "text": "Speaking of plans...",
+          "to": "plans"
+        }
+      ]
+    },
+    "disney_diff": {
+      "speech": "Fair. I'm not making you watch one.",
+      "choices": [
+        {
+          "text": "Thanks for not forcing it.",
+          "to": "disney_agree"
+        },
+        {
+          "text": "So what do you do round here?",
+          "to": "town"
+        }
+      ]
+    },
+    "disney_rude": {
+      "speech": "Okay? Nobody made you watch them.",
+      "choices": [
+        {
+          "text": "Sorry, that came out wrong.",
+          "to": "apology",
+          "effect": "repair"
+        },
+        {
+          "text": "It's my opinion.",
+          "to": "rude_followup"
+        }
+      ]
+    },
+    "town": {
+      "speech": "Some days it's interesting. Other days I have to find something to do myself.",
+      "choices": [
+        {
+          "text": "Like dragging someone out of their house?",
+          "to": "plans_tease"
+        },
+        {
+          "text": "Anything happened today?",
+          "to": "town_news"
+        },
+        {
+          "text": "How are you settling in?",
+          "to": "settling",
+          "effect": "trust"
+        }
+      ]
+    },
+    "town_news": {
+      "speech": "Nothing worth starting a rumour about. Yet.",
+      "choices": [
+        {
+          "text": "Maybe that's a good thing.",
+          "to": "settling"
+        },
+        {
+          "text": "You sound disappointed.",
+          "to": "town_fun"
+        }
+      ]
+    },
+    "town_fun": {
+      "speech": "I just like when something's happening. Not something terrible. Just something.",
+      "choices": [
+        {
+          "text": "We could go for a walk.",
+          "to": "plans_yes",
+          "effect": "warm"
+        },
+        {
+          "text": "Quiet days are good too.",
+          "to": "settling"
+        }
+      ]
+    },
+    "settling": {
+      "speech": "I'm doing alright. I'm not going to sit around waiting to be entertained.",
+      "choices": [
+        {
+          "text": "I figured that much.",
+          "to": "town_fun"
+        },
+        {
+          "text": "Want some company?",
+          "to": "plans"
+        }
+      ]
+    },
+    "apology": {
+      "speech": "Right. We're good. Just don't be daft about it.",
+      "choices": [
+        {
+          "text": "Deal.",
+          "to": "root"
+        },
+        {
+          "text": "So, where were we?",
+          "to": "current"
+        }
+      ]
+    }
+  }
+}

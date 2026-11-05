@@ -2,123 +2,166 @@ package com.cyberspectraa.cybernpc.dialogue;
 
 import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.mojang.logging.LogUtils;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.server.packs.resources.SimpleJsonResourceReloadListener;
+import net.minecraft.util.profiling.ProfilerFiller;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.entity.ai.util.DefaultRandomPos;
+import net.minecraftforge.event.AddReloadListenerEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
+import org.slf4j.Logger;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
- * Lightweight, event-driven conversations for the seven authored Town NPCs.
- * Story IDs are never renamed: "mason" stays the persisted identity of Kai.
- * No dialogue, relationship or mood work runs in an entity tick.
+ * Server-authoritative, data-driven branching dialogue for the seven Town NPCs.
+ *
+ * Data lives in data/<namespace>/town_dialogue/*.json and reloads with /reload.
+ * Only the selected line / transition is evaluated, never an entity tick.
+ * All state remains per-player and per stable story ID. "mason" is still Kai's ID.
  */
-@Mod.EventBusSubscriber(modid = CyberNpc.MOD_ID)
+@Mod.EventBusSubscriber(modid = CyberNpc.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public final class TownCharacterDialogue {
+    private static final Logger LOGGER = LogUtils.getLogger();
     private static final String DATA_KEY = "CyberNpcTownCharacters";
     private static final ResourceLocation KATIE_QUEST =
             new ResourceLocation("cyberquest", "katie_yarn");
+    private static volatile Map<String, Script> scripts = Map.of();
+    private static final java.util.Set<String> KNOWN_IDS = java.util.Set.of(
+            "mason", "town_npc_1", "town_npc_2", "town_npc_3",
+            "town_npc_4", "town_npc_5", "town_npc_6");
 
     public record Transition(String page, String speech) {}
-    private record Topic(String name, String introduction, String detail) {}
-    private record Profile(String name, String hello, String returnHello,
-                           String mood, String town, String chat, List<Topic> topics) {}
-
-    private static Topic topic(String name, String intro, String detail) {
-        return new Topic(name, intro, detail);
-    }
-
-    private static final Map<String, Profile> PROFILES = Map.of(
-        "mason", new Profile("Kai", "Oh. You're new.", "What do you want?",
-            "I'm alright.", "It's a town. Not much else to say about it.",
-            "Depends what you want to talk about.", List.of(
-                topic("Choso and Jujutsu Kaisen", "Choso is my favourite. By a lot.",
-                    "Gojo and Megumi are good too. But Choso is Choso."),
-                topic("Other anime", "I've seen SK8 the Infinity, Banana Fish, Blue Lock and Sasaki and Miyano.",
-                    "Reki and Langa. Ash. Sasaki. Those are some of my favourites."),
-                topic("Music and musicals", "I listen to music a lot.",
-                    "EPIC: The Musical and Mamma Mia! are both good."),
-                topic("Games and mythology", "I play Fortnite, Roblox and HADES.",
-                    "Greek mythology is interesting. I know quite a lot about it."),
-                topic("Foxes and favourite characters", "Foxes are great.",
-                    "Lucifer from Hazbin Hotel is one of my favourites too."))),
-        "town_npc_1", new Profile("Katie", "Oh, you're the new person. Hi.", "Oh, hi again.",
-            "Fine. What are you doing?", "There's usually something happening. Whether it's useful is another question.",
-            "Are you free? Actually, what are you doing right now?", List.of(
-                topic("Crocheting", "I crochet. I've been working on something lately.",
-                    "It's harder to get anything finished when people keep interrupting."),
-                topic("Disney films", "I really like Disney films.",
-                    "I've got opinions. Quite a few, actually."),
-                topic("Making plans", "Are you busy later?", "Good. I might need someone to come with me."))),
-        "town_npc_2", new Profile("Elara", "You're new, aren't you? Have you explored much?",
-            "Found anything interesting yet?", "Restless. I want to get out and see more.",
-            "A useful place to return to. Not a good reason to stop exploring.",
-            "Tell me about somewhere you've been.", List.of(
-                topic("Old ruins", "Ruins are worth investigating. Carefully, preferably.",
-                    "The difficult part is knowing what's history and what's just a story."),
-                topic("Strange creatures", "I've heard of some unusual creatures around here.",
-                    "I'd rather see evidence than trust a traveller's dramatic account."),
-                topic("Maps and geography", "I like knowing where things are.",
-                    "If you find somewhere useful, an actual location would be nice."))),
-        "town_npc_3", new Profile("Rowan", "Hello. Welcome to town.", "Good to see you again.",
-            "Not bad, thanks. And you?", "It's pleasant when things are quiet.",
-            "We don't have to talk about anything in particular.", List.of(
-                topic("Animals", "I've been watching the birds.",
-                    "You learn a lot just by being patient with animals."),
-                topic("Cooking", "I enjoy cooking. Nothing complicated, usually.",
-                    "Food tastes better when you've made it yourself."),
-                topic("Forests and fishing", "I spend time by the trees or the water when I can.",
-                    "It's nice not having to rush everywhere."))),
-        "town_npc_4", new Profile("Felix", "Ah, a new face. This town needed one.",
-            "There you are. Miss me?", "Better now someone has come to entertain me.",
-            "It has its moments. Usually when something goes wrong.",
-            "I could tell you a story. The accurate version might be less exciting.", List.of(
-                topic("Card games", "Fancy a game sometime?", "I never said I'd be easy to beat."),
-                topic("Music and fashion", "Presentation matters. So does a good tune.",
-                    "You can be practical and still look decent, you know."),
-                topic("Stories and gossip", "I hear things. Not all of them are true.",
-                    "I'll tell you what I know, but don't quote me on the dramatic bits."))),
-        "town_npc_5", new Profile("Nadia", "New in town? Try not to break anything.",
-            "Hello. Need something?", "Busy. Which is generally a good sign.",
-            "Functional enough. Some things could be organised better.",
-            "Tell me the problem. We can probably work it out.", List.of(
-                topic("Engineering and redstone", "I like building things that actually work.",
-                    "A neat mechanism is better than a complicated one nobody can maintain."),
-                topic("Puzzles", "I enjoy a problem with a proper solution.",
-                    "Guessing is fine as a start. Testing is better."),
-                topic("Planning ahead", "Preparation saves a lot of trouble.",
-                    "Especially when people insist on running straight into danger."))),
-        "town_npc_6", new Profile("Orin", "Oh. Hello. I was thinking about something.",
-            "Hello again. Still curious?", "Thoughtful, I suppose.",
-            "Places always seem ordinary until you look closely.",
-            "Do you ever wonder why things here are the way they are?", List.of(
-                topic("Stars and the moon", "I like watching the night sky.",
-                    "There's more to look at than most people notice."),
-                topic("Magic and folklore", "Stories about magic fascinate me.",
-                    "I don't assume every story is true. That doesn't stop me listening."),
-                topic("Unusual objects", "Strange little objects are interesting.",
-                    "Sometimes an object is just an object. Sometimes it isn't.")))
-    );
+    private record Choice(String text, String to, String effect, String when, String action) {}
+    private record Node(String speech, String remember, List<Choice> choices) {}
+    private record Script(String id, String name, String first, String repeat,
+                          String trusted, String cooldown, String redirect, String subjectChange,
+                          Map<String, Node> nodes) {}
 
     private TownCharacterDialogue() {}
 
-    public static boolean recognises(CyberNpcEntity npc) {
-        return npc != null && PROFILES.containsKey(npc.getStoryNpcId());
+    @SubscribeEvent
+    public static void onResources(AddReloadListenerEvent event) {
+        event.addListener(new DialogueLoader());
     }
 
+    /** A failure in one user-edited profile must not disable the others. */
+    private static final class DialogueLoader extends SimpleJsonResourceReloadListener {
+        DialogueLoader() {
+            super(new GsonBuilder().create(), "town_dialogue");
+        }
+
+        @Override
+        protected void apply(Map<ResourceLocation, JsonElement> resources,
+                             ResourceManager resourceManager, ProfilerFiller profiler) {
+            Map<String, Script> loaded = new HashMap<>();
+            for (Map.Entry<ResourceLocation, JsonElement> entry : resources.entrySet()) {
+                try {
+                    Script script = parse(entry.getValue().getAsJsonObject());
+                    if (loaded.putIfAbsent(script.id(), script) != null) {
+                        LOGGER.warn("Duplicate Town NPC dialogue for {}", script.id());
+                    }
+                } catch (RuntimeException ex) {
+                    LOGGER.error("Could not load Town NPC dialogue {}", entry.getKey(), ex);
+                }
+            }
+            scripts = Map.copyOf(loaded);
+            LOGGER.info("Loaded {} authored Town NPC dialogue profiles", scripts.size());
+        }
+    }
+
+    private static Script parse(JsonObject obj) {
+        String id = required(obj, "story_id");
+        if (!KNOWN_IDS.contains(id)) throw new IllegalArgumentException("Unknown town story ID: " + id);
+        String name = required(obj, "name");
+        JsonObject jsonNodes = obj.getAsJsonObject("nodes");
+        if (jsonNodes == null || !jsonNodes.has("root")) {
+            throw new IllegalArgumentException(id + ": missing root scene");
+        }
+        Map<String, Node> nodes = new HashMap<>();
+        for (Map.Entry<String, JsonElement> entry : jsonNodes.entrySet()) {
+            String key = entry.getKey();
+            if (key.length() > 40 || key.isBlank()) {
+                throw new IllegalArgumentException(id + ": invalid scene id " + key);
+            }
+            JsonObject json = entry.getValue().getAsJsonObject();
+            String speech = required(json, "speech");
+            if (speech.length() > 1024) {
+                throw new IllegalArgumentException(id + ": scene too long " + key);
+            }
+            String remember = optional(json, "remember");
+            List<Choice> choices = new ArrayList<>();
+            JsonArray array = json.getAsJsonArray("choices");
+            if (array != null) {
+                for (JsonElement item : array) {
+                    JsonObject choice = item.getAsJsonObject();
+                    String label = required(choice, "text");
+                    String to = required(choice, "to");
+                    if (label.length() > 80 || to.length() > 40) {
+                        throw new IllegalArgumentException(id + ": invalid option at " + key);
+                    }
+                    choices.add(new Choice(label, to, optional(choice, "effect"),
+                            optional(choice, "when"), optional(choice, "action")));
+                }
+            }
+            if (choices.size() > 12) {
+                throw new IllegalArgumentException(id + ": too many options in " + key);
+            }
+            nodes.put(key, new Node(speech, remember, List.copyOf(choices)));
+        }
+        for (Map.Entry<String, Node> entry : nodes.entrySet()) {
+            for (Choice c : entry.getValue().choices()) {
+                if (!nodes.containsKey(c.to())) {
+                    throw new IllegalArgumentException(id + ": unknown next scene " + c.to());
+                }
+            }
+        }
+        return new Script(id, name, required(obj, "first_greeting"),
+                required(obj, "repeat_greeting"), required(obj, "trusted_greeting"),
+                required(obj, "cooldown_greeting"), required(obj, "redirect"),
+                required(obj, "subject_change"), Map.copyOf(nodes));
+    }
+
+    private static String required(JsonObject obj, String key) {
+        String value = optional(obj, key);
+        if (value.isBlank()) throw new IllegalArgumentException("Missing dialogue field: " + key);
+        return value;
+    }
+
+    private static String optional(JsonObject obj, String key) {
+        return obj.has(key) && obj.get(key).isJsonPrimitive()
+                ? obj.get(key).getAsString().trim() : "";
+    }
+
+    public static boolean recognises(CyberNpcEntity npc) {
+        return npc != null && scripts.containsKey(npc.getStoryNpcId());
+    }
+
+    /** Keep the old ID; display renaming is handled by CyberNpcEntity on load. */
     public static String displayName(String stableStoryId) {
-        Profile profile = PROFILES.get(stableStoryId);
-        return profile == null ? null : profile.name();
+        Script script = scripts.get(stableStoryId);
+        return script == null ? null : script.name();
     }
 
     public static String originalName(String stableStoryId) {
+        if (stableStoryId == null) return null;
         return switch (stableStoryId) {
             case "mason" -> "Mason";
             case "town_npc_1" -> "Town NPC 1";
@@ -132,151 +175,222 @@ public final class TownCharacterDialogue {
     }
 
     public static String greeting(ServerPlayer player, CyberNpcEntity npc) {
-        Profile profile = PROFILES.get(npc.getStoryNpcId());
-        CompoundTag state = state(player, npc.getStoryNpcId());
-        if (state.getLong("Cooldown") > player.level().getGameTime()) {
-            return "Not right now.";
-        }
+        Script script = scripts.get(npc.getStoryNpcId());
+        if (script == null) return "";
+        CompoundTag state = state(player, script.id());
+        if (onCooldown(player, state)) return script.cooldown();
         int visits = state.getInt("Visits");
-        state.putInt("Visits", Math.min(visits + 1, Integer.MAX_VALUE));
-        return visits == 0 ? profile.hello() : profile.returnHello();
+        state.putInt("Visits", visits == Integer.MAX_VALUE ? visits : visits + 1);
+        if (visits == 0) return script.first();
+        if (state.getInt("Trust") >= 2 && state.getInt("Affection") >= 1) {
+            return script.trusted();
+        }
+        return script.repeat();
     }
 
+    /**
+     * The server recomputes the offered choices before accepting a response.
+     * Only conditional choices from the current scene may become actions.
+     */
     public static List<DialogueView.Option> options(ServerPlayer player,
-                                                     CyberNpcEntity npc, String page) {
-        String id = npc.getStoryNpcId();
-        Profile profile = PROFILES.get(id);
-        if (profile == null) return List.of();
-        List<DialogueView.Option> out = new ArrayList<>();
-        if (state(player, id).getLong("Cooldown") > player.level().getGameTime()
-                || "walk".equals(page)) {
-            out.add(option("leave", "Leave them alone."));
-            return List.copyOf(out);
+                                                      CyberNpcEntity npc, String page) {
+        Script script = scripts.get(npc.getStoryNpcId());
+        if (script == null) return List.of();
+        CompoundTag state = state(player, script.id());
+        if (onCooldown(player, state) || "walked".equals(page)) {
+            return List.of(new DialogueView.Option("leave", "Leave them alone."));
         }
-        if ("topics".equals(page)) {
-            for (int i = 0; i < profile.topics().size(); i++) {
-                out.add(option("talk_" + i, profile.topics().get(i).name()));
-            }
-            out.add(option("back", "Something else."));
-        } else if (page.startsWith("talk_")) {
-            out.add(option("more", "Tell me more."));
-            out.add(option("agree", "I like that too."));
-            out.add(option("disagree", "Not really my thing."));
-            out.add(option("insult", "That's rubbish."));
-            out.add(option("topics", "Another topic."));
-            out.add(option("back", "Something else."));
-        } else if ("yarn_offer".equals(page)) {
-            out.add(option("accept_yarn", "Yeah, I can make some."));
-            out.add(option("back", "Maybe another time."));
-        } else {
-            out.add(option("topics", "What do you like talking about?"));
-            out.add(option("mood", "How are you?"));
-            out.add(option("town", "What do you think of this place?"));
-            out.add(option("chat", "Anything on your mind?"));
-            if ("town_npc_1".equals(id)) {
-                if (questActive(player)) {
-                    out.add(option("yarn_turnin", "I've been making that yarn."));
-                } else if (!questCompleted(player) && state(player, id).getBoolean("Seen_0")) {
-                    out.add(option("yarn_offer", "You mentioned needing some yarn?"));
-                }
-            }
+        Node node = script.nodes().get(page);
+        if (node == null) return List.of(new DialogueView.Option("leave", "Leave."));
+        List<DialogueView.Option> options = new ArrayList<>();
+        List<Choice> available = availableChoices(player, state, node);
+        int maxReplies = "root".equals(page) ? 7 : 6;
+        for (int i = 0; i < available.size() && options.size() < maxReplies; i++) {
+            options.add(new DialogueView.Option("pick_" + i, available.get(i).text()));
         }
-        out.add(option("leave", "See you."));
-        return List.copyOf(out);
+        if (!"root".equals(page)) {
+            options.add(new DialogueView.Option("else", script.subjectChange()));
+        }
+        options.add(new DialogueView.Option("leave", "See you."));
+        return List.copyOf(options);
+    }
+
+    private static List<Choice> availableChoices(ServerPlayer player, CompoundTag state, Node node) {
+        List<Choice> result = new ArrayList<>();
+        for (Choice choice : node.choices()) {
+            if (allowed(player, state, choice.when())) result.add(choice);
+        }
+        return result;
+    }
+
+    private static boolean allowed(ServerPlayer player, CompoundTag state, String condition) {
+        if (condition == null || condition.isBlank()) return true;
+        if (condition.startsWith("flag:")) {
+            return state.getCompound("Memories").getBoolean(condition.substring(5));
+        }
+        return switch (condition) {
+            case "quest_available" -> ModList.get().isLoaded("cyberquest")
+                    && !questActive(player) && !questCompleted(player);
+            case "quest_active" -> questActive(player);
+            case "quest_completed" -> questCompleted(player);
+            default -> false; // Fail closed on unsupported datapack conditions.
+        };
     }
 
     public static Transition advance(ServerPlayer player, CyberNpcEntity npc,
-                                     String currentPage, String action) {
-        String id = npc.getStoryNpcId();
-        Profile profile = PROFILES.get(id);
-        CompoundTag state = state(player, id);
-        if ("back".equals(action)) return new Transition("root", profile.returnHello());
-        if ("topics".equals(action)) return new Transition("topics", "Go on.");
-        if ("mood".equals(action)) return new Transition("root", profile.mood());
-        if ("town".equals(action)) return new Transition("root", profile.town());
-        if ("chat".equals(action)) return new Transition("root", profile.chat());
-        if (action.startsWith("talk_")) {
-            int topicId = topicIndex(action, profile);
-            if (topicId < 0) return new Transition("root", profile.returnHello());
-            if (!state.getBoolean("Seen_" + topicId)) {
-                state.putBoolean("Seen_" + topicId, true);
-                adjust(state, "Trust", 1);
-            }
-            return new Transition(action, profile.topics().get(topicId).introduction());
+                                      String page, String action) {
+        Script script = scripts.get(npc.getStoryNpcId());
+        if (script == null) return new Transition("walked", "");
+        CompoundTag state = state(player, script.id());
+        if (onCooldown(player, state) || "walked".equals(page)) {
+            return new Transition("walked", script.cooldown());
         }
-        if (currentPage.startsWith("talk_")) {
-            int topicId = topicIndex(currentPage, profile);
-            if (topicId < 0) return new Transition("root", profile.returnHello());
-            Topic topic = profile.topics().get(topicId);
-            switch (action) {
-                case "more" -> { return new Transition(currentPage, topic.detail()); }
-                case "agree" -> {
-                    if (!state.getBoolean("Agreed_" + topicId)) {
-                        state.putBoolean("Agreed_" + topicId, true);
-                        adjust(state, "Affection", 1);
-                    }
-                    return new Transition(currentPage, "Fair enough.");
-                }
-                case "disagree" -> { return new Transition(currentPage, "Alright. Different tastes."); }
-                case "insult" -> {
-                    long now = player.level().getGameTime();
-                    if (now >= state.getLong("NextInsult")) {
-                        adjust(state, "Affection", -2);
-                        state.putLong("NextInsult", now + 1200L);
-                    }
-                    int chance = 40 + ("mason".equals(id) && topicId == 0 ? 30 : 0)
-                            - state.getInt("Affection") * 3;
-                    chance = Math.max(10, Math.min(90, chance));
-                    if (player.getRandom().nextInt(100) < chance) {
-                        state.putLong("Cooldown", now + 600L);
-                        // A single navigation request, not a new ticking AI goal.
-                        npc.getNavigation().moveTo(npc.getX() + 3.0D, npc.getY(),
-                                npc.getZ() + 2.0D, 0.95D);
-                        return new Transition("walk", "...");
-                    }
-                    return new Transition(currentPage, "Okay.");
-                }
-                default -> { return new Transition("root", profile.returnHello()); }
-            }
+        if ("else".equals(action)) return new Transition("root", script.redirect());
+        Node node = script.nodes().get(page);
+        if (node == null || !action.startsWith("pick_")) {
+            return new Transition("root", script.redirect());
         }
-        if ("town_npc_1".equals(id)) {
-            if ("yarn_offer".equals(action))
-                return new Transition("yarn_offer", "I'm running low on yarn. Can you craft me a stack? Sixty-four should do.");
-            if ("accept_yarn".equals(action))
-                return new Transition("root", startQuest(player)
-                        ? "Thanks. You'll need string."
-                        : "Can't sort that out right now. Maybe check your journal.");
-            if ("yarn_turnin".equals(action))
-                return new Transition("root", finishQuest(player)
-                        ? "You actually made all of it. Thanks!"
-                        : "Not sixty-four yet. Let me know when you're done.");
-        }
-        return new Transition("root", profile.returnHello());
-    }
 
-    private static int topicIndex(String value, Profile profile) {
+        int index;
         try {
-            int index = Integer.parseInt(value.substring(5));
-            return index >= 0 && index < profile.topics().size() ? index : -1;
-        } catch (NumberFormatException | IndexOutOfBoundsException ignored) {
-            return -1;
+            index = Integer.parseInt(action.substring(5));
+        } catch (NumberFormatException ex) {
+            return new Transition("root", script.redirect());
+        }
+        List<Choice> available = availableChoices(player, state, node);
+        if (index < 0 || index >= available.size()
+                || index >= ("root".equals(page) ? 7 : 6)) {
+            return new Transition(page, node.speech());
+        }
+        Choice choice = available.get(index);
+        if (!allowed(player, state, choice.when())) {
+            return new Transition(page, node.speech());
+        }
+        if (!choice.action().isBlank()) {
+            if ("quest_start".equals(choice.action())) {
+                if (!questOperation(player, "start")) {
+                    return new Transition(page, "I can't start that right now. Check your journal.");
+                }
+            } else if ("quest_finish".equals(choice.action())) {
+                if (questOperation(player, "turnIn")) {
+                    return enter(script, state, "yarn_done");
+                }
+                return new Transition(page,
+                        "Not yet. You need to craft all sixty-four. Check your journal.");
+            } else {
+                return new Transition(page, node.speech());
+            }
+        }
+
+        applyRelationship(player, state, page, index, choice.effect());
+        if (maybeWalkAway(player, npc, state, choice.effect())) {
+            state.putLong("Cooldown", player.level().getGameTime() + 600L);
+            walkAway(player, npc);
+            return new Transition("walked", "..."); // The dialogue closes on the next reply.
+        }
+        return enter(script, state, choice.to());
+    }
+
+    private static Transition enter(Script script, CompoundTag state, String next) {
+        if ("root".equals(next)) return new Transition("root", script.redirect());
+        Node node = script.nodes().get(next);
+        if (node == null) return new Transition("root", script.redirect());
+        if (!node.remember().isBlank()) {
+            state.getCompound("Memories").putBoolean(node.remember(), true);
+        }
+        return new Transition(next, node.speech());
+    }
+
+    private static void applyRelationship(ServerPlayer player, CompoundTag state,
+                                           String page, int index, String effect) {
+        if (effect.isBlank()) return;
+        CompoundTag memories = state.getCompound("Memories");
+        String key = "decision:" + page + ":" + index;
+        long gameTime = player.level().getGameTime();
+        boolean newChoice = !memories.getBoolean(key);
+        if (newChoice) memories.putBoolean(key, true);
+        switch (effect) {
+            case "warm" -> {
+                if (newChoice && canBondToday(state, gameTime)) change(state, "Affection", 1);
+            }
+            case "trust" -> {
+                if (newChoice && canBondToday(state, gameTime)) change(state, "Trust", 1);
+            }
+            case "repair" -> {
+                if (newChoice && state.getInt("Affection") < 0 && canBondToday(state, gameTime)) {
+                    change(state, "Affection", 1);
+                }
+            }
+            case "rude", "kai_choso", "kai_other" -> {
+                // Repeated insults are not a friendship grinding mechanic.
+                // A repeated insult can only lower affinity again on a later day.
+                long day = gameTime / 24000L;
+                if (newChoice || day > state.getLong("LastInsultDay")) {
+                    change(state, "Affection", effect.equals("kai_choso") ? -2 : -1);
+                    state.putLong("LastInsultDay", day);
+                }
+            }
+            default -> { }
         }
     }
 
-    private static DialogueView.Option option(String id, String label) {
-        return new DialogueView.Option(id, label);
+    private static boolean canBondToday(CompoundTag state, long now) {
+        // One meaningful relationship improvement per character per game day.
+        // Merely revisiting topics or spamming "I agree" cannot farm affection.
+        long day = now / 24000L;
+        if (state.contains("LastBondDay") && state.getLong("LastBondDay") == day) {
+            return false;
+        }
+        state.putLong("LastBondDay", day);
+        return true;
     }
 
+    private static void change(CompoundTag state, String key, int delta) {
+        state.putInt(key, Math.max(-10, Math.min(10, state.getInt(key) + delta)));
+    }
+
+    private static boolean maybeWalkAway(ServerPlayer player, CyberNpcEntity npc,
+                                          CompoundTag state, String effect) {
+        int chance = switch (effect) {
+            case "kai_choso" -> 70;
+            case "kai_other" -> 45;
+            default -> 0;
+        };
+        if (chance == 0) return false;
+        chance -= Math.max(0, state.getInt("Affection")) * 2;
+        chance += Math.max(0, -state.getInt("Affection")) * 3;
+        return player.getRandom().nextInt(100) < Math.max(15, Math.min(90, chance));
+    }
+
+    private static void walkAway(ServerPlayer player, CyberNpcEntity npc) {
+        Vec3 destination = null;
+        double best = npc.distanceToSqr(player);
+        for (int i = 0; i < 5; i++) {
+            Vec3 candidate = DefaultRandomPos.getPos(npc, 7, 3);
+            if (candidate != null && candidate.distanceToSqr(player.position()) > best) {
+                destination = candidate;
+                best = candidate.distanceToSqr(player.position());
+            }
+        }
+        if (destination != null) {
+            npc.getNavigation().moveTo(destination.x, destination.y, destination.z, 0.85D);
+        } else {
+            npc.getLookControl().setLookAt(npc.getX() + 3, npc.getEyeY(), npc.getZ() + 3);
+        }
+    }
+
+    private static boolean onCooldown(ServerPlayer player, CompoundTag state) {
+        return state.getLong("Cooldown") > player.level().getGameTime();
+    }
+
+    /** Previous saves contain these same fields, so no data migration is required. */
     private static CompoundTag state(ServerPlayer player, String id) {
         CompoundTag root = player.getPersistentData().getCompound(DATA_KEY);
         CompoundTag state = root.getCompound(id);
+        if (!state.contains("Memories")) state.put("Memories", new CompoundTag());
         root.put(id, state);
         player.getPersistentData().put(DATA_KEY, root);
         return state;
-    }
-
-    private static void adjust(CompoundTag state, String key, int delta) {
-        state.putInt(key, Math.max(-20, Math.min(20, state.getInt(key) + delta)));
     }
 
     private static boolean questActive(ServerPlayer player) {
@@ -287,32 +401,25 @@ public final class TownCharacterDialogue {
         return questState(player, "isCompleted");
     }
 
-    private static boolean questState(ServerPlayer player, String method) {
+    private static boolean questState(ServerPlayer player, String name) {
         if (!ModList.get().isLoaded("cyberquest")) return false;
         try {
             Class<?> type = Class.forName("com.cyberspectraa.cyberquest.player.PlayerQuestData");
-            Method target = type.getMethod(method, ServerPlayer.class, ResourceLocation.class);
-            return Boolean.TRUE.equals(target.invoke(null, player, KATIE_QUEST));
-        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            Method method = type.getMethod(name, ServerPlayer.class, ResourceLocation.class);
+            return Boolean.TRUE.equals(method.invoke(null, player, KATIE_QUEST));
+        } catch (ReflectiveOperationException | RuntimeException ex) {
             return false;
         }
     }
 
-    private static boolean startQuest(ServerPlayer player) {
-        return questOperation(player, "start", false);
-    }
-
-    private static boolean finishQuest(ServerPlayer player) {
-        return questOperation(player, "turnIn", false);
-    }
-
-    private static boolean questOperation(ServerPlayer player, String name, boolean force) {
+    private static boolean questOperation(ServerPlayer player, String name) {
         if (!ModList.get().isLoaded("cyberquest")) return false;
         try {
             Class<?> type = Class.forName("com.cyberspectraa.cyberquest.quest.QuestManager");
             Method method = type.getMethod(name, ServerPlayer.class, ResourceLocation.class, boolean.class);
-            return Boolean.TRUE.equals(method.invoke(null, player, KATIE_QUEST, force));
-        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return Boolean.TRUE.equals(method.invoke(null, player, KATIE_QUEST, false));
+        } catch (ReflectiveOperationException | RuntimeException ex) {
+            LOGGER.warn("Couldn't perform Katie quest action {}", name, ex);
             return false;
         }
     }

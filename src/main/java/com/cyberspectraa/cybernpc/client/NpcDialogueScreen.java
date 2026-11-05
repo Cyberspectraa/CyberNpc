@@ -132,9 +132,18 @@ public final class NpcDialogueScreen extends Screen {
     }
 
     private int replyColumns() {
-        // Small GUI scales can use a single column rather than placing
-        // two unreadably narrow buttons beside each other.
+        // Town-character answers are written as natural, full sentences.
+        // Give them the full button width whenever the screen has room.
+        // On shorter screens, retain the original compact two-column layout.
+        if ("Citizen".equalsIgnoreCase(view.role())
+                && height >= panelHeight() + view.options().size() * 20 + 35) {
+            return 1;
+        }
         return panelWidth() < 330 ? 1 : 2;
+    }
+
+    private long letterDelay() {
+        return "Citizen".equalsIgnoreCase(view.role()) ? 27L : LETTER_MS;
     }
 
     private int replyTop() {
@@ -194,7 +203,7 @@ public final class NpcDialogueScreen extends Screen {
         try {
             // Typewriter effect, restarted whenever the speaking character changes.
             int count = (int) Math.min(speech.length(),
-                    Math.max(0L, (now - speakerChanged) / LETTER_MS));
+                    Math.max(0L, (now - speakerChanged) / letterDelay()));
             // Short, quiet text blips, never one loud effect per letter or
             // a burst of sounds when the player clicks to skip the animation.
             if (count > messageLength && count < speech.length()
@@ -252,7 +261,7 @@ public final class NpcDialogueScreen extends Screen {
                 // First click completes the typewriter line; it never skips
                 // over the player's actual reply.
                 speakerChanged = System.currentTimeMillis()
-                        - currentLine.length() * LETTER_MS;
+                        - currentLine.length() * letterDelay();
                 messageLength = currentLine.length();
                 return true;
             }
@@ -268,6 +277,28 @@ public final class NpcDialogueScreen extends Screen {
             }
         }
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        long elapsed = System.currentTimeMillis() - speakerChanged;
+        if (waitingForServer && queuedNpcReply != null
+                && elapsed > pendingReply.length() * letterDelay() + 380L) {
+            DialogueView next = queuedNpcReply;
+            queuedNpcReply = null;
+            Minecraft.getInstance().setScreen(new NpcDialogueScreen(next));
+            return;
+        }
+        // When an NPC disengages and walks away, don't leave the player
+        // staring at an empty response box.
+        if (!waitingForServer && view.options().size() == 1
+                && "Leave them alone.".equals(view.options().get(0).label())
+                && System.currentTimeMillis() - screenStarted > 1600L) {
+            CyberNpcNetwork.CHANNEL.sendToServer(
+                    new DialogueChoicePacket(view.entityId(), "leave"));
+            Minecraft.getInstance().setScreen(null);
+        }
     }
 
     private String playerName() {
