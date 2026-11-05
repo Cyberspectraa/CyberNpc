@@ -282,14 +282,9 @@ public final class NpcDialogueScreen extends Screen {
     @Override
     public void tick() {
         super.tick();
-        long elapsed = System.currentTimeMillis() - speakerChanged;
-        if (waitingForServer && queuedNpcReply != null
-                && elapsed > pendingReply.length() * letterDelay() + 380L) {
-            DialogueView next = queuedNpcReply;
-            queuedNpcReply = null;
-            Minecraft.getInstance().setScreen(new NpcDialogueScreen(next));
-            return;
-        }
+        // Deliberately preserve the player's reply until they click again.
+        // The server's NPC response is queued by open() and displayed only
+        // by mouseClicked(), even when it arrives immediately.
         // When an NPC disengages and walks away, don't leave the player
         // staring at an empty response box.
         if (!waitingForServer && view.options().size() == 1
