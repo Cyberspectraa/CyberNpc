@@ -12,7 +12,13 @@
     "subtitle": "subtitles.cybernpc.dialogue_voice",
     "sounds": [
       {
-        "name": "cybernpc:dialogue/male"
+        "name": "cybernpc:dialogue/male_hm"
+      },
+      {
+        "name": "cybernpc:dialogue/male_mm"
+      },
+      {
+        "name": "cybernpc:dialogue/male_uh"
       }
     ]
   },
@@ -20,7 +26,13 @@
     "subtitle": "subtitles.cybernpc.dialogue_voice",
     "sounds": [
       {
-        "name": "cybernpc:dialogue/female"
+        "name": "cybernpc:dialogue/female_hm"
+      },
+      {
+        "name": "cybernpc:dialogue/female_mm"
+      },
+      {
+        "name": "cybernpc:dialogue/female_uh"
       }
     ]
   },
@@ -56,7 +68,13 @@
     "subtitle": "subtitles.cybernpc.dialogue_voice",
     "sounds": [
       {
-        "name": "cybernpc:dialogue/elara"
+        "name": "cybernpc:dialogue/elara_hm"
+      },
+      {
+        "name": "cybernpc:dialogue/elara_mm"
+      },
+      {
+        "name": "cybernpc:dialogue/elara_uh"
       }
     ]
   },
@@ -64,7 +82,13 @@
     "subtitle": "subtitles.cybernpc.dialogue_voice",
     "sounds": [
       {
-        "name": "cybernpc:dialogue/rowan"
+        "name": "cybernpc:dialogue/rowan_hm"
+      },
+      {
+        "name": "cybernpc:dialogue/rowan_mm"
+      },
+      {
+        "name": "cybernpc:dialogue/rowan_uh"
       }
     ]
   },
@@ -72,7 +96,13 @@
     "subtitle": "subtitles.cybernpc.dialogue_voice",
     "sounds": [
       {
-        "name": "cybernpc:dialogue/felix"
+        "name": "cybernpc:dialogue/felix_hm"
+      },
+      {
+        "name": "cybernpc:dialogue/felix_mm"
+      },
+      {
+        "name": "cybernpc:dialogue/felix_uh"
       }
     ]
   },
@@ -80,7 +110,13 @@
     "subtitle": "subtitles.cybernpc.dialogue_voice",
     "sounds": [
       {
-        "name": "cybernpc:dialogue/nadia"
+        "name": "cybernpc:dialogue/nadia_hm"
+      },
+      {
+        "name": "cybernpc:dialogue/nadia_mm"
+      },
+      {
+        "name": "cybernpc:dialogue/nadia_uh"
       }
     ]
   },
@@ -88,7 +124,13 @@
     "subtitle": "subtitles.cybernpc.dialogue_voice",
     "sounds": [
       {
-        "name": "cybernpc:dialogue/orin"
+        "name": "cybernpc:dialogue/orin_hm"
+      },
+      {
+        "name": "cybernpc:dialogue/orin_mm"
+      },
+      {
+        "name": "cybernpc:dialogue/orin_uh"
       }
     ]
   },
@@ -96,7 +138,13 @@
     "subtitle": "subtitles.cybernpc.dialogue_voice",
     "sounds": [
       {
-        "name": "cybernpc:dialogue/pope"
+        "name": "cybernpc:dialogue/pope_hm"
+      },
+      {
+        "name": "cybernpc:dialogue/pope_mm"
+      },
+      {
+        "name": "cybernpc:dialogue/pope_uh"
       }
     ]
   }

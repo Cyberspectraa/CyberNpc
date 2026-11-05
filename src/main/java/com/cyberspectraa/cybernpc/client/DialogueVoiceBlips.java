@@ -21,21 +21,21 @@ public final class DialogueVoiceBlips {
 
     private static final Voice KAI = new Voice(ModSounds.DIALOGUE_VOICE_KAI, 1.00F, 1.00F, 2, 95);
     private static final Voice KATIE = new Voice(ModSounds.DIALOGUE_VOICE_KATIE, 1.00F, 1.00F, 2, 90);
-    private static final Voice ELARA = new Voice(ModSounds.DIALOGUE_VOICE_ELARA, 1.03F, 0.78F, 4, 100);
-    private static final Voice ROWAN = new Voice(ModSounds.DIALOGUE_VOICE_ROWAN, 0.78F, 0.70F, 5, 140);
-    private static final Voice FELIX = new Voice(ModSounds.DIALOGUE_VOICE_FELIX, 1.12F, 0.80F, 3, 100);
-    private static final Voice NADIA = new Voice(ModSounds.DIALOGUE_VOICE_NADIA, 0.91F, 0.76F, 4, 125);
-    private static final Voice ORIN = new Voice(ModSounds.DIALOGUE_VOICE_ORIN, 0.93F, 0.68F, 5, 145);
-    private static final Voice POPE = new Voice(ModSounds.DIALOGUE_VOICE_POPE, 0.82F, 0.70F, 5, 145);
-    private static final Voice GENERIC_MALE = new Voice(ModSounds.DIALOGUE_VOICE_MALE, 0.96F, 0.72F, 4, 125);
-    private static final Voice GENERIC_FEMALE = new Voice(ModSounds.DIALOGUE_VOICE_FEMALE, 1.04F, 0.72F, 4, 125);
+    private static final Voice ELARA = new Voice(ModSounds.DIALOGUE_VOICE_ELARA, 1.00F, 1.00F, 2, 100);
+    private static final Voice ROWAN = new Voice(ModSounds.DIALOGUE_VOICE_ROWAN, 1.00F, 1.00F, 2, 115);
+    private static final Voice FELIX = new Voice(ModSounds.DIALOGUE_VOICE_FELIX, 1.00F, 1.00F, 2, 90);
+    private static final Voice NADIA = new Voice(ModSounds.DIALOGUE_VOICE_NADIA, 1.00F, 1.00F, 2, 105);
+    private static final Voice ORIN = new Voice(ModSounds.DIALOGUE_VOICE_ORIN, 1.00F, 1.00F, 2, 120);
+    private static final Voice POPE = new Voice(ModSounds.DIALOGUE_VOICE_POPE, 1.00F, 1.00F, 2, 120);
+    private static final Voice GENERIC_MALE = new Voice(ModSounds.DIALOGUE_VOICE_MALE, 1.00F, 1.00F, 2, 105);
+    private static final Voice GENERIC_FEMALE = new Voice(ModSounds.DIALOGUE_VOICE_FEMALE, 1.00F, 1.00F, 2, 100);
 
     // Constant client-side level; no separate mod config is required.
     // Players can still use Minecraft's normal sound settings.
     private static final float DEFAULT_VOLUME = 0.60F;
 
-    // Only user-supplied Kai/Katie voice clips need cancellation to avoid
-    // overlap. Owned by the dialogue screen on the client, never by NPC AI.
+    // All dialogue voices use supplied VoiceStudio clips. Keep at most one
+    // short syllable active at a time to avoid layered/grainy speech.
     private static SimpleSoundInstance activeRecordedBlip;
 
     private DialogueVoiceBlips() { }
@@ -71,7 +71,8 @@ public final class DialogueVoiceBlips {
         // Vary pitch subtly between grunts, but give each NPC a consistent tone.
         int variation = (i * 31 + speech.length() * 7 + npc.getId() * 13) & 7;
         // Keep supplied recordings near their original pitch (especially Katie).
-        float pitchSpread = (voice == KAI || voice == KATIE) ? 0.004F : 0.011F;
+        // Preserve the timbre from the supplied recordings for all named voices.
+        float pitchSpread = 0.004F;
         float pitch = voice.pitch() * (1.0F + (variation - 3.5F) * pitchSpread);
         if (isGeneric(voice)) {
             // Stable per-entity personality for future authored dialogue NPCs.
@@ -81,13 +82,10 @@ public final class DialogueVoiceBlips {
         SimpleSoundInstance sound = SimpleSoundInstance.forUI(
                 voice.sample().get(), pitch, volume);
 
-        if (voice == KAI || voice == KATIE) {
-            // Replace the previous spoken syllable, instead of layering two
-            // recordings. Keep their established pitch, volume and 95/90ms
-            // interval unchanged.
-            stopActive();
-            activeRecordedBlip = sound;
-        }
+        // Replace the previous syllable for every speaking NPC. Kai and Katie
+        // keep their existing pitch, gain and timing unchanged.
+        stopActive();
+        activeRecordedBlip = sound;
         mc.getSoundManager().play(sound);
         return true;
     }
