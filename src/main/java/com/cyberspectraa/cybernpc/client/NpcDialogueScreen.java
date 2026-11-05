@@ -10,10 +10,8 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -117,8 +115,6 @@ public final class NpcDialogueScreen extends Screen {
                     replyTop + row * spacing).size(buttonWidth, 18).build();
             replyButtons.add(addRenderableWidget(button));
         }
-        Minecraft.getInstance().getSoundManager().play(
-                SimpleSoundInstance.forUI(SoundEvents.BOOK_PAGE_TURN, 1.03F));
     }
 
     private int panelWidth() {
@@ -356,6 +352,13 @@ public final class NpcDialogueScreen extends Screen {
 
     private boolean isIntro() {
         return view.options().stream().anyMatch(o -> o.id().equals("intro_skip"));
+    }
+
+    @Override
+    public void removed() {
+        // Stop even the last tiny syllable when exiting or switching scenes.
+        DialogueVoiceBlips.stopActive();
+        super.removed();
     }
 
     @Override

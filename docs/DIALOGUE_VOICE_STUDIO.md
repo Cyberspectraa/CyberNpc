@@ -37,3 +37,7 @@ For recordings based on real people's voices, use recordings with their permissi
 Voice grunts are always active for NPCs with dialogue. There is no `cybernpc-dialogue-client.toml` file or separate voice-grunt toggle. The fixed base volume is 0.60 (before the individual NPC gain); Kai and Katie use gain 1.0 to make their recorded syllables clearer. Minecraft's standard sound sliders still apply.
 
 The sound only plays while the NPC's line is typing; it stops immediately when the line is clicked to finish, or the conversation closes. Sound playback is local and adds no server-side AI or network traffic.
+
+## 0.44.83 playback cleanup
+
+The book-page sound is no longer played when the dialogue UI opens or switches to another response. For Kai and Katie, a newly triggered syllable **replaces** the previously playing syllable instead of overlapping it; the currently active clip is also stopped when the dialogue screen is removed. This is client-only and does not change any NPC dialog, authored voice recordings, the 2-character/95–90ms trigger frequency, the pitch, or the 0.60 base volume. The original manual click-to-continue remains.

@@ -34,7 +34,19 @@ public final class DialogueVoiceBlips {
     // Players can still use Minecraft's normal sound settings.
     private static final float DEFAULT_VOLUME = 0.60F;
 
+    // Only user-supplied Kai/Katie voice clips need cancellation to avoid
+    // overlap. Owned by the dialogue screen on the client, never by NPC AI.
+    private static SimpleSoundInstance activeRecordedBlip;
+
     private DialogueVoiceBlips() { }
+
+    /** Called when the dialogue screen closes or changes to another page. */
+    public static void stopActive() {
+        if (activeRecordedBlip != null) {
+            Minecraft.getInstance().getSoundManager().stop(activeRecordedBlip);
+            activeRecordedBlip = null;
+        }
+    }
 
     /** Returns true if a grunt actually played. Screen stores last played time/index. */
     public static boolean play(DialogueView view, String speech,
@@ -66,7 +78,17 @@ public final class DialogueVoiceBlips {
             pitch *= 1.0F + (Math.floorMod(npc.getUUID().hashCode(), 9) - 4) * 0.018F;
         }
         float volume = DEFAULT_VOLUME * voice.gain();
-        mc.getSoundManager().play(SimpleSoundInstance.forUI(voice.sample().get(), pitch, volume));
+        SimpleSoundInstance sound = SimpleSoundInstance.forUI(
+                voice.sample().get(), pitch, volume);
+
+        if (voice == KAI || voice == KATIE) {
+            // Replace the previous spoken syllable, instead of layering two
+            // recordings. Keep their established pitch, volume and 95/90ms
+            // interval unchanged.
+            stopActive();
+            activeRecordedBlip = sound;
+        }
+        mc.getSoundManager().play(sound);
         return true;
     }
 
