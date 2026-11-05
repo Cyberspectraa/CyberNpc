@@ -7,5 +7,85 @@
         "stream": true
       }
     ]
+  },
+  "dialogue_voice_male": {
+    "subtitle": "subtitles.cybernpc.dialogue_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:dialogue/male"
+      }
+    ]
+  },
+  "dialogue_voice_female": {
+    "subtitle": "subtitles.cybernpc.dialogue_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:dialogue/female"
+      }
+    ]
+  },
+  "dialogue_voice_kai": {
+    "subtitle": "subtitles.cybernpc.dialogue_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:dialogue/kai"
+      }
+    ]
+  },
+  "dialogue_voice_katie": {
+    "subtitle": "subtitles.cybernpc.dialogue_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:dialogue/katie"
+      }
+    ]
+  },
+  "dialogue_voice_elara": {
+    "subtitle": "subtitles.cybernpc.dialogue_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:dialogue/elara"
+      }
+    ]
+  },
+  "dialogue_voice_rowan": {
+    "subtitle": "subtitles.cybernpc.dialogue_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:dialogue/rowan"
+      }
+    ]
+  },
+  "dialogue_voice_felix": {
+    "subtitle": "subtitles.cybernpc.dialogue_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:dialogue/felix"
+      }
+    ]
+  },
+  "dialogue_voice_nadia": {
+    "subtitle": "subtitles.cybernpc.dialogue_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:dialogue/nadia"
+      }
+    ]
+  },
+  "dialogue_voice_orin": {
+    "subtitle": "subtitles.cybernpc.dialogue_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:dialogue/orin"
+      }
+    ]
+  },
+  "dialogue_voice_pope": {
+    "subtitle": "subtitles.cybernpc.dialogue_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:dialogue/pope"
+      }
+    ]
   }
 }

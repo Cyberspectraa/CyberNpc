@@ -2,6 +2,7 @@ package com.cyberspectraa.cybernpc;
 
 import com.cyberspectraa.cybernpc.command.CyberNpcCommands;
 import com.cyberspectraa.cybernpc.client.PlayerHudConfig;
+import com.cyberspectraa.cybernpc.client.NpcVoiceConfig;
 import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.registry.ModBlocks;
 import com.cyberspectraa.cybernpc.registry.ModCreativeTabs;
@@ -32,6 +33,8 @@ public final class CyberNpc {
         CyberNpcNetwork.register();
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT,
                 PlayerHudConfig.SPEC, "cybernpc-hud-client.toml");
+        ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT,
+                NpcVoiceConfig.SPEC, "cybernpc-dialogue-client.toml");
 
         MinecraftForge.EVENT_BUS.addListener(CyberNpcCommands::register);
     }

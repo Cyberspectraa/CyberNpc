@@ -13,7 +13,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -45,6 +44,8 @@ public final class NpcDialogueScreen extends Screen {
     private long speakerChanged = screenStarted;
     private boolean waitingForServer;
     private int messageLength;
+    private long lastVoiceAtMillis;
+    private int lastVoiceIndex;
     private final java.util.List<Button> replyButtons = new java.util.ArrayList<>();
 
     public NpcDialogueScreen(DialogueView view) {
@@ -204,13 +205,13 @@ public final class NpcDialogueScreen extends Screen {
             // Typewriter effect, restarted whenever the speaking character changes.
             int count = (int) Math.min(speech.length(),
                     Math.max(0L, (now - speakerChanged) / letterDelay()));
-            // Short, quiet text blips, never one loud effect per letter or
-            // a burst of sounds when the player clicks to skip the animation.
-            if (count > messageLength && count < speech.length()
-                    && count % 3 == 0
-                    && !Character.isWhitespace(speech.charAt(count - 1))) {
-                Minecraft.getInstance().getSoundManager().play(
-                        SimpleSoundInstance.forUI(SoundEvents.BOOK_PAGE_TURN, 1.65F, 0.14F));
+            // Voice grunts only for the speaking NPC, not the player's answer.
+            // Event-driven, throttled; clicking to reveal a full line is silent.
+            if (!playerSpeaking && DialogueVoiceBlips.play(
+                    view, speech, messageLength, count,
+                    lastVoiceIndex, now, lastVoiceAtMillis)) {
+                lastVoiceAtMillis = now;
+                lastVoiceIndex = count;
             }
             messageLength = count;
             String visible = speech.substring(0, count);

@@ -63,5 +63,6 @@
   "item.cybernpc.town_npc_4_spawn_egg": "Felix Spawn Egg",
   "item.cybernpc.town_npc_5_spawn_egg": "Nadia Spawn Egg",
   "item.cybernpc.town_npc_6_spawn_egg": "Orin Spawn Egg",
-  "item.cybernpc.yarn": "White Yarn"
+  "item.cybernpc.yarn": "White Yarn",
+  "subtitles.cybernpc.dialogue_voice": "NPC speaks"
 }
