@@ -28,7 +28,13 @@
     "subtitle": "subtitles.cybernpc.dialogue_voice",
     "sounds": [
       {
-        "name": "cybernpc:dialogue/kai"
+        "name": "cybernpc:dialogue/kai_hm"
+      },
+      {
+        "name": "cybernpc:dialogue/kai_mm"
+      },
+      {
+        "name": "cybernpc:dialogue/kai_uh"
       }
     ]
   },
@@ -36,7 +42,13 @@
     "subtitle": "subtitles.cybernpc.dialogue_voice",
     "sounds": [
       {
-        "name": "cybernpc:dialogue/katie"
+        "name": "cybernpc:dialogue/katie_hm"
+      },
+      {
+        "name": "cybernpc:dialogue/katie_mm"
+      },
+      {
+        "name": "cybernpc:dialogue/katie_uh"
       }
     ]
   },

@@ -19,8 +19,8 @@ public final class DialogueVoiceBlips {
     private record Voice(RegistryObject<SoundEvent> sample,
                          float pitch, float gain, int letters, int minMillis) { }
 
-    private static final Voice KAI = new Voice(ModSounds.DIALOGUE_VOICE_KAI, 0.86F, 0.80F, 4, 105);
-    private static final Voice KATIE = new Voice(ModSounds.DIALOGUE_VOICE_KATIE, 1.17F, 0.90F, 3, 85);
+    private static final Voice KAI = new Voice(ModSounds.DIALOGUE_VOICE_KAI, 0.98F, 0.80F, 5, 160);
+    private static final Voice KATIE = new Voice(ModSounds.DIALOGUE_VOICE_KATIE, 1.04F, 0.90F, 5, 155);
     private static final Voice ELARA = new Voice(ModSounds.DIALOGUE_VOICE_ELARA, 1.03F, 0.78F, 4, 100);
     private static final Voice ROWAN = new Voice(ModSounds.DIALOGUE_VOICE_ROWAN, 0.78F, 0.70F, 5, 140);
     private static final Voice FELIX = new Voice(ModSounds.DIALOGUE_VOICE_FELIX, 1.12F, 0.80F, 3, 100);

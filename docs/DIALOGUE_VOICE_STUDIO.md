@@ -6,18 +6,21 @@ The first build includes deliberately simple, original synthetic preview grunts.
 
 ## Character filenames
 
-Put your VoiceStudio renders in a client resource pack at the following paths (each 0.06–0.14-second OGG, mono, no silence):
+All voice samples live in `assets/cybernpc/sounds/dialogue/` inside the mod or an overriding client resource pack.
 
-- assets/cybernpc/sounds/dialogue/kai.ogg
-- assets/cybernpc/sounds/dialogue/katie.ogg
-- assets/cybernpc/sounds/dialogue/elara.ogg
-- assets/cybernpc/sounds/dialogue/rowan.ogg
-- assets/cybernpc/sounds/dialogue/felix.ogg
-- assets/cybernpc/sounds/dialogue/nadia.ogg
-- assets/cybernpc/sounds/dialogue/orin.ogg
-- assets/cybernpc/sounds/dialogue/pope.ogg
-- assets/cybernpc/sounds/dialogue/male.ogg
-- assets/cybernpc/sounds/dialogue/female.ogg
+**Kai:**
+- `kai_hm.ogg`, `kai_mm.ogg`, `kai_uh.ogg`
+
+**Katie:**
+- `katie_hm.ogg`, `katie_mm.ogg`, `katie_uh.ogg`
+
+These six clips came from the user's VoiceStudio WAV recordings. They were trimmed to their voiced sections, given short fades to avoid clicks, volume-balanced and converted to mono OGG Vorbis. Minecraft randomly chooses between the three variants for each character as their dialogue appears. The in-game speed is throttled to avoid excessive overlapping, and pitch is now close to the supplied recordings.
+
+The remaining placeholder voices are unchanged for now:
+- `elara.ogg`, `rowan.ogg`, `felix.ogg`, `nadia.ogg`, `orin.ogg`
+- `pope.ogg`, `male.ogg`, `female.ogg`
+
+To replace Kai or Katie's voice later, overwrite the matching three files in a resource pack, or change their three entries in `assets/cybernpc/sounds.json`. No source-code changes are needed for ordinary audio replacements.
 
 The receptionist, and any future NPCs with text dialogue, automatically use their appearance's male/female default, with a stable small pitch variation per entity. Named NPCs use their own sounds regardless of randomly generated appearance so their voices stay consistent.
 
