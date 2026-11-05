@@ -27,6 +27,8 @@ Record or synthesize a short original syllable such as "mm", "uh", or "hm" in Vo
 
 For recordings based on real people's voices, use recordings with their permission. Check the selected VoiceStudio model's license before releasing generated audio; the application and model licenses differ.
 
-## Settings
+## Playback
 
-`config/cybernpc-dialogue-client.toml` (client-side) exposes `dialogue_voice.enabled` and `dialogue_voice.volume`. The sound only plays while the NPC's line is typing; it stops immediately when the line is clicked to finish, or the conversation closes. Sound playback is local and adds no server-side AI or network traffic.
+Voice grunts are always active for NPCs with dialogue. There is no `cybernpc-dialogue-client.toml` file or separate voice-grunt toggle. The fixed, quiet base volume is 0.30 (before the individual NPC gain). Minecraft's standard sound sliders still apply.
+
+The sound only plays while the NPC's line is typing; it stops immediately when the line is clicked to finish, or the conversation closes. Sound playback is local and adds no server-side AI or network traffic.

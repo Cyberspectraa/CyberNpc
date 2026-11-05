@@ -30,14 +30,17 @@ public final class DialogueVoiceBlips {
     private static final Voice GENERIC_MALE = new Voice(ModSounds.DIALOGUE_VOICE_MALE, 0.96F, 0.72F, 4, 125);
     private static final Voice GENERIC_FEMALE = new Voice(ModSounds.DIALOGUE_VOICE_FEMALE, 1.04F, 0.72F, 4, 125);
 
+    // Constant client-side level; no separate mod config is required.
+    // Players can still use Minecraft's normal sound settings.
+    private static final float DEFAULT_VOLUME = 0.30F;
+
     private DialogueVoiceBlips() { }
 
     /** Returns true if a grunt actually played. Screen stores last played time/index. */
     public static boolean play(DialogueView view, String speech,
                                int previousCount, int count,
                                int lastPlayedIndex, long now, long lastPlayedMillis) {
-        if (!NpcVoiceConfig.ENABLED.get() || NpcVoiceConfig.VOLUME.get() <= 0D
-                || count <= previousCount || speech.isEmpty()) return false;
+        if (count <= previousCount || speech.isEmpty()) return false;
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return false;
         if (!(mc.level.getEntity(view.entityId()) instanceof CyberNpcEntity npc)) return false;
@@ -55,7 +58,7 @@ public final class DialogueVoiceBlips {
             // Stable per-entity personality for future authored dialogue NPCs.
             pitch *= 1.0F + (Math.floorMod(npc.getUUID().hashCode(), 9) - 4) * 0.018F;
         }
-        float volume = (float) (NpcVoiceConfig.VOLUME.get() * voice.gain());
+        float volume = DEFAULT_VOLUME * voice.gain();
         mc.getSoundManager().play(SimpleSoundInstance.forUI(voice.sample().get(), pitch, volume));
         return true;
     }
