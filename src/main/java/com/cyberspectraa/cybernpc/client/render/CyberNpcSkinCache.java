@@ -2,6 +2,7 @@ package com.cyberspectraa.cybernpc.client.render;
 
 import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
+import com.cyberspectraa.cybernpc.entity.NamedNpcSkin;
 import com.cyberspectraa.cybernpc.entity.NpcAppearance;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.entity.ZombieCyberNpcEntity;
@@ -24,12 +25,6 @@ import java.util.zip.ZipInputStream;
 public final class CyberNpcSkinCache {
     private static final ResourceLocation APPEARANCE_PACK =
             new ResourceLocation(CyberNpc.MOD_ID, "appearance/lunarskins.b64");
-
-    private static final ResourceLocation MASON =
-            new ResourceLocation(
-                    CyberNpc.MOD_ID,
-                    "textures/entity/mason.png"
-            );
 
     private static final ResourceLocation COURIER_POSTMAN =
             new ResourceLocation(
@@ -79,12 +74,11 @@ public final class CyberNpcSkinCache {
     }
 
     public static ResourceLocation getNpcTexture(CyberNpcEntity entity) {
-        if ("mason".equalsIgnoreCase(entity.getStoryNpcId())
-                || (entity.getCustomName() != null
-                && "Mason".equalsIgnoreCase(
-                    entity.getCustomName().getString()
-                ))) {
-            return MASON;
+        // Fixed story/role skins take precedence over generated Main outfits.
+        // This also keeps the dialogue portrait and 3D Skin Layers in sync.
+        NamedNpcSkin named = NamedNpcSkin.forNpc(entity);
+        if (named != null) {
+            return named.texture();
         }
 
         if ("Courier".equalsIgnoreCase(entity.getRole())) {

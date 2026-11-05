@@ -948,12 +948,11 @@ public class CyberNpcEntity extends PathfinderMob {
     }
 
     public boolean isSlimModel() {
-        if ("mason".equalsIgnoreCase(getStoryNpcId())
-                || (getCustomName() != null
-                && "Mason".equalsIgnoreCase(
-                    getCustomName().getString()
-                ))) {
-            return false;
+        // Match the actual 64x64 skin's arm UV layout, regardless of the
+        // randomized appearance data saved before the skin was assigned.
+        NamedNpcSkin named = NamedNpcSkin.forNpc(this);
+        if (named != null) {
+            return named.slimArms();
         }
 
         if (NpcServiceRole.fromRole(getRole()) == NpcServiceRole.COURIER) {
