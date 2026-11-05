@@ -16,11 +16,11 @@
           "to": "choso"
         },
         {
-          "text": "Seen any anime worth watching?",
+          "text": "What anime did you like back home?",
           "to": "anime"
         },
         {
-          "text": "What have you been listening to?",
+          "text": "What music do you miss?",
           "to": "music"
         },
         {
@@ -39,7 +39,7 @@
       ]
     },
     "choso": {
-      "speech": "Choso? He's my favourite. Obviously.",
+      "speech": "Choso? From Jujutsu Kaisen. He's my favourite. Obviously.",
       "choices": [
         {
           "text": "I've not seen Jujutsu Kaisen. Who is he?",
@@ -61,7 +61,7 @@
       ]
     },
     "choso_explain": {
-      "speech": "He's in Jujutsu Kaisen. I could tell you a lot, but I'd probably spoil half of it.",
+      "speech": "He's from Jujutsu Kaisen, an anime I watched back home. I could explain, but I'd spoil half of it.",
       "choices": [
         {
           "text": "Keep it spoiler-free, then.",
@@ -84,8 +84,8 @@
       "speech": "He's complicated and he cares about his family. That's enough to start with.",
       "choices": [
         {
-          "text": "Fair. I'll watch it myself.",
-          "to": "choso_good",
+          "text": "Shame we can't watch it here.",
+          "to": "lost_media",
           "effect": "warm"
         },
         {
@@ -152,7 +152,7 @@
       "speech": "Okay. You asked.",
       "choices": [
         {
-          "text": "What else have you been watching?",
+          "text": "What else did you watch back home?",
           "to": "anime"
         },
         {
@@ -183,8 +183,8 @@
           "effect": "trust"
         },
         {
-          "text": "I'll try the show sometime.",
-          "to": "choso_good"
+          "text": "Wish I could see the show again.",
+          "to": "lost_media"
         },
         {
           "text": "Have you seen anything besides JJK?",
@@ -201,13 +201,13 @@
           "effect": "warm"
         },
         {
-          "text": "No spoilers. I'll watch it.",
+          "text": "No spoilers. I never finished it back home.",
           "to": "spoiler_free"
         }
       ]
     },
     "anime": {
-      "speech": "SK8 the Infinity, Banana Fish, Blue Lock, Sasaki and Miyano. Depends what you want.",
+      "speech": "I used to watch SK8 the Infinity, Banana Fish, Blue Lock, Sasaki and Miyano. Depends what you're into.",
       "choices": [
         {
           "text": "What's good about SK8?",
@@ -251,8 +251,8 @@
       "speech": "They're different, but they work well together. That's kind of the point.",
       "choices": [
         {
-          "text": "I might give it a go.",
-          "to": "anime_good"
+          "text": "Wish I could watch it now.",
+          "to": "lost_media"
         },
         {
           "text": "What about Banana Fish?",
@@ -261,7 +261,7 @@
       ]
     },
     "banana": {
-      "speech": "Ash is my favourite. It's not exactly a cheerful watch.",
+      "speech": "Ash is my favourite. Wasn't exactly a cheerful show.",
       "choices": [
         {
           "text": "I'd rather know if it's a heavy story.",
@@ -293,7 +293,7 @@
       ]
     },
     "sasaki": {
-      "speech": "I like Sasaki. It's a nice change from everything being a fight.",
+      "speech": "I like Sasaki. It was a nice change from shows where everything's a fight.",
       "choices": [
         {
           "text": "Sometimes a quieter story is better.",
@@ -307,7 +307,7 @@
       ]
     },
     "blue_lock": {
-      "speech": "I like Blue Lock. Don't ask me to pick a favourite character yet.",
+      "speech": "I liked Blue Lock. Never really picked a favourite character, though.",
       "choices": [
         {
           "text": "Fair. I won't make you choose.",
@@ -324,7 +324,7 @@
       "speech": "Football, competition, and everyone taking it way too seriously. It's entertaining.",
       "choices": [
         {
-          "text": "Might be my thing.",
+          "text": "Sounds like I'd have liked that.",
           "to": "anime_good"
         },
         {
@@ -334,14 +334,14 @@
       ]
     },
     "anime_good": {
-      "speech": "Well, you've got some options now.",
+      "speech": "Yeah. I miss having stuff like that to watch.",
       "choices": [
         {
-          "text": "Anything you're listening to lately?",
+          "text": "What music do you remember?",
           "to": "music"
         },
         {
-          "text": "Do you play anything?",
+          "text": "What games did you play?",
           "to": "games"
         }
       ]
@@ -361,7 +361,7 @@
       ]
     },
     "music": {
-      "speech": "EPIC: The Musical. Mamma Mia!. Quite a few other things. Depends on my mood.",
+      "speech": "I used to listen to EPIC: The Musical and Mamma Mia!. Loads of other stuff too. Still get those songs stuck in my head.",
       "choices": [
         {
           "text": "What's the appeal of EPIC?",
@@ -372,7 +372,7 @@
           "to": "mamma"
         },
         {
-          "text": "Do you listen to music when you're annoyed?",
+          "text": "Did you listen to music when you were annoyed?",
           "to": "music_mood",
           "effect": "trust"
         }
@@ -386,8 +386,8 @@
           "to": "myth"
         },
         {
-          "text": "I'll listen to it sometime.",
-          "to": "music_good",
+          "text": "Wish I could hear it here.",
+          "to": "music_memory",
           "effect": "warm"
         }
       ]
@@ -406,7 +406,7 @@
       ]
     },
     "music_mood": {
-      "speech": "Sometimes. It helps when I don't wanna deal with people.",
+      "speech": "Yeah. If I can't listen to anything, I just get songs stuck in my head. Better than dealing with people sometimes.",
       "choices": [
         {
           "text": "I'll leave you to it when you need space.",
@@ -433,7 +433,7 @@
       ]
     },
     "games": {
-      "speech": "HADES, Fortnite, Roblox. I've played a lot of things.",
+      "speech": "HADES, Fortnite, Roblox. Played loads of stuff back home.",
       "choices": [
         {
           "text": "HADES? Is that the Greek mythology one?",
@@ -445,13 +445,13 @@
           "effect": "trust"
         },
         {
-          "text": "What about Fortnite?",
+          "text": "What was Fortnite like for you?",
           "to": "fortnite"
         }
       ]
     },
     "hades": {
-      "speech": "Yeah. Good game. And I already liked the mythology before I played it.",
+      "speech": "Yeah. Loved that game. And I already liked Greek mythology before I played it.",
       "choices": [
         {
           "text": "Which myths are your favourites?",
@@ -465,7 +465,7 @@
       ]
     },
     "fortnite": {
-      "speech": "It's fun with the right people. That's most of it.",
+      "speech": "It was fun with the right people. That's most of it.",
       "choices": [
         {
           "text": "You'd rather play with friends?",
@@ -479,7 +479,7 @@
       ]
     },
     "game_friends": {
-      "speech": "It's easier talking to people in games sometimes. You don't have to make it weird.",
+      "speech": "Talking to people in games was easier sometimes. Didn't have to make it weird.",
       "choices": [
         {
           "text": "I get that. No pressure.",
@@ -493,7 +493,7 @@
       ]
     },
     "myth": {
-      "speech": "There's a lot more to Greek mythology than the same three gods everyone mentions.",
+      "speech": "Back home people kept talking about the same three Greek gods. There was way more to those stories.",
       "choices": [
         {
           "text": "What about the underworld stories?",
@@ -507,10 +507,10 @@
       ]
     },
     "myth_underworld": {
-      "speech": "The stories about Hades get misrepresented a lot. Don't just go off one game.",
+      "speech": "The old stories about Hades get misrepresented a lot. The game wasn't the mythology.",
       "choices": [
         {
-          "text": "Alright. I'll actually read about it.",
+          "text": "Makes me wish I'd read more of those stories.",
           "to": "game_good",
           "effect": "warm"
         },
@@ -547,7 +547,7 @@
       ]
     },
     "foxes": {
-      "speech": "Foxes are good. And Lucifer from Hazbin Hotel is another favourite of mine.",
+      "speech": "Foxes are good. And Lucifer from Hazbin Hotel was another favourite character of mine.",
       "choices": [
         {
           "text": "Why foxes?",
@@ -599,7 +599,7 @@
           "to": "town"
         },
         {
-          "text": "Tell me more about anime.",
+          "text": "What other anime do you remember?",
           "to": "anime"
         }
       ]
@@ -652,7 +652,7 @@
       ]
     },
     "miss_home": {
-      "speech": "Music, games. Normal stuff. Can we not make this a whole thing?",
+      "speech": "Music, games, shows. Stuff I can't exactly go back and watch. Cba making it a whole thing.",
       "choices": [
         {
           "text": "Sure. We can leave it there.",
@@ -701,7 +701,7 @@
       ]
     },
     "choso_reality": {
-      "speech": "I know. Doesn't change that I like him.",
+      "speech": "I know he's fictional. Doesn't change that I like him.",
       "choices": [
         {
           "text": "Fair enough.",
@@ -710,6 +710,40 @@
         {
           "text": "What about the actual show?",
           "to": "jjk_others"
+        }
+      ]
+    },
+    "lost_media": {
+      "speech": "Yeah. No way to watch it here, is there? I still remember the good bits, though.",
+      "choices": [
+        {
+          "text": "What other shows do you remember?",
+          "to": "anime"
+        },
+        {
+          "text": "Do you miss the old world?",
+          "to": "miss_home"
+        },
+        {
+          "text": "Did you have a favourite character?",
+          "to": "choso_why"
+        }
+      ]
+    },
+    "music_memory": {
+      "speech": "I can remember most of it. Not the same as actually hearing it, but whatever.",
+      "choices": [
+        {
+          "text": "Do you miss listening to music?",
+          "to": "miss_home"
+        },
+        {
+          "text": "What games did you play?",
+          "to": "games"
+        },
+        {
+          "text": "Was the musical about Greek mythology?",
+          "to": "epic"
         }
       ]
     }

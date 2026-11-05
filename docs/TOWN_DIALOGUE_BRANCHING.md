@@ -59,3 +59,6 @@ on the server against the current page before accepting a player choice.
 - Secret quests beyond Katie's already specified Yarn objective have not been authored.
 - Friendships between the NPCs have not been assigned.
 - Kai's Choso Doll quest is still a future design, not activated by these dialogues.
+## Kai's media memories and lore
+
+Kai was transported from a different world. Jujutsu Kaisen and other anime, musicals, and computer games are memories of media from his original world, **not** present-day island entertainment or real people inhabiting the town. His affection for Choso is about a fictional character. Both he and the player arrived independently and had never met before. Dialogue must avoid suggesting that Kai can watch a new episode, recommend streaming something locally, or play Fortnite in the island. His Choso Doll quest remains a separate future quest and is unchanged here.
