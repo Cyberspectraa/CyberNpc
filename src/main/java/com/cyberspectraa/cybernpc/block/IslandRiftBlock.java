@@ -1,29 +1,24 @@
 package com.cyberspectraa.cybernpc.block;
 
-import com.cyberspectraa.cybernpc.rift.RiftDiscoverySavedData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
- * A one-block story Rift anchor. Actual dimension travel, NPC escorts and
- * departures are intentionally not enabled until the island quest is ready.
+ * Decorative, admin-placed island Rift anchor.
+ *
+ * Intentionally has NO interaction or gameplay logic yet: no player discovery,
+ * teleportation, quest progress, NPC followers or departures. When that phase
+ * is implemented, it must be enabled deliberately and tested separately.
  */
 public final class IslandRiftBlock extends Block {
     private static final VoxelShape SHAPE = Shapes.or(
@@ -47,36 +42,8 @@ public final class IslandRiftBlock extends Block {
         return SHAPE;
     }
 
-    @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos,
-            Player player, InteractionHand hand, BlockHitResult hit) {
-        if (hand != InteractionHand.MAIN_HAND) {
-            return InteractionResult.PASS;
-        }
-
-        if (level instanceof ServerLevel serverLevel
-                && player instanceof ServerPlayer serverPlayer) {
-            boolean discovered = RiftDiscoverySavedData.get(serverLevel)
-                    .discover(serverPlayer, pos);
-
-            if (discovered) {
-                serverPlayer.sendSystemMessage(Component.literal(
-                        "You have discovered the Island Rift. " +
-                        "Something beyond the island is calling..."));
-            } else {
-                serverPlayer.displayClientMessage(Component.literal(
-                        "Island Rift discovered. Its destination is still unknown."), true);
-            }
-
-            serverLevel.playSound(null, pos, SoundEvents.END_PORTAL_FRAME_FILL,
-                    SoundSource.BLOCKS, 0.65F, 0.85F);
-            serverLevel.sendParticles(ParticleTypes.REVERSE_PORTAL,
-                    pos.getX() + 0.5D, pos.getY() + 0.8D, pos.getZ() + 0.5D,
-                    18, 0.25D, 0.45D, 0.25D, 0.06D);
-        }
-
-        return InteractionResult.sidedSuccess(level.isClientSide);
-    }
+    // No use() override: right-click uses Block's ordinary no-op behaviour.
+    // This is a visual prop only until the island finale is designed.
 
     @Override
     public void animateTick(BlockState state, Level level,

@@ -1,4 +1,4 @@
-# Island Rift foundation and Wild NPC voices — CyberNpc 0.44.86
+# Island Rift foundation and Wild NPC voices — CyberNpc 0.44.87
 
 Development branch: `development-no-actions`. This is a source commit
 awaiting a LOCAL Forge 1.20.1 build (no GitHub Actions).
@@ -12,18 +12,16 @@ awaiting a LOCAL Forge 1.20.1 build (no GitHub Actions).
 - Not craftable, not in a creative tab, and not naturally generated.
 - Voxel pedestal with custom rift-stone / violet-core pixel textures,
   subtle particles and occasional portal ambience; emits light level 9.
-- Right-click as any player to **discover** the Rift. The server stores that
-  player's UUID, first discovery dimension, block position and game time in
-  `cybernpc_rift_discovery.dat` (overworld SavedData).
-- Discovery is persistent per-player and safe across dimensions and respawns.
-  First discovery shows an announcement; later interactions indicate that
-  the Rift is known.
+- **No gameplay behaviour yet.** Right-clicking does nothing: it does not
+  register discovery, save player data, play activation effects, advance quests,
+  teleport players, recruit NPCs or mark departures.
+- The future per-player discovery mechanism must be added only when the island
+  storyline is ready. Do not add placeholder persistent state yet.
 - Unbreakable in survival by default. An operator can replace the block with
   a command. This is NOT a teleport portal yet.
 - No quest changes, NPC escorts, disappearing NPCs, world deletion or save
-  migration in this foundation stage. Later story/escort stages should reuse
-  `RiftDiscoverySavedData.hasDiscovered(ServerPlayer)` instead of inventing
-  duplicate flags.
+  migration in this foundation stage. Avoid implementing redundant discovery
+  flags or departure data until the story system is designed.
 
 ## Wild NPC voice refresh
 
@@ -53,8 +51,9 @@ git pull --ff-only
 Install only the new `CyberNpc.jar` in a backed-up Forge test pack.
 Spawn male and female Wild NPCs and wait for ambient grunts, then trigger
 reactions and damage; there should be no Piglin sound for Wild NPCs.
-Use `/give @s cybernpc:island_rift` as operator, place it, and right-click
-with a normal player. Rejoin to confirm the first-discovery notification
-does not repeat. The Rift **must not** transport anyone yet.
+Use `/give @s cybernpc:island_rift` as operator and place it.
+Check its texture, low-key particles, ambient sound and collision. Right-click
+as a normal player: **nothing should happen**, including no discovery message
+or new advancement. It must not teleport or affect any NPCs.
 
 Build not verified in this chat: report local Gradle errors for fixing.
