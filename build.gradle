@@ -47,11 +47,50 @@ minecraft {
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
+// Photon 1.x FX is serialized once during the build; the exported effect is
+// packaged inside CyberNpc.jar. Normal gameplay code uses only the server
+// command, not client-only Photon classes.
+sourceSets {
+    fxgen {
+        java.srcDir 'fxgen/src/main/java'
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.compileClasspath
+    }
+}
+
+repositories {
+    maven {
+        name = 'CurseMaven'
+        url = 'https://www.cursemaven.com'
+        content { includeGroup 'curse.maven' }
+    }
+    maven {
+        name = 'LowDragLibSnapshots'
+        url = 'https://maven.firstdarkdev.xyz/snapshots'
+        content { includeGroup 'com.lowdragmc.ldlib' }
+    }
+}
+
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    // Pinned Photon and LDLib Forge 1.20.1 API for the build-time FX exporter.
+    fxgenImplementation fg.deobf("curse.maven:photon-871522:7501597@jar")
+    fxgenImplementation fg.deobf("com.lowdragmc.ldlib:ldlib-forge-1.20.1:1.0.42@jar")
+}
+
+tasks.register('generateIslandRiftFx', JavaExec) {
+    dependsOn tasks.named('fxgenClasses')
+    classpath = sourceSets.fxgen.runtimeClasspath
+    mainClass = 'com.cyberspectraa.cybernpc.fxgen.IslandRiftFxGenerator'
+    args layout.buildDirectory.file('generated-island-rift/assets/cybernpc/fx/island_rift.fx')
+            .get().asFile.absolutePath
 }
 
 tasks.named('processResources', ProcessResources).configure {
+    dependsOn tasks.named('generateIslandRiftFx')
+    from(layout.buildDirectory.dir('generated-island-rift'))
     def replaceProperties = [
             minecraft_version: minecraft_version,
             minecraft_version_range: minecraft_version_range,

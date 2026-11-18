@@ -1,67 +1,130 @@
 package com.cyberspectraa.cybernpc.block;
 
+import com.cyberspectraa.cybernpc.registry.ModBlockEntities;
+import com.cyberspectraa.cybernpc.rift.RiftBlockEntity;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
-import net.minecraft.util.RandomSource;
+import net.minecraft.core.Direction;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DirectionProperty;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.level.block.state.properties.EnumProperty;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityTicker;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
+import javax.annotation.Nullable;
+
 /**
- * Decorative, admin-placed island Rift anchor.
- *
- * Intentionally has NO interaction or gameplay logic yet: no player discovery,
- * teleportation, quest progress, NPC followers or departures. When that phase
- * is implemented, it must be enabled deliberately and tested separately.
+ * Two blocks high, one block wide: a noninteractive tear in world space.
+ * The model and mandatory Photon FX are cosmetic only; no quests, travel,
+ * discovery tracking or NPC logic. Preserve the 'island_rift' registry ID.
  */
-public final class IslandRiftBlock extends Block {
-    private static final VoxelShape SHAPE = Shapes.or(
-            box(1, 0, 1, 15, 4, 15),
-            box(4, 4, 4, 12, 16, 12)
-    );
+public final class IslandRiftBlock extends Block implements EntityBlock {
+    public static final EnumProperty<DoubleBlockHalf> HALF =
+            BlockStateProperties.DOUBLE_BLOCK_HALF;
+    public static final DirectionProperty FACING =
+            BlockStateProperties.HORIZONTAL_FACING;
+
+    private static final VoxelShape NORTH_SOUTH =
+            box(2.0D, 0.0D, 6.0D, 14.0D, 16.0D, 10.0D);
+    private static final VoxelShape EAST_WEST =
+            box(6.0D, 0.0D, 2.0D, 10.0D, 16.0D, 14.0D);
 
     public IslandRiftBlock(Properties properties) {
         super(properties);
+        registerDefaultState(stateDefinition.any()
+                .setValue(HALF, DoubleBlockHalf.LOWER)
+                .setValue(FACING, Direction.NORTH));
+    }
+
+    @Override
+    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
+        builder.add(HALF, FACING);
+    }
+
+    @Override
+    @Nullable
+    public BlockState getStateForPlacement(BlockPlaceContext context) {
+        BlockPos above = context.getClickedPos().above();
+        if (above.getY() >= context.getLevel().getMaxBuildHeight()
+                || !context.getLevel().getBlockState(above).canBeReplaced(context)) {
+            return null;
+        }
+        return defaultBlockState()
+                .setValue(HALF, DoubleBlockHalf.LOWER)
+                .setValue(FACING, context.getHorizontalDirection().getOpposite());
+    }
+
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state,
+            @Nullable LivingEntity placer, ItemStack stack) {
+        // The ordinary admin-only BlockItem places the lower block first.
+        // The upper half is kept in sync by updateShape.
+        level.setBlock(pos.above(), state.setValue(HALF, DoubleBlockHalf.UPPER), 3);
+    }
+
+    @Override
+    public BlockState updateShape(BlockState state, Direction direction,
+            BlockState neighbour, LevelAccessor level, BlockPos pos, BlockPos neighbourPos) {
+        if (direction.getAxis() == Direction.Axis.Y
+                && (state.getValue(HALF) == DoubleBlockHalf.LOWER) == (direction == Direction.UP)) {
+            return neighbour.is(this)
+                    && neighbour.getValue(HALF) != state.getValue(HALF)
+                    ? state : Blocks.AIR.defaultBlockState();
+        }
+        return super.updateShape(state, direction, neighbour, level, pos, neighbourPos);
     }
 
     @Override
     public VoxelShape getShape(BlockState state, BlockGetter level,
             BlockPos pos, CollisionContext context) {
-        return SHAPE;
+        return state.getValue(FACING).getAxis() == Direction.Axis.X
+                ? EAST_WEST : NORTH_SOUTH;
     }
 
     @Override
     public VoxelShape getCollisionShape(BlockState state, BlockGetter level,
             BlockPos pos, CollisionContext context) {
-        return SHAPE;
+        // Passing through the inactive tear has no gameplay consequence.
+        return Shapes.empty();
     }
 
-    // No use() override: right-click uses Block's ordinary no-op behaviour.
-    // This is a visual prop only until the island finale is designed.
+    // No use() handler, teleportation, discovery, quest or NPC logic.
 
     @Override
-    public void animateTick(BlockState state, Level level,
-            BlockPos pos, RandomSource random) {
-        for (int i = 0; i < 2; i++) {
-            double x = pos.getX() + 0.28D + random.nextDouble() * 0.44D;
-            double y = pos.getY() + 0.3D + random.nextDouble() * 0.9D;
-            double z = pos.getZ() + 0.28D + random.nextDouble() * 0.44D;
-            level.addParticle(random.nextBoolean()
-                            ? ParticleTypes.PORTAL : ParticleTypes.ENCHANT,
-                    x, y, z, (random.nextDouble() - 0.5D) * 0.08D,
-                    0.025D, (random.nextDouble() - 0.5D) * 0.08D);
-        }
+    @Nullable
+    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        return state.getValue(HALF) == DoubleBlockHalf.LOWER
+                ? new RiftBlockEntity(pos, state) : null;
+    }
 
-        if (random.nextInt(450) == 0) {
-            level.playLocalSound(pos.getX() + 0.5D, pos.getY() + 0.6D,
-                    pos.getZ() + 0.5D, SoundEvents.PORTAL_AMBIENT,
-                    SoundSource.BLOCKS, 0.12F, 0.8F, false);
+    @Override
+    @Nullable
+    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(
+            Level level, BlockState state, BlockEntityType<T> type) {
+        if (level.isClientSide
+                || state.getValue(HALF) != DoubleBlockHalf.LOWER
+                || type != ModBlockEntities.ISLAND_RIFT.get()) {
+            return null;
         }
+        return (tickLevel, tickPos, tickState, tile) -> {
+            if (tile instanceof RiftBlockEntity rift) {
+                RiftBlockEntity.serverTick(tickLevel, tickPos, tickState, rift);
+            }
+        };
     }
 }

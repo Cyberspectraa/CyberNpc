@@ -1,45 +1,42 @@
-# Island Rift foundation and Wild NPC voices — CyberNpc 0.44.87
+# Island Rift visual update — CyberNpc 0.44.88
 
-Development branch: `development-no-actions`. This is a source commit
-awaiting a LOCAL Forge 1.20.1 build (no GitHub Actions).
+## What changed
 
-## Island Rift (phase one)
+- The existing registry ID `cybernpc:island_rift` is unchanged.
+- One block wide, **two blocks tall**; admin-only item placement creates both
+  halves, with facing synchronized. Both disappear together if removed using
+  commands. No naturally generated structure or recipe.
+- Pixel-art texture depicts a narrow jagged *tear in reality*, not a pedestal
+  or framed portal. Dark void centre; violet/cyan fracture edges.
+- Double-height cutout block models; no Minecraft-style solid stone frame.
+- **Photon is mandatory** for CyberNpc and provides the animated Rift effects.
+  The project uses the same Forge 1.20.1 / Photon .fx exporter approach as
+  CyberClasses and the same server-command anchoring as CyberServer.
+- `assets/cybernpc/fx/island_rift.fx` is generated **into the JAR at build
+  time**; no separate resource pack needed.
+- Loaded Rift lower-half block entities refresh the ambient Photon animation
+  every 96 ticks **only when a player is within 28 blocks**. This avoids
+  network/particle work for deserted Rift locations.
+- Occasional quiet ambient sound is retained. Vanilla portal particles were
+  removed from the Rift; Photon now owns its animated FX.
+- The Rift **DOES NOT** teleport, save discovery, start quests, activate NPC
+  following/departures, or do anything when right-clicked.
+- Wild NPC male/female voice recordings from 0.44.87 are untouched.
 
-- Registered block and block item: `cybernpc:island_rift`.
-- **Operator-only placement** (permission level 2+) from the item. Command:
-  `/give @s cybernpc:island_rift` as an operator. An admin may also use
-  `/setblock ~ ~ ~ cybernpc:island_rift`.
-- Not craftable, not in a creative tab, and not naturally generated.
-- Voxel pedestal with custom rift-stone / violet-core pixel textures,
-  subtle particles and occasional portal ambience; emits light level 9.
-- **No gameplay behaviour yet.** Right-clicking does nothing: it does not
-  register discovery, save player data, play activation effects, advance quests,
-  teleport players, recruit NPCs or mark departures.
-- The future per-player discovery mechanism must be added only when the island
-  storyline is ready. Do not add placeholder persistent state yet.
-- Unbreakable in survival by default. An operator can replace the block with
-  a command. This is NOT a teleport portal yet.
-- No quest changes, NPC escorts, disappearing NPCs, world deletion or save
-  migration in this foundation stage. Avoid implementing redundant discovery
-  flags or departure data until the story system is designed.
+## Important compatibility rules
 
-## Wild NPC voice refresh
+- Keep CyberNpc as both client+server code: model rendering and cutout render
+  layers must load on clients, while block placement/FX triggers are
+  server-authoritative. Do not move all code into the server-only CyberServer
+  module or introduce circular mod dependencies.
+- Photon is required in both Minecraft client and dedicated server modpacks.
+- Never delete the island_rift block registry ID; installed test worlds might
+  already contain it.
+- Old single-block Rifts in test worlds will default to the lower half;
+  **replace them using the updated admin item** to produce the 2-block visual.
+- Do not replace or delete user gameplay data outside this visual update.
 
-- Original user WAV recordings from `Generic Male.zip` and
-  `Generic Female.zip` were cleaned of initial silence / long breaths,
-  softly filtered and converted to 22,050 Hz mono OGG.
-- Six new independent sound events/OGGs:
-  `wild_voice_{male,female}_{hm,mm,uh}`.
-- Wild NPCs use gender-matched voice clips for ambient, emotional reactions,
-  and hurt sounds (Hm / Mm / Uh selected by context).
-- Previous random ambient interval, reaction and hurt cooldowns retained.
-  Pitch variations reduced to preserve the supplied voice timbre. Sounds
-  remain positional and use the normal neutral mob volume slider.
-- The seven custom town-character voices, Pope, generic **dialogue-screen**
-  voices, dialogue timing and screen overlap logic are unchanged.
-- Non-Wild NPC reaction sound behaviour is unchanged.
-
-## Local test checklist
+## Local build/test
 
 ```powershell
 cd "$HOME\CyberMods\CyberNpc"
@@ -48,12 +45,23 @@ git pull --ff-only
 .\build-local.bat
 ```
 
-Install only the new `CyberNpc.jar` in a backed-up Forge test pack.
-Spawn male and female Wild NPCs and wait for ambient grunts, then trigger
-reactions and damage; there should be no Piglin sound for Wild NPCs.
-Use `/give @s cybernpc:island_rift` as operator and place it.
-Check its texture, low-key particles, ambient sound and collision. Right-click
-as a normal player: **nothing should happen**, including no discovery message
-or new advancement. It must not teleport or affect any NPCs.
+First build may download pinned Photon/LDLib compile-time dependencies.
+A successful local build creates `CyberNpc.jar`; this branch does not use
+GitHub Actions. Do not treat the new version as tested until compiled and
+verified in a backed-up test world.
 
-Build not verified in this chat: report local Gradle errors for fixing.
+In Minecraft: `/give @s cybernpc:island_rift` as an operator, place where
+there are **two free blocks vertically**, observe transparent 1x2 space-tear
+with Photon motes from both sides. It should be completely inactive on right
+click or walking through. Test destroying the bottom half with `/setblock`
+in creative/admin mode: its top should disappear. Try dedicated multiplayer
+with Photon installed on both sides, and check build-local.log if the build
+fails. The 7 town character voices remain unchanged.
+
+## Architecture decision still pending
+
+Moving all implementation to CyberServer would force a large dependency
+restructure. Keep per-mod client renderers, textures, and feature-specific
+server logic now. If common code genuinely repeats, factor only that code
+into a small independent shared API/module later. CyberServer stays a
+server-side world director.

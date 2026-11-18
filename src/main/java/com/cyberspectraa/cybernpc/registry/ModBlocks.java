@@ -46,7 +46,8 @@ public final class ModBlocks {
                             BlockBehaviour.Properties.of()
                                     .mapColor(MapColor.COLOR_PURPLE)
                                     .strength(-1.0F, 3600000.0F)
-                                    .lightLevel(state -> 9)
+                                    .noCollission()
+                                    .lightLevel(state -> 5)
                                     .sound(SoundType.AMETHYST)
                                     .noOcclusion()
                     ));
