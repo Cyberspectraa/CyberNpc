@@ -18,3 +18,6 @@ src/generated/
 # OS
 .DS_Store
 Thumbs.db
+# Local verification outputs
+/CyberNpc.jar
+/build-local.log

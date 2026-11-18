@@ -1,33 +1,15 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-echo === CyberNpc local Forge build ===
-echo Required: JDK 17 and Gradle 8.8 on PATH.
-where java >nul 2>&1
-if errorlevel 1 (
-    echo ERROR: Java not found. Install JDK 17.
-    exit /b 1
+echo === CyberNpc local build (no GitHub Actions) ===
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\build-local.ps1" -GradleVersion "8.8" -ModName "CyberNpc" -JarPattern "CyberNpc-*.jar"
+set "RESULT=%ERRORLEVEL%"
+if not "%RESULT%"=="0" (
+    echo.
+    echo Build failed. Please share build-local.log if you need help.
+) else (
+    echo.
+    echo The file CyberNpc.jar is ready for testing.
 )
-where gradle >nul 2>&1
-if errorlevel 1 (
-    echo ERROR: Gradle not found. Install Gradle 8.8.
-    exit /b 1
-)
-call gradle clean build --no-daemon --stacktrace
-if errorlevel 1 (
-    echo BUILD FAILED. Nothing was copied to CyberNpc.jar.
-    exit /b 1
-)
-set "BUILT="
-for %%F in ("build\libs\CyberNpc-*.jar") do (
-    if exist "%%~fF" (
-        copy /Y "%%~fF" "CyberNpc.jar" >nul
-        set "BUILT=1"
-    )
-)
-if not defined BUILT (
-    echo ERROR: Build passed but output JAR was not found in build\libs.
-    exit /b 1
-)
-echo SUCCESS: CyberNpc.jar is in this folder.
-endlocal
+pause
+exit /b %RESULT%
