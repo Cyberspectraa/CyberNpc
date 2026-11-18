@@ -147,5 +147,53 @@
         "name": "cybernpc:dialogue/pope_uh"
       }
     ]
+  },
+  "wild_voice_male_hm": {
+    "subtitle": "subtitles.cybernpc.wild_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:wild/male_hm"
+      }
+    ]
+  },
+  "wild_voice_male_mm": {
+    "subtitle": "subtitles.cybernpc.wild_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:wild/male_mm"
+      }
+    ]
+  },
+  "wild_voice_male_uh": {
+    "subtitle": "subtitles.cybernpc.wild_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:wild/male_uh"
+      }
+    ]
+  },
+  "wild_voice_female_hm": {
+    "subtitle": "subtitles.cybernpc.wild_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:wild/female_hm"
+      }
+    ]
+  },
+  "wild_voice_female_mm": {
+    "subtitle": "subtitles.cybernpc.wild_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:wild/female_mm"
+      }
+    ]
+  },
+  "wild_voice_female_uh": {
+    "subtitle": "subtitles.cybernpc.wild_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:wild/female_uh"
+      }
+    ]
   }
 }

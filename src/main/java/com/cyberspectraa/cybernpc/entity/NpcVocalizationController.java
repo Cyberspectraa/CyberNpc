@@ -1,13 +1,14 @@
 package com.cyberspectraa.cybernpc.entity;
 
+import com.cyberspectraa.cybernpc.registry.ModSounds;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 
 /**
  * Lightweight non-verbal voice layer. CyberNpc deliberately does not speak:
- * these are short grunt/snort-style acknowledgements built from vanilla sound
- * events so the mod does not need bundled voice assets.
+ * Wild NPCs use the supplied, cleaned male/female grunt recordings.
+ * Existing non-Wild reaction sounds are deliberately left unchanged.
  */
 final class NpcVocalizationController {
     private static final int AMBIENT_MIN_TICKS = 700;
@@ -46,13 +47,8 @@ final class NpcVocalizationController {
         resetAmbient();
 
         if (npc.getRandom().nextFloat() < 0.58F) {
-            play(
-                    npc.getRandom().nextBoolean()
-                            ? SoundEvents.PIGLIN_AMBIENT
-                            : SoundEvents.PIGLIN_ADMIRING_ITEM,
-                    0.24F,
-                    passivePitch()
-            );
+            play(voice(npc.getRandom().nextBoolean() ? 0 : 1),
+                    0.50F, passivePitch());
         }
     }
 
@@ -61,6 +57,21 @@ final class NpcVocalizationController {
                 || icon == NpcReactionIcon.NONE
                 || reactionCooldown > 0
                 || !npc.isAlive()) {
+            return;
+        }
+
+        if (npc.getNpcType() == NpcType.WILD) {
+            // Match the short syllable to the emotion. No Piglin reactions.
+            int syllable = switch (icon) {
+                case THINKING, CONFUSED, GROUP_INVITE, HOME, SLEEP, ANNOYED -> 1;
+                case SURPRISED, DANGER, SCARED, SAD, ANGRY, COMBAT -> 2;
+                default -> 0;
+            };
+            play(voice(syllable),
+                    syllable == 2 ? 0.70F : 0.58F,
+                    reactionPitch());
+            reactionCooldown = REACTION_COOLDOWN_TICKS
+                    + npc.getRandom().nextInt(31);
             return;
         }
 
@@ -120,12 +131,25 @@ final class NpcVocalizationController {
         }
 
         play(
-                SoundEvents.PIGLIN_HURT,
-                damage >= 5.0F ? 0.38F : 0.30F,
-                reactionPitch() - (damage >= 5.0F ? 0.10F : 0.02F)
+                voice(2),
+                damage >= 5.0F ? 0.78F : 0.66F,
+                reactionPitch() - (damage >= 5.0F ? 0.07F : 0.02F)
         );
         hurtCooldown = HURT_COOLDOWN_TICKS;
         reactionCooldown = Math.max(reactionCooldown, 20);
+    }
+
+    /** Uses the Wild-NPC recordings, not the dialogue screen's voice assets. */
+    private SoundEvent voice(int syllable) {
+        boolean female = npc.getAppearanceGender() == NpcAppearance.Gender.FEMALE;
+        return switch (syllable) {
+            case 1 -> female ? ModSounds.WILD_FEMALE_MM.get()
+                    : ModSounds.WILD_MALE_MM.get();
+            case 2 -> female ? ModSounds.WILD_FEMALE_UH.get()
+                    : ModSounds.WILD_MALE_UH.get();
+            default -> female ? ModSounds.WILD_FEMALE_HM.get()
+                    : ModSounds.WILD_MALE_HM.get();
+        };
     }
 
     private boolean canMakePassiveSound() {
@@ -160,11 +184,12 @@ final class NpcVocalizationController {
             case PATIENT, STUBBORN -> -0.04F;
             default -> 0.0F;
         };
-        return 0.82F + personality + (npc.getRandom().nextFloat() - 0.5F) * 0.12F;
+        return 1.0F + personality * 0.35F
+                + (npc.getRandom().nextFloat() - 0.5F) * 0.07F;
     }
 
     private float reactionPitch() {
-        return 0.82F + (npc.getRandom().nextFloat() - 0.5F) * 0.16F;
+        return 1.0F + (npc.getRandom().nextFloat() - 0.5F) * 0.08F;
     }
 
     private void resetAmbient() {

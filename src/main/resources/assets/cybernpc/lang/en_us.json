@@ -64,5 +64,7 @@
   "item.cybernpc.town_npc_5_spawn_egg": "Nadia Spawn Egg",
   "item.cybernpc.town_npc_6_spawn_egg": "Orin Spawn Egg",
   "item.cybernpc.yarn": "White Yarn",
-  "subtitles.cybernpc.dialogue_voice": "NPC speaks"
+  "subtitles.cybernpc.dialogue_voice": "NPC speaks",
+  "block.cybernpc.island_rift": "Island Rift",
+  "subtitles.cybernpc.wild_voice": "Wild NPC vocalizes"
 }

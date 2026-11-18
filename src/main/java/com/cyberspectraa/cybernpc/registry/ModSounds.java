@@ -55,6 +55,19 @@ public final class ModSounds {
     public static final RegistryObject<SoundEvent> DIALOGUE_VOICE_POPE =
             registerDialogueVoice("dialogue_voice_pope");
 
+    public static final RegistryObject<SoundEvent> WILD_MALE_HM =
+            registerDialogueVoice("wild_voice_male_hm");
+    public static final RegistryObject<SoundEvent> WILD_MALE_MM =
+            registerDialogueVoice("wild_voice_male_mm");
+    public static final RegistryObject<SoundEvent> WILD_MALE_UH =
+            registerDialogueVoice("wild_voice_male_uh");
+    public static final RegistryObject<SoundEvent> WILD_FEMALE_HM =
+            registerDialogueVoice("wild_voice_female_hm");
+    public static final RegistryObject<SoundEvent> WILD_FEMALE_MM =
+            registerDialogueVoice("wild_voice_female_mm");
+    public static final RegistryObject<SoundEvent> WILD_FEMALE_UH =
+            registerDialogueVoice("wild_voice_female_uh");
+
     private static RegistryObject<SoundEvent> registerDialogueVoice(String key) {
         return SOUND_EVENTS.register(key, () -> SoundEvent.createVariableRangeEvent(
                 new ResourceLocation(CyberNpc.MOD_ID, key)));

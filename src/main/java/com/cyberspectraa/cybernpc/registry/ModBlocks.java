@@ -3,6 +3,7 @@ package com.cyberspectraa.cybernpc.registry;
 import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.block.DropBoxBlock;
 import com.cyberspectraa.cybernpc.block.LetterBoxBlock;
+import com.cyberspectraa.cybernpc.block.IslandRiftBlock;
 import com.cyberspectraa.cybernpc.block.GuardPostBlock;
 import com.cyberspectraa.cybernpc.block.NpcMarkerBlock;
 import com.cyberspectraa.cybernpc.building.NpcMarkerKind;
@@ -35,6 +36,18 @@ public final class ModBlocks {
                                     .mapColor(MapColor.WOOD)
                                     .strength(2.0F, 3.0F)
                                     .sound(SoundType.WOOD)
+                                    .noOcclusion()
+                    ));
+
+    // Admin-placed Rift anchor, intentionally absent from worldgen/recipes.
+    public static final RegistryObject<Block> ISLAND_RIFT =
+            BLOCKS.register("island_rift", () ->
+                    new IslandRiftBlock(
+                            BlockBehaviour.Properties.of()
+                                    .mapColor(MapColor.COLOR_PURPLE)
+                                    .strength(-1.0F, 3600000.0F)
+                                    .lightLevel(state -> 9)
+                                    .sound(SoundType.AMETHYST)
                                     .noOcclusion()
                     ));
 

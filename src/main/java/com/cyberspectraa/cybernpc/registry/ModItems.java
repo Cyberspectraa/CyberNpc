@@ -4,6 +4,7 @@ import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.building.BuildingMarkerType;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.item.AddressedLetterItem;
+import com.cyberspectraa.cybernpc.item.AdminRiftBlockItem;
 import com.cyberspectraa.cybernpc.item.BuildingMarkerItem;
 import com.cyberspectraa.cybernpc.item.BuildingPlannerItem;
 import com.cyberspectraa.cybernpc.item.HomeAssignmentToolItem;
@@ -322,6 +323,13 @@ public final class ModItems {
                     new BlockItem(
                             ModBlocks.LETTER_BOX.get(),
                             new Item.Properties()
+                    ));
+
+    public static final RegistryObject<Item> ISLAND_RIFT =
+            ITEMS.register("island_rift", () ->
+                    new AdminRiftBlockItem(
+                            ModBlocks.ISLAND_RIFT.get(),
+                            new Item.Properties().stacksTo(1).rarity(Rarity.EPIC)
                     ));
 
     public static final RegistryObject<Item> GUARD_POST =
