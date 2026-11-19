@@ -468,6 +468,16 @@ public final class NpcDialogueScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        // A visible Close/Continue control must work on the FIRST click;
+        // the skip-typewriter shortcut must not intercept its hit box.
+        if (button == 0 && continuationButton != null
+                && continuationButton.visible
+                && mouseX >= continuationButton.getX()
+                && mouseX < continuationButton.getX() + continuationButton.getWidth()
+                && mouseY >= continuationButton.getY()
+                && mouseY < continuationButton.getY() + continuationButton.getHeight()) {
+            return super.mouseClicked(mouseX, mouseY, button);
+        }
         if (button == 0) {
             if (waitingForServer) {
                 if (playerReplyLength < pendingReply.length()) {
