@@ -164,6 +164,13 @@ public final class NpcDialogueController {
         Session session = SESSIONS.get(player.getUUID());
         if (session == null || player.level().getGameTime() > session.expiresAt()) {
             clearSession(player);
+            // A late Farewell/Skip packet must never reopen a conversation
+            // that the client already closed.
+            if ("leave".equals(action)) return;
+            if ("intro_skip".equals(action) || "intro_finish".equals(action)) {
+                if (CyberIntroService.isGreeting(player)) CyberIntroService.finish(player);
+                return;
+            }
             recover(player, npcId);
             return;
         }

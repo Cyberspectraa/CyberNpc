@@ -206,8 +206,10 @@ public final class NpcDialogueScreen extends Screen {
                 || "intro_skip".equals(choice.id())) {
             CyberNpcNetwork.CHANNEL.sendToServer(
                     new DialogueChoicePacket(view.entityId(), choice.id()));
-            if (isIntro()) Minecraft.getInstance().setScreen(null);
-            else onClose();
+            // Farewell/Finish is already a server-authoritative action.
+            // Closing locally without a second Close packet avoids a race
+            // that could regenerate the conversation after Farewell.
+            Minecraft.getInstance().setScreen(null);
             return;
         }
 
