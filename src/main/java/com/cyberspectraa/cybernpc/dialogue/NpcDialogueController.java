@@ -86,11 +86,9 @@ public final class NpcDialogueController {
             return;
         }
 
-        // Prevent idle navigation from continually turning the torso away
-        // during a peaceful conversation. Combat goals can still take over.
-        if (npc.getTarget() == null) {
-            npc.getNavigation().stop();
-        }
+        // Do not stop navigation here: the Main Seven's defensive goal
+        // uses navigation without always setting a Mob target. Stopping it
+        // would silently prevent them from defending themselves.
         npc.getLookControl().setLookAt(player, 30.0F, 30.0F);
         double dx = player.getX() - npc.getX();
         double dz = player.getZ() - npc.getZ();

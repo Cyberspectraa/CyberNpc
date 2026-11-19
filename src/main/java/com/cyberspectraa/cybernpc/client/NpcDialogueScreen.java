@@ -340,13 +340,13 @@ public final class NpcDialogueScreen extends Screen {
                     g.drawString(font, "Speaking...", rx + 10, ry + 29,
                             MUTED, false);
                 } else if (queuedNpcReply != null) {
-                    g.drawString(font, "Continue the conversation", rx + 10,
+                    g.drawString(font, "Reply ready", rx + 10,
                             ry + 29, TEXT, false);
                 } else if (now - speakerChanged >= RESPONSE_TIMEOUT_MS) {
-                    g.drawString(font, "No reply received", rx + 10,
+                    g.drawString(font, "No response", rx + 10,
                             ry + 29, MUTED, false);
                 } else {
-                    g.drawString(font, "Waiting for a response...", rx + 10,
+                    g.drawString(font, "Waiting...", rx + 10,
                             ry + 29, MUTED, false);
                 }
                 continuationButton.setMessage(Component.literal(
@@ -355,7 +355,7 @@ public final class NpcDialogueScreen extends Screen {
             } else {
                 g.drawString(font, "CONVERSATION", rx + 10, ry + 10,
                         0xFFEFCB87, false);
-                g.drawString(font, "No further replies available.", rx + 10,
+                g.drawString(font, "No replies available.", rx + 10,
                         ry + 29, TEXT, false);
                 continuationButton.setMessage(Component.literal("Close"));
             }

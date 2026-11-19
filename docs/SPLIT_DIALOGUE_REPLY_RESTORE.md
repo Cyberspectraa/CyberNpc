@@ -23,8 +23,9 @@ from the conversation. The original 0.44.93 speaker-swap was preferred.
 - Reapply NPC look direction as soon as a conversation packet is sent,
   then every active server tick.
 - Strengthen the smooth yaw adjustment from ~18% to ~40% per tick.
-- Stop peaceful idle navigation during conversation, without stopping
-  active monster-target combat.
+- Preserve NPC navigation during conversation; in particular the Main
+  Seven's defensive melee goal navigates without always storing a Mob target,
+  and cancelling navigation each tick would make their weapons useless.
 - Ensure fence-avoidance's early-return path also updates conversation
   facing. This addresses screenshots showing an NPC turned away during
   an open dialogue.
