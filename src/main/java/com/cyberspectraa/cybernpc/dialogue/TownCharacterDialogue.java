@@ -203,7 +203,7 @@ public final class TownCharacterDialogue {
         Node node = script.nodes().get(page);
         if (node == null) return List.of(new DialogueView.Option("leave", "Leave."));
         List<DialogueView.Option> options = new ArrayList<>();
-        List<Choice> available = availableChoices(player, state, node);
+        List<Choice> available = availableChoices(player, script.id(), state, node);
         int maxReplies = "root".equals(page) ? 7 : 6;
         for (int i = 0; i < available.size() && options.size() < maxReplies; i++) {
             options.add(new DialogueView.Option("pick_" + i, available.get(i).text()));
@@ -215,26 +215,62 @@ public final class TownCharacterDialogue {
         return List.copyOf(options);
     }
 
-    private static List<Choice> availableChoices(ServerPlayer player, CompoundTag state, Node node) {
+    private static List<Choice> availableChoices(ServerPlayer player, String storyId,
+                                                  CompoundTag state, Node node) {
         List<Choice> result = new ArrayList<>();
         for (Choice choice : node.choices()) {
-            if (allowed(player, state, choice.when())) result.add(choice);
+            if (allowed(player, storyId, state, choice.when())) result.add(choice);
         }
         return result;
     }
 
-    private static boolean allowed(ServerPlayer player, CompoundTag state, String condition) {
+    private static boolean allowed(ServerPlayer player, String storyId,
+                                   CompoundTag state, String condition) {
         if (condition == null || condition.isBlank()) return true;
         if (condition.startsWith("flag:")) {
             return state.getCompound("Memories").getBoolean(condition.substring(5));
         }
+        ResourceLocation personalQuest = secretQuestId(storyId);
         return switch (condition) {
-            case "quest_available" -> ModList.get().isLoaded("cyberquest")
+            // Preserve Katie's existing quest ID and active/completed status.
+            // New players must become friends before she offers her yarn quest.
+            case "quest_available" -> "town_npc_1".equals(storyId)
+                    && ModList.get().isLoaded("cyberquest")
+                    && friendshipReady(state)
                     && !questActive(player) && !questCompleted(player);
+            case "quest_locked" -> "town_npc_1".equals(storyId)
+                    && !friendshipReady(state) && !questActive(player)
+                    && !questCompleted(player);
             case "quest_active" -> questActive(player);
             case "quest_completed" -> questCompleted(player);
-            default -> false; // Fail closed on unsupported datapack conditions.
+            case "secret_available" -> personalQuest != null
+                    && ModList.get().isLoaded("cyberquest")
+                    && friendshipReady(state)
+                    && !questState(player, "isActive", personalQuest)
+                    && !questState(player, "isCompleted", personalQuest);
+            case "secret_active" -> personalQuest != null
+                    && questState(player, "isActive", personalQuest);
+            case "secret_completed" -> personalQuest != null
+                    && questState(player, "isCompleted", personalQuest);
+            default -> false; // Unknown conditions must never unlock quests.
         };
+    }
+
+    private static boolean friendshipReady(CompoundTag state) {
+        return state.getInt("Trust") >= 2 && state.getInt("Affection") >= 1;
+    }
+
+    private static ResourceLocation secretQuestId(String storyId) {
+        String name = switch (storyId) {
+            case "mason" -> "kai_choso_plush";
+            case "town_npc_2" -> "elara_lost_route";
+            case "town_npc_3" -> "rowan_welcome_meal";
+            case "town_npc_4" -> "felix_fair_deck";
+            case "town_npc_5" -> "nadia_failsafe";
+            case "town_npc_6" -> "orin_star_notes";
+            default -> null;
+        };
+        return name == null ? null : new ResourceLocation("cyberquest", name);
     }
 
     public static Transition advance(ServerPlayer player, CyberNpcEntity npc,
@@ -257,13 +293,13 @@ public final class TownCharacterDialogue {
         } catch (NumberFormatException ex) {
             return new Transition("root", script.redirect());
         }
-        List<Choice> available = availableChoices(player, state, node);
+        List<Choice> available = availableChoices(player, script.id(), state, node);
         if (index < 0 || index >= available.size()
                 || index >= ("root".equals(page) ? 7 : 6)) {
             return new Transition(page, node.speech());
         }
         Choice choice = available.get(index);
-        if (!allowed(player, state, choice.when())) {
+        if (!allowed(player, script.id(), state, choice.when())) {
             return new Transition(page, node.speech());
         }
         if (!choice.action().isBlank()) {
@@ -273,10 +309,36 @@ public final class TownCharacterDialogue {
                 }
             } else if ("quest_finish".equals(choice.action())) {
                 if (questOperation(player, "turnIn")) {
+                    change(state, "Trust", 1);
                     return enter(script, state, "yarn_done");
                 }
                 return new Transition(page,
                         "Not yet. You need to craft all sixty-four. Check your journal.");
+            } else if ("secret_start".equals(choice.action())) {
+                ResourceLocation id = secretQuestId(script.id());
+                if (id == null || !questOperation(player, "start", id)) {
+                    return new Transition(page, "I can't put that in your journal right now.");
+                }
+            } else if ("secret_research".equals(choice.action())) {
+                ResourceLocation id = secretQuestId(script.id());
+                if (id == null || !questState(player, "isActive", id)
+                        || !recordSecretDiscovery(player, script.id())) {
+                    return new Transition(page, "Perhaps we should discuss that another time.");
+                }
+            } else if ("secret_finish".equals(choice.action())) {
+                ResourceLocation id = secretQuestId(script.id());
+                if (id == null || !questState(player, "isActive", id)) {
+                    return new Transition(page, "I don't have an unfinished request for you.");
+                }
+                // Kai's keepsake is an existing item. The item stays with the
+                // player; CyberQuest validates that it is actually held.
+                if ("mason".equals(script.id())) trySecretDelivery(player, script.id());
+                if (questOperation(player, "turnIn", id)) {
+                    change(state, "Trust", 1); // Exactly once per completed quest.
+                    return enter(script, state, "secret_done");
+                }
+                return new Transition(page, "There's still something to finish. "
+                        + "Please check your journal, then come back.");
             } else {
                 return new Transition(page, node.speech());
             }
@@ -402,25 +464,66 @@ public final class TownCharacterDialogue {
     }
 
     private static boolean questState(ServerPlayer player, String name) {
-        if (!ModList.get().isLoaded("cyberquest")) return false;
+        return questState(player, name, KATIE_QUEST);
+    }
+
+    private static boolean questState(ServerPlayer player, String name, ResourceLocation id) {
+        if (id == null || !ModList.get().isLoaded("cyberquest")) return false;
         try {
             Class<?> type = Class.forName("com.cyberspectraa.cyberquest.player.PlayerQuestData");
             Method method = type.getMethod(name, ServerPlayer.class, ResourceLocation.class);
-            return Boolean.TRUE.equals(method.invoke(null, player, KATIE_QUEST));
+            return Boolean.TRUE.equals(method.invoke(null, player, id));
         } catch (ReflectiveOperationException | RuntimeException ex) {
             return false;
         }
     }
 
     private static boolean questOperation(ServerPlayer player, String name) {
-        if (!ModList.get().isLoaded("cyberquest")) return false;
+        return questOperation(player, name, KATIE_QUEST);
+    }
+
+    private static boolean questOperation(ServerPlayer player, String name, ResourceLocation id) {
+        if (id == null || !ModList.get().isLoaded("cyberquest")) return false;
         try {
             Class<?> type = Class.forName("com.cyberspectraa.cyberquest.quest.QuestManager");
             Method method = type.getMethod(name, ServerPlayer.class, ResourceLocation.class, boolean.class);
-            return Boolean.TRUE.equals(method.invoke(null, player, KATIE_QUEST, false));
+            return Boolean.TRUE.equals(method.invoke(null, player, id, false));
         } catch (ReflectiveOperationException | RuntimeException ex) {
-            LOGGER.warn("Couldn't perform Katie quest action {}", name, ex);
+            LOGGER.warn("Couldn't perform personal quest action {} for {}", name, id, ex);
             return false;
+        }
+    }
+
+    private static boolean recordSecretDiscovery(ServerPlayer player, String storyId) {
+        if (!ModList.get().isLoaded("cyberquest")) return false;
+        String name = switch (storyId) {
+            case "town_npc_2" -> "elara";
+            case "town_npc_3" -> "rowan";
+            case "town_npc_4" -> "felix";
+            case "town_npc_5" -> "nadia";
+            case "town_npc_6" -> "orin";
+            default -> null;
+        };
+        if (name == null) return false;
+        try {
+            Class<?> type = Class.forName("com.cyberspectraa.cyberquest.quest.QuestManager");
+            type.getMethod("recordDiscovery", ServerPlayer.class, String.class)
+                    .invoke(null, player, "cybernpc:secret_" + name + "_research");
+            return true;
+        } catch (ReflectiveOperationException | RuntimeException ex) {
+            LOGGER.warn("Couldn't record {}'s personal quest discovery", name, ex);
+            return false;
+        }
+    }
+
+    private static void trySecretDelivery(ServerPlayer player, String storyId) {
+        if (!ModList.get().isLoaded("cyberquest")) return;
+        try {
+            Class<?> type = Class.forName("com.cyberspectraa.cyberquest.quest.QuestManager");
+            type.getMethod("tryDeliverItems", ServerPlayer.class, String.class)
+                    .invoke(null, player, storyId);
+        } catch (ReflectiveOperationException | RuntimeException ex) {
+            LOGGER.warn("Couldn't handle personal quest hand-in for {}", storyId, ex);
         }
     }
 

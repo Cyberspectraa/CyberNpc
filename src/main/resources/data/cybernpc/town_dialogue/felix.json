@@ -12,6 +12,21 @@
       "speech": "Well, look who decided to be interesting. What can I do for you?",
       "choices": [
         {
+          "text": "About your personal request...",
+          "to": "secret_after",
+          "when": "secret_completed"
+        },
+        {
+          "text": "About the help you asked for...",
+          "to": "secret_progress",
+          "when": "secret_active"
+        },
+        {
+          "text": "Is there something you haven't asked me yet?",
+          "to": "secret_offer",
+          "when": "secret_available"
+        },
+        {
           "text": "You said you had a story.",
           "to": "story"
         },
@@ -513,6 +528,97 @@
           "text": "Sorry. That came out wrong.",
           "to": "serious_trust",
           "effect": "repair"
+        }
+      ]
+    },
+    "secret_offer": {
+      "speech": "My old card deck didn't make it across the fracture. Will you help me make another? I promise there's an actual reason.",
+      "choices": [
+        {
+          "text": "Yes. I want to help.",
+          "to": "secret_accepted",
+          "action": "secret_start",
+          "when": "secret_available"
+        },
+        {
+          "text": "Can we talk about it another time?",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_accepted": {
+      "speech": "Twelve sheets of paper. And no, I'm not telling you the trick yet.",
+      "choices": [
+        {
+          "text": "I'll check my journal.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_progress": {
+      "speech": "Got the paper? There's something I should probably tell you about those cards.",
+      "choices": [
+        {
+          "text": "Let's talk through the important part.",
+          "to": "secret_reflected",
+          "action": "secret_research",
+          "when": "secret_active"
+        },
+        {
+          "text": "I think I've finished. Here you go.",
+          "to": "secret_done",
+          "action": "secret_finish",
+          "when": "secret_active"
+        },
+        {
+          "text": "What exactly do you need?",
+          "to": "secret_hint"
+        },
+        {
+          "text": "I'm still working on it.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_hint": {
+      "speech": "Craft twelve paper. Then ask me why I'd bother making cards on an island like this.",
+      "choices": [
+        {
+          "text": "Right. I'll get back to it.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_reflected": {
+      "speech": "There it is. An honest answer. Don't tell anyone you've heard me being sincere.",
+      "choices": [
+        {
+          "text": "I'll finish the rest of the task.",
+          "to": "root"
+        },
+        {
+          "text": "Is everything ready now?",
+          "to": "secret_done",
+          "action": "secret_finish",
+          "when": "secret_active"
+        }
+      ]
+    },
+    "secret_done": {
+      "speech": "A fresh deck. And someone to play with. I think I like that better than the old tricks.",
+      "choices": [
+        {
+          "text": "I'm glad I could help.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_after": {
+      "speech": "Fancy a game sometime? No tricks this time. Probably.",
+      "choices": [
+        {
+          "text": "That's good to hear.",
+          "to": "root"
         }
       ]
     }

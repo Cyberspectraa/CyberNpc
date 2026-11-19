@@ -12,6 +12,21 @@
       "speech": "Do you need something fixed, or are we just talking?",
       "choices": [
         {
+          "text": "About your personal request...",
+          "to": "secret_after",
+          "when": "secret_completed"
+        },
+        {
+          "text": "About the help you asked for...",
+          "to": "secret_progress",
+          "when": "secret_active"
+        },
+        {
+          "text": "Is there something you haven't asked me yet?",
+          "to": "secret_offer",
+          "when": "secret_available"
+        },
+        {
           "text": "I've got a building problem.",
           "to": "build"
         },
@@ -547,6 +562,97 @@
         {
           "text": "What do you do when you're not working?",
           "to": "puzzles"
+        }
+      ]
+    },
+    "secret_offer": {
+      "speech": "I've designed a backup circuit for a town mechanism. I can build it, but I need someone willing to challenge my plan.",
+      "choices": [
+        {
+          "text": "Yes. I want to help.",
+          "to": "secret_accepted",
+          "action": "secret_start",
+          "when": "secret_available"
+        },
+        {
+          "text": "Can we talk about it another time?",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_accepted": {
+      "speech": "Good. Bring me two repeaters, then tell me exactly where the mechanism might fail.",
+      "choices": [
+        {
+          "text": "I'll check my journal.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_progress": {
+      "speech": "Have you made the repeaters? More importantly, have you thought about what happens when the circuit loses power?",
+      "choices": [
+        {
+          "text": "Let's talk through the important part.",
+          "to": "secret_reflected",
+          "action": "secret_research",
+          "when": "secret_active"
+        },
+        {
+          "text": "I think I've finished. Here you go.",
+          "to": "secret_done",
+          "action": "secret_finish",
+          "when": "secret_active"
+        },
+        {
+          "text": "What exactly do you need?",
+          "to": "secret_hint"
+        },
+        {
+          "text": "I'm still working on it.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_hint": {
+      "speech": "Craft two redstone repeaters, then talk through a failure test with me.",
+      "choices": [
+        {
+          "text": "Right. I'll get back to it.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_reflected": {
+      "speech": "Right. You looked for the failure instead of telling me what I wanted to hear.",
+      "choices": [
+        {
+          "text": "I'll finish the rest of the task.",
+          "to": "root"
+        },
+        {
+          "text": "Is everything ready now?",
+          "to": "secret_done",
+          "action": "secret_finish",
+          "when": "secret_active"
+        }
+      ]
+    },
+    "secret_done": {
+      "speech": "Two repeaters and a plan that can survive mistakes. Thanks. I work better when I don't have to do every part alone.",
+      "choices": [
+        {
+          "text": "I'm glad I could help.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_after": {
+      "speech": "You can help with the next build. Just don't touch any unlabelled levers.",
+      "choices": [
+        {
+          "text": "That's good to hear.",
+          "to": "root"
         }
       ]
     }

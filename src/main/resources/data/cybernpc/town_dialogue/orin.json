@@ -12,6 +12,21 @@
       "speech": "Oh. I was thinking about something. Do you need me?",
       "choices": [
         {
+          "text": "About your personal request...",
+          "to": "secret_after",
+          "when": "secret_completed"
+        },
+        {
+          "text": "About the help you asked for...",
+          "to": "secret_progress",
+          "when": "secret_active"
+        },
+        {
+          "text": "Is there something you haven't asked me yet?",
+          "to": "secret_offer",
+          "when": "secret_available"
+        },
+        {
           "text": "What were you thinking about?",
           "to": "thought"
         },
@@ -542,6 +557,97 @@
           "text": "I'll keep looking for answers.",
           "to": "thought",
           "effect": "trust"
+        }
+      ]
+    },
+    "secret_offer": {
+      "speech": "I've been wondering if the stars here resemble the ones I remember. Would you help me observe them, without pretending we know the answer?",
+      "choices": [
+        {
+          "text": "Yes. I want to help.",
+          "to": "secret_accepted",
+          "action": "secret_start",
+          "when": "secret_available"
+        },
+        {
+          "text": "Can we talk about it another time?",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_accepted": {
+      "speech": "A spyglass would help. Then we can compare what we've noticed.",
+      "choices": [
+        {
+          "text": "I'll check my journal.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_progress": {
+      "speech": "Did you make a spyglass? There are a few things I want to compare with you.",
+      "choices": [
+        {
+          "text": "Let's talk through the important part.",
+          "to": "secret_reflected",
+          "action": "secret_research",
+          "when": "secret_active"
+        },
+        {
+          "text": "I think I've finished. Here you go.",
+          "to": "secret_done",
+          "action": "secret_finish",
+          "when": "secret_active"
+        },
+        {
+          "text": "What exactly do you need?",
+          "to": "secret_hint"
+        },
+        {
+          "text": "I'm still working on it.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_hint": {
+      "speech": "Craft a spyglass, then tell me what you'd look for in an unfamiliar sky.",
+      "choices": [
+        {
+          "text": "Right. I'll get back to it.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_reflected": {
+      "speech": "Yes. And if we find nothing unusual, that matters too. It's still a real observation.",
+      "choices": [
+        {
+          "text": "I'll finish the rest of the task.",
+          "to": "root"
+        },
+        {
+          "text": "Is everything ready now?",
+          "to": "secret_done",
+          "action": "secret_finish",
+          "when": "secret_active"
+        }
+      ]
+    },
+    "secret_done": {
+      "speech": "We may not have an answer, but we've started asking a better question. I'd like to keep looking with you.",
+      "choices": [
+        {
+          "text": "I'm glad I could help.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_after": {
+      "speech": "Sometimes I look up and remember that we're all under the same sky, even here.",
+      "choices": [
+        {
+          "text": "That's good to hear.",
+          "to": "root"
         }
       ]
     }

@@ -12,6 +12,21 @@
       "speech": "Yeah? What did you want?",
       "choices": [
         {
+          "text": "About your personal request...",
+          "to": "secret_after",
+          "when": "secret_completed"
+        },
+        {
+          "text": "About the help you asked for...",
+          "to": "secret_progress",
+          "when": "secret_active"
+        },
+        {
+          "text": "You seem a little worried. Is something missing?",
+          "to": "secret_offer",
+          "when": "secret_available"
+        },
+        {
           "text": "Who's that Choso character you keep mentioning?",
           "to": "choso"
         },
@@ -744,6 +759,76 @@
         {
           "text": "Was the musical about Greek mythology?",
           "to": "epic"
+        }
+      ]
+    },
+    "secret_offer": {
+      "speech": "I heard someone found a Choso plush out there. I know it sounds stupid, but... could you look for it? I miss having something from home.",
+      "choices": [
+        {
+          "text": "Yes. I want to help.",
+          "to": "secret_accepted",
+          "action": "secret_start",
+          "when": "secret_available"
+        },
+        {
+          "text": "Can we talk about it another time?",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_accepted": {
+      "speech": "Thanks. Just... don't make a huge deal out of it, alright?",
+      "choices": [
+        {
+          "text": "I'll check my journal.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_progress": {
+      "speech": "Any luck with that plush? If you find it, hold it when you talk to me.",
+      "choices": [
+        {
+          "text": "I think I've finished. Here you go.",
+          "to": "secret_done",
+          "action": "secret_finish",
+          "when": "secret_active"
+        },
+        {
+          "text": "What exactly do you need?",
+          "to": "secret_hint"
+        },
+        {
+          "text": "I'm still working on it.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_hint": {
+      "speech": "A Choso plush. I don't know where it ended up. If you find it, show me.",
+      "choices": [
+        {
+          "text": "Right. I'll get back to it.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_done": {
+      "speech": "You found it? ...Wow. I didn't think I'd see anything like this again. Thank you. Really.",
+      "choices": [
+        {
+          "text": "I'm glad I could help.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_after": {
+      "speech": "I'm keeping this memory. Doesn't mean I'm getting sentimental, okay?",
+      "choices": [
+        {
+          "text": "That's good to hear.",
+          "to": "root"
         }
       ]
     }

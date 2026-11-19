@@ -12,6 +12,21 @@
       "speech": "Well? Have you found anything worth talking about?",
       "choices": [
         {
+          "text": "About your personal request...",
+          "to": "secret_after",
+          "when": "secret_completed"
+        },
+        {
+          "text": "About the help you asked for...",
+          "to": "secret_progress",
+          "when": "secret_active"
+        },
+        {
+          "text": "Is there something you haven't asked me yet?",
+          "to": "secret_offer",
+          "when": "secret_available"
+        },
+        {
           "text": "I found an odd place outside town.",
           "to": "ruins"
         },
@@ -418,6 +433,97 @@
         {
           "text": "Want to talk about the island?",
           "to": "island"
+        }
+      ]
+    },
+    "secret_offer": {
+      "speech": "There's a trail I haven't dared mark on my maps. If someone new wanders there, they might not come back. Could you help me chart it?",
+      "choices": [
+        {
+          "text": "Yes. I want to help.",
+          "to": "secret_accepted",
+          "action": "secret_start",
+          "when": "secret_available"
+        },
+        {
+          "text": "Can we talk about it another time?",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_accepted": {
+      "speech": "Good. Make a map, and we'll compare what we know before anyone follows it.",
+      "choices": [
+        {
+          "text": "I'll check my journal.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_progress": {
+      "speech": "Have you made a map? I've been thinking about which paths are safest to mark.",
+      "choices": [
+        {
+          "text": "Let's talk through the important part.",
+          "to": "secret_reflected",
+          "action": "secret_research",
+          "when": "secret_active"
+        },
+        {
+          "text": "I think I've finished. Here you go.",
+          "to": "secret_done",
+          "action": "secret_finish",
+          "when": "secret_active"
+        },
+        {
+          "text": "What exactly do you need?",
+          "to": "secret_hint"
+        },
+        {
+          "text": "I'm still working on it.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_hint": {
+      "speech": "Craft a map, then let's agree on which route should be marked for newcomers.",
+      "choices": [
+        {
+          "text": "Right. I'll get back to it.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_reflected": {
+      "speech": "Exactly. A dangerous path is useful to know about, but safer ways home matter more.",
+      "choices": [
+        {
+          "text": "I'll finish the rest of the task.",
+          "to": "root"
+        },
+        {
+          "text": "Is everything ready now?",
+          "to": "secret_done",
+          "action": "secret_finish",
+          "when": "secret_active"
+        }
+      ]
+    },
+    "secret_done": {
+      "speech": "There. A route people can actually trust. I don't usually ask others to help with my maps. I'm glad I asked you.",
+      "choices": [
+        {
+          "text": "I'm glad I could help.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_after": {
+      "speech": "If I ever head into those ruins again, I'll take your notes along.",
+      "choices": [
+        {
+          "text": "That's good to hear.",
+          "to": "root"
         }
       ]
     }

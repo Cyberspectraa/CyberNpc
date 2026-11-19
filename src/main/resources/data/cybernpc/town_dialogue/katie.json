@@ -345,6 +345,11 @@
           "text": "How'd that project turn out?",
           "to": "yarn_done",
           "when": "quest_completed"
+        },
+        {
+          "text": "Maybe we should get to know each other first.",
+          "to": "project_private",
+          "when": "quest_locked"
         }
       ]
     },

@@ -12,6 +12,21 @@
       "speech": "Hello. It's nice to see someone stopping for a moment.",
       "choices": [
         {
+          "text": "About your personal request...",
+          "to": "secret_after",
+          "when": "secret_completed"
+        },
+        {
+          "text": "About the help you asked for...",
+          "to": "secret_progress",
+          "when": "secret_active"
+        },
+        {
+          "text": "Is there something you haven't asked me yet?",
+          "to": "secret_offer",
+          "when": "secret_available"
+        },
+        {
           "text": "What are you looking at?",
           "to": "birds"
         },
@@ -387,6 +402,97 @@
         {
           "text": "Maybe I'll join you another time.",
           "to": "forest_rest"
+        }
+      ]
+    },
+    "secret_offer": {
+      "speech": "Some people arrive here with nothing, and a hot meal helps more than questions. Could we put bread aside for the next newcomers?",
+      "choices": [
+        {
+          "text": "Yes. I want to help.",
+          "to": "secret_accepted",
+          "action": "secret_start",
+          "when": "secret_available"
+        },
+        {
+          "text": "Can we talk about it another time?",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_accepted": {
+      "speech": "That's kind of you. Eight loaves should be enough to start with.",
+      "choices": [
+        {
+          "text": "I'll check my journal.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_progress": {
+      "speech": "How's the bread coming along? I'd like to have something ready before anyone else arrives.",
+      "choices": [
+        {
+          "text": "Let's talk through the important part.",
+          "to": "secret_reflected",
+          "action": "secret_research",
+          "when": "secret_active"
+        },
+        {
+          "text": "I think I've finished. Here you go.",
+          "to": "secret_done",
+          "action": "secret_finish",
+          "when": "secret_active"
+        },
+        {
+          "text": "What exactly do you need?",
+          "to": "secret_hint"
+        },
+        {
+          "text": "I'm still working on it.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_hint": {
+      "speech": "Craft eight bread and tell me what you think we should say to someone who's frightened and lost.",
+      "choices": [
+        {
+          "text": "Right. I'll get back to it.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_reflected": {
+      "speech": "Yes. We don't need their whole story before giving them a place at the table.",
+      "choices": [
+        {
+          "text": "I'll finish the rest of the task.",
+          "to": "root"
+        },
+        {
+          "text": "Is everything ready now?",
+          "to": "secret_done",
+          "action": "secret_finish",
+          "when": "secret_active"
+        }
+      ]
+    },
+    "secret_done": {
+      "speech": "Thank you. It means a lot knowing I'm not the only one looking out for strangers.",
+      "choices": [
+        {
+          "text": "I'm glad I could help.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_after": {
+      "speech": "There's always room for another chair here. You know that, don't you?",
+      "choices": [
+        {
+          "text": "That's good to hear.",
+          "to": "root"
         }
       ]
     }
