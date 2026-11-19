@@ -566,6 +566,9 @@ public class CyberNpcEntity extends PathfinderMob {
         goalSelector.addGoal(0, new FloatGoal(this));
         goalSelector.addGoal(1, new BuildingAwareOpenDoorGoal(this, true));
         goalSelector.addGoal(2, new WildNpcCombatGoal(this));
+        // Main Seven only: small-radius defensive melee, never proactive
+        // Wild-NPC hunting or aggression towards players.
+        goalSelector.addGoal(2, new MainSevenDefense.DefenseGoal(this));
         goalSelector.addGoal(5, new ConditionalRandomStrollGoal(this, 1.0D, 120));
         goalSelector.addGoal(6, new ConditionalLookAtPlayerGoal(this, 8.0F));
         goalSelector.addGoal(7, new ConditionalRandomLookAroundGoal(this));
@@ -2763,6 +2766,12 @@ public class CyberNpcEntity extends PathfinderMob {
 
         if (getNpcType() != NpcType.WILD) {
             if (isAlive()) {
+                // Covers both fresh spawn eggs and the seven characters
+                // already saved in existing worlds, without replacing custom
+                // weapons placed on those characters by administrators.
+                if (tickCount == 1 || tickCount % 100 == 0) {
+                    MainSevenDefense.ensureWeapon(this);
+                }
                 if (isSpecialServiceNpc()
                         && level() instanceof ServerLevel serverLevel) {
                     SpecialNpcSavedData.get(serverLevel)
