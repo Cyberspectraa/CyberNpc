@@ -53,10 +53,8 @@ public final class NpcDialogueScreen extends Screen {
     private long speakerChanged = screenStarted;
     private boolean waitingForServer;
     private int messageLength;
-    private int playerReplyLength;
-    private long playerReplyStartedAt;
-    private long playerVoiceAtMillis;
-    private int playerVoiceIndex;
+    // The original split design uses this same speaker/typewriter state
+    // for both the NPC and the player's reply.
     private Button continuationButton;
     private long lastVoiceAtMillis;
     private int lastVoiceIndex;
@@ -112,7 +110,7 @@ public final class NpcDialogueScreen extends Screen {
         return 30 + Math.min(rowsPerPage(), Math.max(1, view.options().size()))
                 * ROW_HEIGHT + 26;
     }
-    private int compactReplyHeight() { return 105; }
+    private int compactReplyHeight() { return 67; }
     private int replyY() { return height - bottomGap() - replyHeight(); }
     private int pageCount() {
         return Math.max(1, (view.options().size() + rowsPerPage() - 1) / rowsPerPage());
@@ -125,7 +123,6 @@ public final class NpcDialogueScreen extends Screen {
         screenStarted = System.currentTimeMillis();
         speakerChanged = screenStarted;
         replyPage = 0;
-        playerReplyLength = 0;
         textScroll = 0;
         scrollLimit = 0;
 
@@ -154,7 +151,7 @@ public final class NpcDialogueScreen extends Screen {
                 Component.literal("Close"), b -> {
                     if (waitingForServer
                             && queuedNpcReply != null
-                            && playerReplyLength >= pendingReply.length()) {
+                            && messageLength >= pendingReply.length()) {
                         showQueuedNpcReply();
                     } else {
                         onClose();
@@ -216,13 +213,12 @@ public final class NpcDialogueScreen extends Screen {
         DialogueVoiceBlips.stopActive();
         pendingReply = choice.label();
         waitingForServer = true;
-        playerReplyLength = 0;
-        playerReplyStartedAt = System.currentTimeMillis();
-        playerVoiceIndex = 0;
-        playerVoiceAtMillis = 0L;
-        // Keep the NPC's last line and portrait stable on the left.
-        // The player's voice and typed reply are now on the right.
-        messageLength = view.speech().length();
+        // Return to the original split layout: the speaking character always
+        // has the left portrait and parchment, including the player.
+        messageLength = 0;
+        lastVoiceIndex = 0;
+        lastVoiceAtMillis = 0L;
+        speakerChanged = System.currentTimeMillis();
         textScroll = 0;
         CyberNpcNetwork.CHANNEL.sendToServer(
                 new DialogueChoicePacket(view.entityId(), choice.id()));
@@ -238,8 +234,8 @@ public final class NpcDialogueScreen extends Screen {
         long now = System.currentTimeMillis();
         float entry = ease(Math.min(1.0F, (now - screenStarted) / (float) ENTRY_MS));
         boolean playerSpeaking = waitingForServer;
-        String speaker = view.name();
-        String speech = view.speech();
+        String speaker = playerSpeaking ? playerName() : view.name();
+        String speech = playerSpeaking ? pendingReply : view.speech();
 
         // Both boxes rise from the bottom independently, leaving the centre
         // and most of the top of the world untouched (no fullscreen dim).
@@ -261,13 +257,15 @@ public final class NpcDialogueScreen extends Screen {
             float switchIn = ease(Math.min(1.0F,
                     (now - speakerChanged) / (float) SWITCH_MS));
             int slide = Math.round((1.0F - switchIn) * 7.0F);
-            drawSpeakerPortrait(g, false,
-                    portraitX - slide, portraitY, mouseX, mouseY);
+            drawSpeakerPortrait(g, playerSpeaking,
+                    portraitX + (playerSpeaking ? slide : -slide),
+                    portraitY, mouseX, mouseY);
         }
 
         DialogueView.Relationship relationship = view.relationship();
         int textY = ly + 29;
-        if (relationship != null) {
+        // Bond values describe the NPC, not the player's own character.
+        if (!playerSpeaking && relationship != null) {
             String status = bondLabel(relationship.trust(), relationship.affection());
             String bond = "Bond: " + status;
             String stats = "Trust " + signed(relationship.trust())
@@ -291,12 +289,15 @@ public final class NpcDialogueScreen extends Screen {
         g.enableScissor(textX + 5, textY + 4,
                 textX + textWidth - 5, textY + paperHeight - 4);
         try {
-            int count = playerSpeaking ? speech.length()
-                    : (int) Math.min(speech.length(),
-                            Math.max(0L, (now - speakerChanged) / letterDelay()));
-            boolean played = !playerSpeaking && DialogueVoiceBlips.play(
-                    view, speech, messageLength, count,
-                    lastVoiceIndex, now, lastVoiceAtMillis);
+            int count = (int) Math.min(speech.length(),
+                    Math.max(0L, (now - speakerChanged) / letterDelay()));
+            boolean played = playerSpeaking
+                    ? DialogueVoiceBlips.playPlayer(
+                            speech, messageLength, count,
+                            lastVoiceIndex, now, lastVoiceAtMillis)
+                    : DialogueVoiceBlips.play(
+                            view, speech, messageLength, count,
+                            lastVoiceIndex, now, lastVoiceAtMillis);
             if (played) {
                 lastVoiceAtMillis = now;
                 lastVoiceIndex = count;
@@ -323,66 +324,39 @@ public final class NpcDialogueScreen extends Screen {
                 && entry >= 1.0F;
 
         if (waitingForServer || view.options().isEmpty()) {
-            // A short right-side card shows the PLAYER'S reply.
-            // It never replaces the NPC portrait or creates a huge empty box.
+            // Preserve the original left-side player portrait and reply.
+            // The right side is a small state/control panel, never a second
+            // copy of the chosen text or a giant empty wood background.
             int rh = compactReplyHeight();
             int ry = height - bottomGap() - rh + rise;
             drawWoodPanel(g, rx, ry, rw, rh);
 
             continuationButton.visible = true;
             if (waitingForServer) {
-                int count = (int) Math.min(pendingReply.length(),
-                        Math.max(0L, (now - playerReplyStartedAt) / letterDelay()));
-                boolean voiced = DialogueVoiceBlips.playPlayer(
-                        pendingReply, playerReplyLength, count,
-                        playerVoiceIndex, now, playerVoiceAtMillis);
-                if (voiced) {
-                    playerVoiceAtMillis = now;
-                    playerVoiceIndex = count;
-                }
-                playerReplyLength = count;
-
-                g.drawString(font, playerName() + ":", rx + 10, ry + 10,
+                boolean finished = messageLength >= pendingReply.length();
+                g.drawString(font, "YOUR REPLY", rx + 10, ry + 10,
                         0xFFEFCB87, false);
-                int paperY = ry + 25;
-                int paperW = rw - 18;
-                paperPanel(g, rx + 9, paperY, paperW, 48);
-                g.enableScissor(rx + 15, paperY + 4,
-                        rx + rw - 15, paperY + 43);
-                try {
-                    List<FormattedCharSequence> replyLines = font.split(
-                            Component.literal(pendingReply.substring(0, count)),
-                            Math.max(35, paperW - 14));
-                    for (int i = 0; i < Math.min(3, replyLines.size()); i++) {
-                        g.drawString(font, replyLines.get(i),
-                                rx + 17, paperY + 7 + i * 11, INK, false);
-                    }
-                } finally {
-                    g.disableScissor();
-                }
-
-                if (playerReplyLength < pendingReply.length()) {
-                    g.drawString(font, "Speaking...", rx + 10, ry + rh - 21,
+                if (!finished) {
+                    g.drawString(font, "Speaking...", rx + 10, ry + 29,
                             MUTED, false);
                 } else if (queuedNpcReply != null) {
-                    g.drawString(font, "Reply ready", rx + 10, ry + rh - 21,
-                            MUTED, false);
-                } else if (now - playerReplyStartedAt >= RESPONSE_TIMEOUT_MS) {
+                    g.drawString(font, "Continue the conversation", rx + 10,
+                            ry + 29, TEXT, false);
+                } else if (now - speakerChanged >= RESPONSE_TIMEOUT_MS) {
                     g.drawString(font, "No reply received", rx + 10,
-                            ry + rh - 21, MUTED, false);
+                            ry + 29, MUTED, false);
                 } else {
-                    g.drawString(font, "Waiting...", rx + 10, ry + rh - 21,
-                            MUTED, false);
+                    g.drawString(font, "Waiting for a response...", rx + 10,
+                            ry + 29, MUTED, false);
                 }
                 continuationButton.setMessage(Component.literal(
-                        queuedNpcReply != null
-                                && playerReplyLength >= pendingReply.length()
+                        finished && queuedNpcReply != null
                                 ? "Continue" : "Close"));
             } else {
                 g.drawString(font, "CONVERSATION", rx + 10, ry + 10,
                         0xFFEFCB87, false);
-                g.drawString(font, "No further replies available.",
-                        rx + 10, ry + 35, TEXT, false);
+                g.drawString(font, "No further replies available.", rx + 10,
+                        ry + 29, TEXT, false);
                 continuationButton.setMessage(Component.literal("Close"));
             }
             for (Button button : replyButtons) button.visible = false;
@@ -480,10 +454,10 @@ public final class NpcDialogueScreen extends Screen {
         }
         if (button == 0) {
             if (waitingForServer) {
-                if (playerReplyLength < pendingReply.length()) {
-                    playerReplyStartedAt = System.currentTimeMillis()
+                if (messageLength < pendingReply.length()) {
+                    speakerChanged = System.currentTimeMillis()
                             - pendingReply.length() * letterDelay();
-                    playerReplyLength = pendingReply.length();
+                    messageLength = pendingReply.length();
                     return true;
                 }
                 // Only a click on the continue button advances after speech;

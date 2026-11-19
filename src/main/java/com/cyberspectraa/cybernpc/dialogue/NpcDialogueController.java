@@ -86,14 +86,19 @@ public final class NpcDialogueController {
             return;
         }
 
+        // Prevent idle navigation from continually turning the torso away
+        // during a peaceful conversation. Combat goals can still take over.
+        if (npc.getTarget() == null) {
+            npc.getNavigation().stop();
+        }
         npc.getLookControl().setLookAt(player, 30.0F, 30.0F);
         double dx = player.getX() - npc.getX();
         double dz = player.getZ() - npc.getZ();
         float targetYaw = (float) (Mth.atan2(dz, dx) * (180.0D / Math.PI)) - 90.0F;
-        float yaw = Mth.rotLerp(0.18F, npc.getYRot(), targetYaw);
+        float yaw = Mth.rotLerp(0.40F, npc.getYRot(), targetYaw);
         npc.setYRot(yaw);
-        npc.setYBodyRot(Mth.rotLerp(0.18F, npc.yBodyRot, targetYaw));
-        npc.setYHeadRot(Mth.rotLerp(0.22F, npc.getYHeadRot(), targetYaw));
+        npc.setYBodyRot(Mth.rotLerp(0.40F, npc.yBodyRot, targetYaw));
+        npc.setYHeadRot(Mth.rotLerp(0.45F, npc.getYHeadRot(), targetYaw));
     }
 
     /**
@@ -362,6 +367,7 @@ public final class NpcDialogueController {
     private static void send(ServerPlayer player, CyberNpcEntity npc,
                              String page, String playerLine, String speech) {
         FACING.put(npc.getUUID(), player.getUUID());
+        tickConversationFacing(npc);
         String role = npc.getRole().isBlank() ? "Citizen" : npc.getRole();
         String safeSpeech = speech == null || speech.isBlank()
                 ? "What would you like to know?" : speech;

@@ -2760,6 +2760,10 @@ public class CyberNpcEntity extends PathfinderMob {
         if (isAlive() && fenceAvoidanceBrain.tick()) {
             if (getNpcType() == NpcType.WILD) {
                 finishAiTick();
+            } else {
+                // Even fence avoidance's early return must not prevent a
+                // talking town character from facing their conversation partner.
+                NpcDialogueController.tickConversationFacing(this);
             }
             return;
         }
