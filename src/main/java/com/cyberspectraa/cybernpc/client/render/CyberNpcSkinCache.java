@@ -55,6 +55,15 @@ public final class CyberNpcSkinCache {
     private static final ResourceLocation FALLBACK_ALEX =
             new ResourceLocation("minecraft", "textures/entity/player/slim/alex.png");
 
+    // User-supplied vanilla-style clothing UV overlays. Head pixels remain
+    // transparent so generated zombie face, hair, eyes and race extras survive.
+    private static final ResourceLocation ZOMBIE_STEVE_OUTFIT =
+            new ResourceLocation(CyberNpc.MOD_ID,
+                    "textures/entity/appearance/zombie/outfit_steve.png");
+    private static final ResourceLocation ZOMBIE_ALEX_OUTFIT =
+            new ResourceLocation(CyberNpc.MOD_ID,
+                    "textures/entity/appearance/zombie/outfit_alex.png");
+
     private static final ResourceLocation FALLBACK_ZOMBIE =
             new ResourceLocation("minecraft", "textures/entity/zombie/zombie.png");
 
@@ -304,6 +313,16 @@ public final class CyberNpcSkinCache {
                  )) {
                 blend(composed, eyeLayer);
                 blend(composed, hairLayer);
+            }
+
+            if (zombie) {
+                // Only paint the transparent clothing UV pixels. Existing
+                // zombie skin, eye expression, hair and race feature layers
+                // remain the original texture and render path.
+                try (NativeImage outfit = loadResourceImage(
+                        gender.slim() ? ZOMBIE_ALEX_OUTFIT : ZOMBIE_STEVE_OUTFIT)) {
+                    blend(composed, outfit);
+                }
             }
 
             if (!zombie && mainOutfit > 0) {

@@ -3,6 +3,7 @@ package com.cyberspectraa.cybernpc.client;
 import com.cyberspectraa.cybernpc.dialogue.DialogueView;
 import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.network.DialogueChoicePacket;
+import com.cyberspectraa.cybernpc.network.DialogueClosePacket;
 import com.cyberspectraa.cybernpc.network.IntroControlPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -40,7 +41,8 @@ public final class NpcDialogueScreen extends Screen {
     private static final long ENTRY_MS = 280L;
     private static final long SWITCH_MS = 180L;
     private static final long LETTER_MS = 52L;
-    private static final int ROW_HEIGHT = 34;
+    private static final int ROW_HEIGHT = 30;
+    private static final long RESPONSE_TIMEOUT_MS = 8000L;
 
     private final DialogueView view;
     private String pendingReply = "";
@@ -51,6 +53,11 @@ public final class NpcDialogueScreen extends Screen {
     private long speakerChanged = screenStarted;
     private boolean waitingForServer;
     private int messageLength;
+    private int playerReplyLength;
+    private long playerReplyStartedAt;
+    private long playerVoiceAtMillis;
+    private int playerVoiceIndex;
+    private Button continuationButton;
     private long lastVoiceAtMillis;
     private int lastVoiceIndex;
     private int replyPage;
@@ -101,7 +108,11 @@ public final class NpcDialogueScreen extends Screen {
         // Preserve enough vertical room for world visibility on small windows.
         return Math.min(4, Math.max(2, (height - 125) / ROW_HEIGHT));
     }
-    private int replyHeight() { return 30 + rowsPerPage() * ROW_HEIGHT + 26; }
+    private int replyHeight() {
+        return 30 + Math.min(rowsPerPage(), Math.max(1, view.options().size()))
+                * ROW_HEIGHT + 26;
+    }
+    private int compactReplyHeight() { return 105; }
     private int replyY() { return height - bottomGap() - replyHeight(); }
     private int pageCount() {
         return Math.max(1, (view.options().size() + rowsPerPage() - 1) / rowsPerPage());
@@ -114,6 +125,7 @@ public final class NpcDialogueScreen extends Screen {
         screenStarted = System.currentTimeMillis();
         speakerChanged = screenStarted;
         replyPage = 0;
+        playerReplyLength = 0;
         textScroll = 0;
         scrollLimit = 0;
 
@@ -138,7 +150,28 @@ public final class NpcDialogueScreen extends Screen {
                 Component.literal(">"), clicked -> selectPage(replyPage + 1))
                 .pos(rightX() + rightWidth() - 32, replyY() + replyHeight() - 24)
                 .size(24, 18).build());
+        continuationButton = addRenderableWidget(Button.builder(
+                Component.literal("Close"), b -> {
+                    if (waitingForServer
+                            && queuedNpcReply != null
+                            && playerReplyLength >= pendingReply.length()) {
+                        showQueuedNpcReply();
+                    } else {
+                        onClose();
+                    }
+                })
+                .pos(rightX() + rightWidth() - 87,
+                        height - bottomGap() - 28)
+                .size(78, 20).build());
+        continuationButton.visible = false;
         refreshSlots();
+    }
+
+    private void showQueuedNpcReply() {
+        if (queuedNpcReply == null) return;
+        DialogueView next = queuedNpcReply;
+        queuedNpcReply = null;
+        Minecraft.getInstance().setScreen(new NpcDialogueScreen(next));
     }
 
     private void refreshSlots() {
@@ -181,11 +214,14 @@ public final class NpcDialogueScreen extends Screen {
         DialogueVoiceBlips.stopActive();
         pendingReply = choice.label();
         waitingForServer = true;
-        messageLength = 0;
+        playerReplyLength = 0;
+        playerReplyStartedAt = System.currentTimeMillis();
+        playerVoiceIndex = 0;
+        playerVoiceAtMillis = 0L;
+        // Keep the NPC's last line and portrait stable on the left.
+        // The player's voice and typed reply are now on the right.
+        messageLength = view.speech().length();
         textScroll = 0;
-        lastVoiceIndex = 0;
-        lastVoiceAtMillis = 0L;
-        speakerChanged = System.currentTimeMillis();
         CyberNpcNetwork.CHANNEL.sendToServer(
                 new DialogueChoicePacket(view.entityId(), choice.id()));
         refreshSlots();
@@ -200,8 +236,8 @@ public final class NpcDialogueScreen extends Screen {
         long now = System.currentTimeMillis();
         float entry = ease(Math.min(1.0F, (now - screenStarted) / (float) ENTRY_MS));
         boolean playerSpeaking = waitingForServer;
-        String speaker = playerSpeaking ? playerName() : view.name();
-        String speech = playerSpeaking ? pendingReply : view.speech();
+        String speaker = view.name();
+        String speech = view.speech();
 
         // Both boxes rise from the bottom independently, leaving the centre
         // and most of the top of the world untouched (no fullscreen dim).
@@ -223,35 +259,42 @@ public final class NpcDialogueScreen extends Screen {
             float switchIn = ease(Math.min(1.0F,
                     (now - speakerChanged) / (float) SWITCH_MS));
             int slide = Math.round((1.0F - switchIn) * 7.0F);
-            drawSpeakerPortrait(g, playerSpeaking, portraitX
-                    + (playerSpeaking ? slide : -slide), portraitY, mouseX, mouseY);
+            drawSpeakerPortrait(g, false,
+                    portraitX - slide, portraitY, mouseX, mouseY);
         }
 
         DialogueView.Relationship relationship = view.relationship();
         int textY = ly + 29;
         if (relationship != null) {
             String status = bondLabel(relationship.trust(), relationship.affection());
-            g.drawString(font, font.plainSubstrByWidth("Bond: " + status,
-                    textWidth - 4), textX, ly + 22, 0xFFE3C18A, false);
+            String bond = "Bond: " + status;
             String stats = "Trust " + signed(relationship.trust())
                     + "  |  Affection " + signed(relationship.affection());
-            g.drawString(font, font.plainSubstrByWidth(stats,
-                    textWidth - 4), textX, ly + 34, MUTED, false);
-            textY = ly + 47;
+            boolean oneLine = font.width(bond) + font.width(stats) + 13 <= textWidth;
+            g.drawString(font, font.plainSubstrByWidth(bond, textWidth - 4),
+                    textX, ly + 23, 0xFFE3C18A, false);
+            if (oneLine) {
+                g.drawString(font, stats,
+                        textX + textWidth - font.width(stats) - 3, ly + 23,
+                        MUTED, false);
+            } else {
+                g.drawString(font, font.plainSubstrByWidth(stats, textWidth - 4),
+                        textX, ly + 35, MUTED, false);
+            }
+            textY = ly + (oneLine ? 37 : 48);
         }
 
-        int paperHeight = Math.max(37, lh - (textY - ly) - 8);
+        int paperHeight = Math.max(27, lh - (textY - ly) - 8);
         paperPanel(g, textX, textY, textWidth, paperHeight);
         g.enableScissor(textX + 5, textY + 4,
                 textX + textWidth - 5, textY + paperHeight - 4);
         try {
-            int count = (int) Math.min(speech.length(),
-                    Math.max(0L, (now - speakerChanged) / letterDelay()));
-            boolean played = playerSpeaking
-                    ? DialogueVoiceBlips.playPlayer(speech, messageLength, count,
-                            lastVoiceIndex, now, lastVoiceAtMillis)
-                    : DialogueVoiceBlips.play(view, speech, messageLength, count,
-                            lastVoiceIndex, now, lastVoiceAtMillis);
+            int count = playerSpeaking ? speech.length()
+                    : (int) Math.min(speech.length(),
+                            Math.max(0L, (now - speakerChanged) / letterDelay()));
+            boolean played = !playerSpeaking && DialogueVoiceBlips.play(
+                    view, speech, messageLength, count,
+                    lastVoiceIndex, now, lastVoiceAtMillis);
             if (played) {
                 lastVoiceAtMillis = now;
                 lastVoiceIndex = count;
@@ -272,17 +315,86 @@ public final class NpcDialogueScreen extends Screen {
             g.disableScissor();
         }
 
-        int rx = rightX(), ry = replyY() + rise;
-        int rw = rightWidth(), rh = replyHeight();
-        drawWoodPanel(g, rx, ry, rw, rh);
-
+        int rx = rightX(), rw = rightWidth();
         boolean showReplies = !waitingForServer
                 && messageLength >= view.speech().length()
                 && entry >= 1.0F;
-        g.drawString(font, playerSpeaking
-                ? (queuedNpcReply != null && messageLength >= speech.length()
-                        ? "Click to continue" : "Your reply...")
-                : (showReplies ? "YOUR REPLY" : "LISTENING..."),
+
+        if (waitingForServer || view.options().isEmpty()) {
+            // A short right-side card shows the PLAYER'S reply.
+            // It never replaces the NPC portrait or creates a huge empty box.
+            int rh = compactReplyHeight();
+            int ry = height - bottomGap() - rh + rise;
+            drawWoodPanel(g, rx, ry, rw, rh);
+
+            continuationButton.visible = true;
+            if (waitingForServer) {
+                int count = (int) Math.min(pendingReply.length(),
+                        Math.max(0L, (now - playerReplyStartedAt) / letterDelay()));
+                boolean voiced = DialogueVoiceBlips.playPlayer(
+                        pendingReply, playerReplyLength, count,
+                        playerVoiceIndex, now, playerVoiceAtMillis);
+                if (voiced) {
+                    playerVoiceAtMillis = now;
+                    playerVoiceIndex = count;
+                }
+                playerReplyLength = count;
+
+                g.drawString(font, playerName() + ":", rx + 10, ry + 10,
+                        0xFFEFCB87, false);
+                int paperY = ry + 25;
+                int paperW = rw - 18;
+                paperPanel(g, rx + 9, paperY, paperW, 48);
+                g.enableScissor(rx + 15, paperY + 4,
+                        rx + rw - 15, paperY + 43);
+                try {
+                    List<FormattedCharSequence> replyLines = font.split(
+                            Component.literal(pendingReply.substring(0, count)),
+                            Math.max(35, paperW - 14));
+                    for (int i = 0; i < Math.min(3, replyLines.size()); i++) {
+                        g.drawString(font, replyLines.get(i),
+                                rx + 17, paperY + 7 + i * 11, INK, false);
+                    }
+                } finally {
+                    g.disableScissor();
+                }
+
+                if (playerReplyLength < pendingReply.length()) {
+                    g.drawString(font, "Speaking...", rx + 10, ry + rh - 21,
+                            MUTED, false);
+                } else if (queuedNpcReply != null) {
+                    g.drawString(font, "Reply ready", rx + 10, ry + rh - 21,
+                            MUTED, false);
+                } else if (now - playerReplyStartedAt >= RESPONSE_TIMEOUT_MS) {
+                    g.drawString(font, "No reply received", rx + 10,
+                            ry + rh - 21, MUTED, false);
+                } else {
+                    g.drawString(font, "Waiting...", rx + 10, ry + rh - 21,
+                            MUTED, false);
+                }
+                continuationButton.setMessage(Component.literal(
+                        queuedNpcReply != null
+                                && playerReplyLength >= pendingReply.length()
+                                ? "Continue" : "Close"));
+            } else {
+                g.drawString(font, "CONVERSATION", rx + 10, ry + 10,
+                        0xFFEFCB87, false);
+                g.drawString(font, "No further replies available.",
+                        rx + 10, ry + 35, TEXT, false);
+                continuationButton.setMessage(Component.literal("Close"));
+            }
+            for (Button button : replyButtons) button.visible = false;
+            previousPageButton.visible = false;
+            nextPageButton.visible = false;
+            super.render(g, mouseX, mouseY, partialTick);
+            return;
+        }
+
+        continuationButton.visible = false;
+        int ry = replyY() + rise;
+        int rh = replyHeight();
+        drawWoodPanel(g, rx, ry, rw, rh);
+        g.drawString(font, showReplies ? "YOUR REPLY" : "LISTENING...",
                 rx + 10, ry + 10, 0xFFEFCB87, false);
 
         for (int slot = 0; slot < replyButtons.size(); slot++) {
@@ -297,8 +409,6 @@ public final class NpcDialogueScreen extends Screen {
         nextPageButton.visible = paging;
         nextPageButton.active = paging && replyPage + 1 < pageCount();
 
-        // The buttons supply input/hover visuals. Render their full text on
-        // top using two lines; the original complete label is in a tooltip.
         super.render(g, mouseX, mouseY, partialTick);
         if (showReplies) {
             for (int slot = 0; slot < replyButtons.size(); slot++) {
@@ -321,11 +431,6 @@ public final class NpcDialogueScreen extends Screen {
                 g.drawCenteredString(font, page, rx + rw / 2,
                         ry + rh - 19, MUTED);
             }
-        } else if (playerSpeaking) {
-            String hint = queuedNpcReply != null && messageLength >= speech.length()
-                    ? "Click to continue" : "Your reply";
-            g.drawCenteredString(font, font.plainSubstrByWidth(hint, rw - 12),
-                    rx + rw / 2, ry + rh / 2, TEXT);
         }
         if (scrollLimit > 0 && messageLength >= speech.length()) {
             g.drawString(font, "Scroll to read", textX + 3,
@@ -362,20 +467,23 @@ public final class NpcDialogueScreen extends Screen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0) {
-            String current = waitingForServer ? pendingReply : view.speech();
-            if (messageLength < current.length()) {
-                // First click reveals the sentence, not the next speaker.
-                speakerChanged = System.currentTimeMillis()
-                        - current.length() * letterDelay();
-                messageLength = current.length();
-                return true;
-            }
             if (waitingForServer) {
-                if (queuedNpcReply != null) {
-                    DialogueView next = queuedNpcReply;
-                    queuedNpcReply = null;
-                    Minecraft.getInstance().setScreen(new NpcDialogueScreen(next));
+                if (playerReplyLength < pendingReply.length()) {
+                    playerReplyStartedAt = System.currentTimeMillis()
+                            - pendingReply.length() * letterDelay();
+                    playerReplyLength = pendingReply.length();
+                    return true;
                 }
+                // Only a click on the continue button advances after speech;
+                // a click anywhere else still works as before for convenience.
+                if (queuedNpcReply != null) {
+                    showQueuedNpcReply();
+                    return true;
+                }
+            } else if (messageLength < view.speech().length()) {
+                speakerChanged = System.currentTimeMillis()
+                        - view.speech().length() * letterDelay();
+                messageLength = view.speech().length();
                 return true;
             }
         }
@@ -432,7 +540,11 @@ public final class NpcDialogueScreen extends Screen {
                     x + 28, top + 34, 0xFFDDBB8E);
             return;
         }
+        boolean showName = living.isCustomNameVisible();
         try {
+            // Inventory portrait should not duplicate the NPC's floating
+            // world nameplate inside the small frame.
+            if (showName) living.setCustomNameVisible(false);
             g.enableScissor(x + 3, top + 3, x + 53, top + 69);
             try {
                 InventoryScreen.renderEntityInInventoryFollowsMouse(
@@ -443,9 +555,10 @@ public final class NpcDialogueScreen extends Screen {
                 g.disableScissor();
             }
         } catch (RuntimeException ignored) {
-            g.drawCenteredString(font, playerSpeaking ? "You" : "NPC",
-                    x + 28, top + 34, 0xFFDDBB8E);
+        } finally {
+            if (showName) living.setCustomNameVisible(true);
         }
+        // Rendering failures leave the portrait's framed background intact.
     }
 
     private static void paperPanel(GuiGraphics g, int x, int y, int w, int h) {
@@ -474,6 +587,9 @@ public final class NpcDialogueScreen extends Screen {
 
     @Override
     public void onClose() {
+        // End the server's look-at lock even when Escape is used rather
+        // than a dedicated Farewell choice.
+        CyberNpcNetwork.CHANNEL.sendToServer(new DialogueClosePacket(view.entityId()));
         if (isIntro()) CyberNpcNetwork.CHANNEL.sendToServer(new IntroControlPacket(true));
         super.onClose();
     }

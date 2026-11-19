@@ -2779,6 +2779,8 @@ public class CyberNpcEntity extends PathfinderMob {
                 }
                 buildingBrain.tick();
                 serviceBrain.tick();
+                // Dialogue attention must win over idle/service look goals.
+                NpcDialogueController.tickConversationFacing(this);
             } else {
                 buildingBrain.release();
             }

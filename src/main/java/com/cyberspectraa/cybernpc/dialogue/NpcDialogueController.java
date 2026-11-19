@@ -10,6 +10,8 @@ import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.network.DialogueOpenPacket;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -35,10 +37,89 @@ public final class NpcDialogueController {
     private static final long SESSION_LIFETIME = 2400L;
     private static final double MAX_RANGE_SQR = 36.0D;
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
+    // One speaking partner per NPC; only NPCs actually in a conversation
+    // need to update their look direction. Never scan all players every tick.
+    private static final Map<UUID, UUID> FACING = new HashMap<>();
 
     private record Session(UUID npcUuid, String page, long expiresAt) {}
 
     private NpcDialogueController() {}
+
+    private static void clearSession(ServerPlayer player) {
+        Session previous = SESSIONS.remove(player.getUUID());
+        if (previous != null) {
+            FACING.remove(previous.npcUuid(), player.getUUID());
+        }
+    }
+
+    /** Used for explicit Close, Escape and leaving a conversation. */
+    public static void close(ServerPlayer player, int npcId) {
+        if (player == null) return;
+        Session session = SESSIONS.get(player.getUUID());
+        if (session == null) return;
+        Entity target = player.level().getEntity(npcId);
+        if (target instanceof CyberNpcEntity npc
+                && npc.getUUID().equals(session.npcUuid())) {
+            clearSession(player);
+        }
+    }
+
+    /**
+     * The relationship screen is an ordinary, non-pausing GUI. Idle and
+     * service AI would otherwise turn the character away between lines.
+     * Run after service AI (server side) so the head and torso steadily face
+     * the active conversation partner, then release immediately on Close.
+     */
+    public static void tickConversationFacing(CyberNpcEntity npc) {
+        if (npc == null || npc.getNpcType() == NpcType.WILD
+                || !(npc.level() instanceof ServerLevel level)) return;
+        UUID playerId = FACING.get(npc.getUUID());
+        if (playerId == null) return;
+
+        ServerPlayer player = level.getServer().getPlayerList().getPlayer(playerId);
+        Session session = SESSIONS.get(playerId);
+        if (player == null || session == null
+                || !npc.getUUID().equals(session.npcUuid())
+                || level.getGameTime() > session.expiresAt()
+                || !valid(player, npc)) {
+            FACING.remove(npc.getUUID(), playerId);
+            return;
+        }
+
+        npc.getLookControl().setLookAt(player, 30.0F, 30.0F);
+        double dx = player.getX() - npc.getX();
+        double dz = player.getZ() - npc.getZ();
+        float targetYaw = (float) (Mth.atan2(dz, dx) * (180.0D / Math.PI)) - 90.0F;
+        float yaw = Mth.rotLerp(0.18F, npc.getYRot(), targetYaw);
+        npc.setYRot(yaw);
+        npc.setYBodyRot(Mth.rotLerp(0.18F, npc.yBodyRot, targetYaw));
+        npc.setYHeadRot(Mth.rotLerp(0.22F, npc.getYHeadRot(), targetYaw));
+    }
+
+    /**
+     * A stale or expired dialogue choice should never strand the local
+     * interface in an endless waiting state. Regenerate safe root options
+     * without advancing quests or awarding relationship points.
+     */
+    private static void recover(ServerPlayer player, int npcId) {
+        Entity candidate = player.level().getEntity(npcId);
+        if (candidate instanceof CyberNpcEntity npc
+                && valid(player, npc) && canInteract(npc)) {
+            clearSession(player);
+            SESSIONS.put(player.getUUID(), new Session(
+                    npc.getUUID(), "root",
+                    player.level().getGameTime() + SESSION_LIFETIME));
+            send(player, npc, "root", "",
+                    "Sorry, I lost my train of thought. What were we discussing?");
+            return;
+        }
+        CyberNpcNetwork.CHANNEL.send(
+            PacketDistributor.PLAYER.with(() -> player),
+            new DialogueOpenPacket(new DialogueView(npcId,
+                    "Conversation", "", "",
+                    "The conversation has ended. Please approach the NPC to talk again.",
+                    List.of(option("leave", "Close")), null)));
+    }
 
     /**
      * Only NPCs with approved dialogue or a required live service can open
@@ -54,6 +135,7 @@ public final class NpcDialogueController {
 
     public static void open(ServerPlayer player, CyberNpcEntity npc) {
         if (!valid(player, npc) || !canInteract(npc)) return;
+        clearSession(player);
         String page = "root";
         SESSIONS.put(player.getUUID(),
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
@@ -70,6 +152,7 @@ public final class NpcDialogueController {
         // it does not move the player's spawn position or camera entity.
         player.lookAt(EntityAnchorArgument.Anchor.EYES,
                 npc, EntityAnchorArgument.Anchor.EYES);
+        clearSession(player);
         String page = "intro_0";
         SESSIONS.put(player.getUUID(),
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
@@ -80,26 +163,37 @@ public final class NpcDialogueController {
     public static void choose(ServerPlayer player, int npcId, String action) {
         Session session = SESSIONS.get(player.getUUID());
         if (session == null || player.level().getGameTime() > session.expiresAt()) {
-            SESSIONS.remove(player.getUUID());
+            clearSession(player);
+            recover(player, npcId);
             return;
         }
 
         Entity target = player.level().getEntity(npcId);
         if (!(target instanceof CyberNpcEntity npc)
                 || !npc.getUUID().equals(session.npcUuid()) || !valid(player, npc)) {
-            SESSIONS.remove(player.getUUID());
+            clearSession(player);
+            recover(player, npcId);
             return;
         }
 
         // Never execute a client-supplied action without confirming that the
         // currently active, server-generated page actually offered it.
         List<DialogueView.Option> validOptions = options(player, npc, session.page());
-        if (validOptions.stream().noneMatch(o -> o.id().equals(action))) return;
+        if (validOptions.stream().noneMatch(o -> o.id().equals(action))) {
+            // Choices can change because of a quest/relationship update.
+            // Refresh current options; do not execute the outdated action.
+            send(player, npc, session.page(), "",
+                    "I didn't catch that. Would you ask again?");
+            return;
+        }
 
         if (session.page().startsWith("intro_")) {
-            if (!CyberIntroService.isGreeting(player)) return;
+            if (!CyberIntroService.isGreeting(player)) {
+                recover(player, npcId);
+                return;
+            }
             if ("intro_skip".equals(action) || "intro_finish".equals(action)) {
-                SESSIONS.remove(player.getUUID());
+                clearSession(player);
                 CyberIntroService.finish(player);
                 return;
             }
@@ -123,7 +217,7 @@ public final class NpcDialogueController {
         }
 
         if ("leave".equals(action)) {
-            SESSIONS.remove(player.getUUID());
+            clearSession(player);
             return;
         }
 
@@ -200,7 +294,7 @@ public final class NpcDialogueController {
                 // CyberClasses opens its own class creation screen and handles
                 // the optional starter kit. Do not overwrite that screen.
                 if (openGuildClass(player)) {
-                    SESSIONS.remove(player.getUUID());
+                    clearSession(player);
                     return;
                 }
                 npcReply = "I can't open class registration yet. You'll need to "
@@ -230,7 +324,7 @@ public final class NpcDialogueController {
                 if (!guildReceptionist(npc)) return;
                 // The CyberQuest guild card screen replaces this conversation.
                 if (invokeGuild(player, "issueOrShowGuildCard")) {
-                    SESSIONS.remove(player.getUUID());
+                    clearSession(player);
                     return;
                 }
                 npcReply = "I can't reach the guild records just now. "
@@ -260,11 +354,14 @@ public final class NpcDialogueController {
 
     private static void send(ServerPlayer player, CyberNpcEntity npc,
                              String page, String playerLine, String speech) {
+        FACING.put(npc.getUUID(), player.getUUID());
         String role = npc.getRole().isBlank() ? "Citizen" : npc.getRole();
+        String safeSpeech = speech == null || speech.isBlank()
+                ? "What would you like to know?" : speech;
         CyberNpcNetwork.CHANNEL.send(
             PacketDistributor.PLAYER.with(() -> player),
             new DialogueOpenPacket(new DialogueView(npc.getId(),
-                npc.getName().getString(), role, playerLine, speech,
+                npc.getName().getString(), role, playerLine, safeSpeech,
                 options(player, npc, page),
                 TownCharacterDialogue.relationship(player, npc))));
     }
@@ -556,6 +653,8 @@ public final class NpcDialogueController {
 
     @SubscribeEvent
     public static void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
-        SESSIONS.remove(event.getEntity().getUUID());
+        if (event.getEntity() instanceof ServerPlayer player) {
+            clearSession(player);
+        }
     }
 }
