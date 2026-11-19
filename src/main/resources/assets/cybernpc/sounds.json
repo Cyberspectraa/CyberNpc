@@ -195,5 +195,33 @@
         "name": "cybernpc:wild/female_uh"
       }
     ]
+  },
+  "dialogue_voice_player_low": {
+    "subtitle": "subtitles.cybernpc.dialogue_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:dialogue/male_hm"
+      },
+      {
+        "name": "cybernpc:dialogue/male_mm"
+      },
+      {
+        "name": "cybernpc:dialogue/male_uh"
+      }
+    ]
+  },
+  "dialogue_voice_player_high": {
+    "subtitle": "subtitles.cybernpc.dialogue_voice",
+    "sounds": [
+      {
+        "name": "cybernpc:dialogue/female_hm"
+      },
+      {
+        "name": "cybernpc:dialogue/female_mm"
+      },
+      {
+        "name": "cybernpc:dialogue/female_uh"
+      }
+    ]
   }
 }

@@ -30,6 +30,13 @@ public final class DialogueVoiceBlips {
     private static final Voice GENERIC_MALE = new Voice(ModSounds.DIALOGUE_VOICE_MALE, 1.00F, 1.00F, 2, 105);
     private static final Voice GENERIC_FEMALE = new Voice(ModSounds.DIALOGUE_VOICE_FEMALE, 1.00F, 1.00F, 2, 100);
 
+    // Separate sound event IDs allow future player-specific VoiceStudio clips
+    // to be swapped by a resource pack. Initial sounds reuse generic samples.
+    private static final Voice PLAYER_LOW = new Voice(ModSounds.DIALOGUE_VOICE_PLAYER_LOW,
+            1.07F, 1.00F, 2, 105);
+    private static final Voice PLAYER_HIGH = new Voice(ModSounds.DIALOGUE_VOICE_PLAYER_HIGH,
+            1.00F, 1.00F, 2, 100);
+
     // Constant client-side level; no separate mod config is required.
     // Players can still use Minecraft's normal sound settings.
     private static final float DEFAULT_VOLUME = 0.60F;
@@ -48,45 +55,69 @@ public final class DialogueVoiceBlips {
         }
     }
 
-    /** Returns true if a grunt actually played. Screen stores last played time/index. */
+    /** Existing NPC voice, unchanged in pitch, sample choice and cadence. */
     public static boolean play(DialogueView view, String speech,
                                int previousCount, int count,
                                int lastPlayedIndex, long now, long lastPlayedMillis) {
-        if (count <= previousCount || speech.isEmpty()) return false;
         Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null) return false;
-        if (!(mc.level.getEntity(view.entityId()) instanceof CyberNpcEntity npc)) return false;
+        if (mc.level == null
+                || !(mc.level.getEntity(view.entityId()) instanceof CyberNpcEntity npc)) {
+            return false;
+        }
+        return playRecorded(resolve(npc), speech, previousCount, count,
+                lastPlayedIndex, now, lastPlayedMillis, npc.getId(),
+                npc.getUUID().hashCode(), DEFAULT_VOLUME);
+    }
 
-        Voice voice = resolve(npc);
+    /**
+     * Player reply blips are local-only, triggered by the player's own
+     * typewriter line. No speech synthesis, server messages or voice capture.
+     */
+    public static boolean playPlayer(String speech,
+                                     int previousCount, int count,
+                                     int lastPlayedIndex, long now, long lastPlayedMillis) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return false;
+        Voice voice = switch (DialogueVoiceConfig.PLAYER_VOICE.get()) {
+            case LOW -> PLAYER_LOW;
+            case HIGH -> PLAYER_HIGH;
+            case OFF -> null;
+        };
+        if (voice == null) return false;
+        float volume = DialogueVoiceConfig.PLAYER_VOLUME.get().floatValue();
+        if (volume <= 0.0F) return false;
+        return playRecorded(voice, speech, previousCount, count,
+                lastPlayedIndex, now, lastPlayedMillis, mc.player.getId(),
+                mc.player.getUUID().hashCode(), volume);
+    }
+
+    /** One shared throttle and playback path for both sides of the dialogue. */
+    private static boolean playRecorded(Voice voice, String speech,
+                                        int previousCount, int count,
+                                        int lastPlayedIndex, long now, long lastPlayedMillis,
+                                        int entityId, int uuidHash, float baseVolume) {
+        if (count <= previousCount || speech.isEmpty()) return false;
         if (count - lastPlayedIndex < voice.letters()
                 || now - lastPlayedMillis < voice.minMillis()) return false;
-        // One render frame can reveal multiple characters. If it happens to
-        // finish on whitespace or punctuation, use the latest real letter in
-        // this newly revealed section rather than silently skipping a grunt.
+        // Fast typing can reveal several characters in one frame. Find the
+        // newest letter instead of playing silence for punctuation/whitespace.
         int i = Math.min(count, speech.length()) - 1;
         int lower = Math.max(previousCount, i - 7);
         while (i >= lower && !Character.isLetterOrDigit(speech.charAt(i))) i--;
         if (i < lower) return false;
 
-        // Vary pitch subtly between grunts, but give each NPC a consistent tone.
-        int variation = (i * 31 + speech.length() * 7 + npc.getId() * 13) & 7;
-        // Keep supplied recordings near their original pitch (especially Katie).
-        // Preserve the timbre from the supplied recordings for all named voices.
+        int variation = (i * 31 + speech.length() * 7 + entityId * 13) & 7;
         float pitchSpread = 0.004F;
         float pitch = voice.pitch() * (1.0F + (variation - 3.5F) * pitchSpread);
         if (isGeneric(voice)) {
-            // Stable per-entity personality for future authored dialogue NPCs.
-            pitch *= 1.0F + (Math.floorMod(npc.getUUID().hashCode(), 9) - 4) * 0.018F;
+            // Keep the old generic NPC's per-entity voice signature.
+            pitch *= 1.0F + (Math.floorMod(uuidHash, 9) - 4) * 0.018F;
         }
-        float volume = DEFAULT_VOLUME * voice.gain();
         SimpleSoundInstance sound = SimpleSoundInstance.forUI(
-                voice.sample().get(), pitch, volume);
-
-        // Replace the previous syllable for every speaking NPC. Kai and Katie
-        // keep their existing pitch, gain and timing unchanged.
+                voice.sample().get(), pitch, baseVolume * voice.gain());
         stopActive();
         activeRecordedBlip = sound;
-        mc.getSoundManager().play(sound);
+        Minecraft.getInstance().getSoundManager().play(sound);
         return true;
     }
 

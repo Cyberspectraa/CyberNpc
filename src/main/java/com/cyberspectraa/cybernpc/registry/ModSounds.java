@@ -31,6 +31,12 @@ public final class ModSounds {
     public static final RegistryObject<SoundEvent> DIALOGUE_VOICE_FEMALE =
             registerDialogueVoice("dialogue_voice_female");
 
+    public static final RegistryObject<SoundEvent> DIALOGUE_VOICE_PLAYER_LOW =
+            registerDialogueVoice("dialogue_voice_player_low");
+
+    public static final RegistryObject<SoundEvent> DIALOGUE_VOICE_PLAYER_HIGH =
+            registerDialogueVoice("dialogue_voice_player_high");
+
     public static final RegistryObject<SoundEvent> DIALOGUE_VOICE_KAI =
             registerDialogueVoice("dialogue_voice_kai");
 

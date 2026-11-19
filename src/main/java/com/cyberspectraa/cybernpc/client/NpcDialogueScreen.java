@@ -103,9 +103,14 @@ public final class NpcDialogueScreen extends Screen {
                     if (isIntro()) Minecraft.getInstance().setScreen(null);
                     else onClose();
                 } else {
+                    // The player's chosen line becomes the active speaker.
+                    // Stop the NPC's last syllable before our reply starts.
+                    DialogueVoiceBlips.stopActive();
                     pendingReply = choice.label();
                     waitingForServer = true;
                     messageLength = 0;
+                    lastVoiceIndex = 0;
+                    lastVoiceAtMillis = 0L;
                     speakerChanged = System.currentTimeMillis();
                     CyberNpcNetwork.CHANNEL.sendToServer(
                             new DialogueChoicePacket(view.entityId(), choice.id()));
@@ -202,11 +207,17 @@ public final class NpcDialogueScreen extends Screen {
             // Typewriter effect, restarted whenever the speaking character changes.
             int count = (int) Math.min(speech.length(),
                     Math.max(0L, (now - speakerChanged) / letterDelay()));
-            // Voice grunts only for the speaking NPC, not the player's answer.
-            // Event-driven, throttled; clicking to reveal a full line is silent.
-            if (!playerSpeaking && DialogueVoiceBlips.play(
-                    view, speech, messageLength, count,
-                    lastVoiceIndex, now, lastVoiceAtMillis)) {
+            // Both participants have VoiceStudio-style grunts matched to their
+            // own typewriter reveal. Reply sounds play locally only; clicking
+            // to reveal all the text does not create a burst of syllables.
+            boolean played = playerSpeaking
+                    ? DialogueVoiceBlips.playPlayer(
+                            speech, messageLength, count,
+                            lastVoiceIndex, now, lastVoiceAtMillis)
+                    : DialogueVoiceBlips.play(
+                            view, speech, messageLength, count,
+                            lastVoiceIndex, now, lastVoiceAtMillis);
+            if (played) {
                 lastVoiceAtMillis = now;
                 lastVoiceIndex = count;
             }
