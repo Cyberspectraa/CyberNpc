@@ -154,6 +154,20 @@ public final class TownCharacterDialogue {
         return npc != null && scripts.containsKey(npc.getStoryNpcId());
     }
 
+    /**
+     * Send the viewer their own saved relationship with a named town NPC.
+     * The client never guesses values from global entity state, and the
+     * Pope, receptionist, shopkeepers and Wild NPCs have no such overlay.
+     */
+    public static DialogueView.Relationship relationship(
+            ServerPlayer player, CyberNpcEntity npc) {
+        if (player == null || !recognises(npc)) return null;
+        CompoundTag saved = state(player, npc.getStoryNpcId());
+        return new DialogueView.Relationship(
+                Math.max(-10, Math.min(10, saved.getInt("Trust"))),
+                Math.max(-10, Math.min(10, saved.getInt("Affection"))));
+    }
+
     /** Keep the old ID; display renaming is handled by CyberNpcEntity on load. */
     public static String displayName(String stableStoryId) {
         Script script = scripts.get(stableStoryId);

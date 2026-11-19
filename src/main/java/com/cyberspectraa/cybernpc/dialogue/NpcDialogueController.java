@@ -264,7 +264,9 @@ public final class NpcDialogueController {
         CyberNpcNetwork.CHANNEL.send(
             PacketDistributor.PLAYER.with(() -> player),
             new DialogueOpenPacket(new DialogueView(npc.getId(),
-                npc.getName().getString(), role, playerLine, speech, options(player, npc, page))));
+                npc.getName().getString(), role, playerLine, speech,
+                options(player, npc, page),
+                TownCharacterDialogue.relationship(player, npc))));
     }
 
     private static DialogueView.Option option(String id, String label) {

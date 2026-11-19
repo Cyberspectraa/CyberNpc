@@ -7,7 +7,7 @@ import java.util.List;
 /** A server-built dialogue snapshot; actions are revalidated on receipt. */
 public record DialogueView(
         int entityId, String name, String role, String playerLine, String speech,
-        List<Option> options
+        List<Option> options, Relationship relationship
 ) {
     public DialogueView {
         options = List.copyOf(options);
@@ -23,6 +23,13 @@ public record DialogueView(
         for (Option choice : view.options()) {
             buf.writeUtf(choice.id(), 40);
             buf.writeUtf(choice.label(), 80);
+        }
+        // Data is per-player, saved on the server. Non-story NPCs send no
+        // relationship snapshot. It is purely informational on the client.
+        buf.writeBoolean(view.relationship() != null);
+        if (view.relationship() != null) {
+            buf.writeByte(view.relationship().trust());
+            buf.writeByte(view.relationship().affection());
         }
     }
 
@@ -40,8 +47,17 @@ public record DialogueView(
         for (int i = 0; i < count; i++) {
             choices.add(new Option(buf.readUtf(40), buf.readUtf(80)));
         }
-        return new DialogueView(id, name, role, playerLine, speech, choices);
+        Relationship relationship = null;
+        if (buf.readBoolean()) {
+            relationship = new Relationship(
+                    Math.max(-10, Math.min(10, buf.readByte())),
+                    Math.max(-10, Math.min(10, buf.readByte())));
+        }
+        return new DialogueView(id, name, role, playerLine, speech, choices, relationship);
     }
+
+    /** Actual persisted Town character values; no extra friendship XP pool. */
+    public record Relationship(int trust, int affection) {}
 
     public record Option(String id, String label) {}
 }
