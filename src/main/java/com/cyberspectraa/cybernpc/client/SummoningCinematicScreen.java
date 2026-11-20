@@ -324,19 +324,20 @@ public final class SummoningCinematicScreen extends Screen {
 
         graphics.pose().pushPose();
         graphics.pose().translate(width / 2.0F, height / 2.0F - 8.0F, 0.0F);
-        // The original OBJ title was baked from its reverse side with a slight
-        // screen-space incline. Mirror only the title sprite (not the HUD)
-        // and counter-rotate it so the lettering reads left-to-right, level.
-        // The correction remains local to this pose; all intro timing,
-        // fades, controls and world-camera angles are unchanged.
+        // Keep the GUI quad front-facing: a negative X pose scale reverses
+        // its vertex winding and Minecraft culls the whole title.
+        // Instead invert the U texture coordinates using a negative atlas
+        // width. This mirrors the lettering without mirroring the geometry,
+        // making the title visible and readable with the normal GUI pipeline.
+        // The small Z correction levels the baked perspective in the sprite.
         graphics.pose().mulPose(Axis.ZP.rotationDegrees(1.0F));
-        graphics.pose().scale(-scale, scale, 1.0F);
+        graphics.pose().scale(scale, scale, 1.0F);
         graphics.setColor(1F, 1F, 1F, alpha);
         graphics.blit(TITLE_ART,
                 -TITLE_ART_WIDTH / 2, -TITLE_ART_HEIGHT / 2,
-                0, 0,
+                -TITLE_ART_WIDTH, 0,
                 TITLE_ART_WIDTH, TITLE_ART_HEIGHT,
-                TITLE_ART_WIDTH, TITLE_ART_HEIGHT);
+                -TITLE_ART_WIDTH, TITLE_ART_HEIGHT);
         graphics.setColor(1F, 1F, 1F, 1F);
         graphics.pose().popPose();
     }
