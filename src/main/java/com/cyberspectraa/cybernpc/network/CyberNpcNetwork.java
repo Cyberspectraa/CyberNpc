@@ -108,6 +108,12 @@ public final class CyberNpcNetwork {
                 .decoder(RiftCreditsPacket::decode)
                 .consumerMainThread(RiftCreditsPacket::handle)
                 .add();
+        CHANNEL.messageBuilder(
+                RiftAbortPacket.class, nextId++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RiftAbortPacket::encode)
+                .decoder(RiftAbortPacket::decode)
+                .consumerMainThread(RiftAbortPacket::handle)
+                .add();
     }
 
     private CyberNpcNetwork() {
