@@ -45,12 +45,13 @@ public final class SummoningCinematicScreen extends Screen {
     private static final int REVEAL_TICKS = CyberIntroService.REVEAL_TICKS;
     private static final int FADE_TICKS = 19;
 
-    // Temporary Blockbench artwork. Replace this one PNG when the final
-    // pack name and title model are approved.
+    // Final series title: the owner's Fractured Island Blockbench OBJ was
+    // baked once into a transparent sprite. Keep the cinematic's lightweight
+    // GUI rendering path rather than loading a separate 3D model each frame.
     private static final ResourceLocation TITLE_ART = new ResourceLocation(
-            CyberNpc.MOD_ID, "textures/gui/testing_version_title.png");
-    private static final int TITLE_ART_WIDTH = 861;
-    private static final int TITLE_ART_HEIGHT = 126;
+            CyberNpc.MOD_ID, "textures/gui/fractured_island_title.png");
+    private static final int TITLE_ART_WIDTH = 1128;
+    private static final int TITLE_ART_HEIGHT = 139;
     private static final double SHOT_DISTANCE = 5.2D;
     private static final double SHOT_ELEVATION = 2.25D;
     private static final double ARC_DEGREES = 12.0D;
@@ -299,9 +300,9 @@ public final class SummoningCinematicScreen extends Screen {
     }
 
     private void renderTitle(GuiGraphics graphics, double titleTime) {
-        // The placeholder uses the actual Blockbench wooden lettering,
-        // rasterised once as a lightweight transparent image. No model
-        // loader, offscreen 3D renderer or ongoing texture generation.
+        // The final Blockbench Fractured Island lettering is baked once to
+        // this transparent sprite, preserving its authored purple texture and
+        // a subtle view of its 3D depth without runtime model loading.
         graphics.fill(0, 0, width, height, 0xFF101016);
         double opacity = Math.min(1D,
                 Math.min(titleTime / 12D, (TITLE_TICKS - titleTime) / 13D));
