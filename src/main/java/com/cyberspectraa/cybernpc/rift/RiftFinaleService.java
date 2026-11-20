@@ -7,6 +7,7 @@ import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.network.RiftCreditsPacket;
 import com.cyberspectraa.cybernpc.network.RiftAbortPacket;
 import com.cyberspectraa.cybernpc.network.RiftPromptPacket;
+import com.cyberspectraa.cybernpc.network.RiftDecisionFeedbackPacket;
 import com.cyberspectraa.cybernpc.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -45,7 +46,7 @@ import java.util.UUID;
  */
 @Mod.EventBusSubscriber(modid = CyberNpc.MOD_ID)
 public final class RiftFinaleService {
-    public static final int CREDITS_TICKS = 42 * 20;
+    public static final int CREDITS_TICKS = 72 * 20;
     private static final int PROMPT_TICKS = 30 * 20;
     private static final String DATA = "CyberNpcRiftDeparture";
     private static final String TOWN_DATA = "CyberNpcTownCharacters";
@@ -106,7 +107,10 @@ public final class RiftFinaleService {
     /** Never trust a client choice without a currently offered, nearby Rift. */
     public static void choose(ServerPlayer player, boolean accept) {
         Prompt offered = PROMPTS.remove(player.getUUID());
-        if (offered == null) return;
+        if (offered == null) {
+            if (accept) reject(player, "That invitation has expired. Step into the Rift again.");
+            return;
+        }
         if (!accept) {
             DECLINED_UNTIL_EXIT.add(player.getUUID());
             return;
@@ -118,11 +122,20 @@ public final class RiftFinaleService {
                         offered.lower().getY() + 1D,
                         offered.lower().getZ() + 0.5D) > 9D) {
             // A delayed/spoofed Yes packet cannot trigger a distant farewell.
+            reject(player, "The Rift is too far away. Step closer and try again.");
             return;
         }
         if (state(player).getBoolean("Departed")
-                || player.getPersistentData().getCompound("CyberIntro").getBoolean("Pending")) return;
+                || player.getPersistentData().getCompound("CyberIntro").getBoolean("Pending")) {
+            reject(player, "Your character is not ready for this crossing.");
+            return;
+        }
         startCredits(player);
+    }
+
+    private static void reject(ServerPlayer player, String reason) {
+        CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new RiftDecisionFeedbackPacket(reason));
     }
 
     private static boolean validRift(ServerPlayer player, BlockPos lower) {
@@ -230,14 +243,13 @@ public final class RiftFinaleService {
         if (server == null) return;
         long now = server.overworld().getGameTime();
         if (!PROMPTS.isEmpty() && now % 5L == 0L) {
-            // If the player is teleported away or leaves without answering,
-            // expire that offer immediately instead of trapping re-entry.
-            PROMPTS.entrySet().removeIf(e -> {
-                ServerPlayer player = server.getPlayerList().getPlayer(e.getKey());
-                return now > e.getValue().expires() || player == null
-                        || !player.level().dimension().equals(e.getValue().dimension())
-                        || !touchingRift(player);
-            });
+            // Keep the offered decision alive while the player reads the GUI.
+            // The old '!touchingRift' check dropped it within five ticks as
+            // their movement settled just outside the thin tear; Yes then
+            // silently did nothing. Acceptance still validates Rift integrity,
+            // dimension, proximity and the absolute 30-second deadline.
+            PROMPTS.entrySet().removeIf(e -> now > e.getValue().expires()
+                    || server.getPlayerList().getPlayer(e.getKey()) == null);
         }
         if (!DECLINED_UNTIL_EXIT.isEmpty() && now % 5L == 0L) {
             DECLINED_UNTIL_EXIT.removeIf(id -> {
