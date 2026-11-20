@@ -121,18 +121,18 @@ public final class RiftFinaleService {
             reject(player, "The invitation has expired. Step into the Rift again.");
             return;
         }
-        if (!player.level().dimension().equals(offered.dimension())
-                || !validRift(player, offered.lower())) {
-            reject(player, "The Rift is no longer available. Return to the Rift and try again.");
+        if (!player.level().dimension().equals(offered.dimension())) {
+            reject(player, "You changed dimensions after entering the Rift. Return to the island and try again.");
             return;
         }
-        // A live server-issued invitation already proves that this player
-        // physically entered this exact Rift. Do not check distance a second
-        // time: the no-collision tear and non-pausing warning screen allow
-        // natural gravity/momentum to move the character while reading it.
-        // Accepting remains explicit, single-use and bounded to this Rift,
-        // dimension and 90-second expiration. A spoofed Yes without a prompt
-        // is rejected above.
+        // The Rift was already verified as intact on the SERVER in touch()
+        // before we issued this one-use invitation to this exact player.
+        // Rechecking its block states here was rejecting legitimate choices:
+        // the tear is non-colliding, the GUI does not pause the world, and
+        // neighbour updates or chunk changes may alter the blocks while the
+        // warning is visible. No second block or proximity check is needed.
+        // The offer still expires, cannot be forged by a stray Yes packet,
+        // and is invalid after changing dimensions or declining.
         if (state(player).getBoolean("Departed")
                 || player.getPersistentData().getCompound("CyberIntro").getBoolean("Pending")) {
             reject(player, "Your character is not ready for this crossing.");
