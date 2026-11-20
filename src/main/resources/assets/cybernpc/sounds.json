@@ -223,5 +223,13 @@
         "name": "cybernpc:dialogue/female_uh"
       }
     ]
+  },
+  "rift_outro_music": {
+    "sounds": [
+      {
+        "name": "cybernpc:music/rift_outro",
+        "stream": true
+      }
+    ]
   }
 }
