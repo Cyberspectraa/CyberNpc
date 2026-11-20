@@ -229,9 +229,15 @@ public final class RiftFinaleService {
         MinecraftServer server = event.getServer();
         if (server == null) return;
         long now = server.overworld().getGameTime();
-        if (!PROMPTS.isEmpty()) {
-            PROMPTS.entrySet().removeIf(e -> now > e.getValue().expires()
-                    || server.getPlayerList().getPlayer(e.getKey()) == null);
+        if (!PROMPTS.isEmpty() && now % 5L == 0L) {
+            // If the player is teleported away or leaves without answering,
+            // expire that offer immediately instead of trapping re-entry.
+            PROMPTS.entrySet().removeIf(e -> {
+                ServerPlayer player = server.getPlayerList().getPlayer(e.getKey());
+                return now > e.getValue().expires() || player == null
+                        || !player.level().dimension().equals(e.getValue().dimension())
+                        || !touchingRift(player);
+            });
         }
         if (!DECLINED_UNTIL_EXIT.isEmpty() && now % 5L == 0L) {
             DECLINED_UNTIL_EXIT.removeIf(id -> {
