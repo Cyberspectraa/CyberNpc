@@ -1,4 +1,4 @@
-# Rift finale — CyberNpc 0.45.3 (development-no-actions)
+# Rift finale — CyberNpc 0.45.4 (development-no-actions)
 
 The owner's 20 November 2026 direction is now an **opt-in series outro** on
 `cybernpc:island_rift`. This replaces the Rift's prior gameplay-inactive rule
@@ -68,7 +68,7 @@ no-collision behaviour or Photon FX. Do not move this system into CyberServer.
 
 1. On `development-no-actions`, run `git pull --ff-only` and
    `build-local.bat`, replace the old JAR and confirm a **real build success**.
-   Forge 1.20.1 / Java 17, mandatory Photon, and **matching CyberNpc 0.45.3
+   Forge 1.20.1 / Java 17, mandatory Photon, and **matching CyberNpc 0.45.4
    on client and server** are required. Network protocol is now `9`.
 2. Walk into both Rift halves: confirm the warning appears once, neither side
    automatically accepts. Escape/Stay must NOT alter your character.
@@ -214,3 +214,59 @@ The changes are confined to `RiftCreditsScreen.java` plus mod version and
 documentation. Build locally on Java 17/Forge 1.20.1 and check line fitting,
 fade smoothness, credit readability at both GUI scale 2 and GUI scale 4,
 music continuity and the final disconnect. Do **not** run GitHub Actions.
+
+## 0.45.4 — Final crossing UI and traditional credits roll
+
+This is a **presentation-only** change. The server-owned 72-second duration,
+Rift validation and entry confirmation, saved stats, player invisibility,
+sound event and OGG file, disconnect and recovery are unchanged. No other Cyber
+mods are modified. Minecraft font and default Minecraft buttons are retained.
+
+### Why the previous transition still felt choppy
+
+0.45.3 drew the old and new page on top of each other with 24-tick overlapping
+crossfades. When a heading and several lines occupied roughly the same screen
+position, they appeared doubled during the fade. Increasing smoothing alone
+does not correct the problem.
+
+0.45.4 replaces that with three deliberately simple phases:
+1. **Quiet opening and recap cards** (0–30 seconds): title, playtime and kills,
+   NPC visit/relationship statistics, then an actual thank-you. Each card
+   fades completely out before the next one appears. The 18-tick eased fade
+   and six-tick half-gap leave a small dark pause on each side of the cut.
+   No text overlays, positional changes or zooms.
+2. **Single continuous scrolling credits roll** (30–62 seconds): resource packs,
+   mods, tools/websites and music. All named resources retain concise type
+   descriptions. Scrolling uses render partial ticks and fractional pose
+   translation for smooth, steady motion at different frame rates, and clips
+   to the central viewing area. No sudden list swap.
+3. **Beyond the Rift** (62–72 seconds): a short restrained teaser that fades in
+   after the last credits scroll away.
+
+### Shared in-game style
+
+Both `RiftDecisionScreen` and `RiftCreditsScreen` now use the small shared
+`RiftUiStyle` palette: dark neutral background, two thin warm-grey pixel
+borders, vanilla Minecraft font, muted parchment headings, pale body text.
+No glowing purple panel, animated stars, particle backdrop, unnecessary
+colourful decoration or per-frame font resizing. The warning has ordinary
+Minecraft buttons ('Stay on the Island' and 'Enter the Rift'), explicitly
+says the decision is permanent and explains that credits play before the
+disconnect. All on-screen behaviour is still server-authoritative and
+explicitly opt-in.
+
+### Regression checks for the local 0.45.4 build
+
+- Enter the Rift in both survival and spectator (spectator must never
+  start an ending); **Stay** and Escape must leave the player on the island.
+- **Enter** must lead from warning to actual credits without a distance or
+  block-state rejection. The previous 0.45.2 fix is not modified.
+- Watch at different Minecraft GUI scales, including 2 and 4: no overlapping
+  cards, clipped names, shimmering text, fast jumps or unwanted scroll stops.
+- All supplied credit names and types must appear during the single roll.
+- Outro music should play continuously, stop on disconnect/reset, and
+  last the same 72 seconds as before.
+- Final disconnect, recorded departure and admin reset must still function.
+
+GitHub source was changed on `development-no-actions`; the branch must be
+built locally with Java 17 / `build-local.bat`. Do not trigger GitHub Actions.
