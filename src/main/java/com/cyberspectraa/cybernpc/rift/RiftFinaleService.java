@@ -47,7 +47,8 @@ import java.util.UUID;
 @Mod.EventBusSubscriber(modid = CyberNpc.MOD_ID)
 public final class RiftFinaleService {
     public static final int CREDITS_TICKS = 72 * 20;
-    private static final int PROMPT_TICKS = 30 * 20;
+    // The decision is made in a non-pausing GUI. Give players time to read.
+    private static final int PROMPT_TICKS = 90 * 20;
     private static final String DATA = "CyberNpcRiftDeparture";
     private static final String TOWN_DATA = "CyberNpcTownCharacters";
     private static final String[] TOWN_IDS = {
@@ -104,7 +105,7 @@ public final class RiftFinaleService {
                 new RiftPromptPacket());
     }
 
-    /** Never trust a client choice without a currently offered, nearby Rift. */
+    /** Only the player who touched an intact Rift may accept its server-issued offer. */
     public static void choose(ServerPlayer player, boolean accept) {
         Prompt offered = PROMPTS.remove(player.getUUID());
         if (offered == null) {
@@ -116,15 +117,22 @@ public final class RiftFinaleService {
             return;
         }
         long now = player.getServer().overworld().getGameTime();
-        if (now > offered.expires() || !player.level().dimension().equals(offered.dimension())
-                || !validRift(player, offered.lower())
-                || player.distanceToSqr(offered.lower().getX() + 0.5D,
-                        offered.lower().getY() + 1D,
-                        offered.lower().getZ() + 0.5D) > 9D) {
-            // A delayed/spoofed Yes packet cannot trigger a distant farewell.
-            reject(player, "The Rift is too far away. Step closer and try again.");
+        if (now > offered.expires()) {
+            reject(player, "The invitation has expired. Step into the Rift again.");
             return;
         }
+        if (!player.level().dimension().equals(offered.dimension())
+                || !validRift(player, offered.lower())) {
+            reject(player, "The Rift is no longer available. Return to the Rift and try again.");
+            return;
+        }
+        // A live server-issued invitation already proves that this player
+        // physically entered this exact Rift. Do not check distance a second
+        // time: the no-collision tear and non-pausing warning screen allow
+        // natural gravity/momentum to move the character while reading it.
+        // Accepting remains explicit, single-use and bounded to this Rift,
+        // dimension and 90-second expiration. A spoofed Yes without a prompt
+        // is rejected above.
         if (state(player).getBoolean("Departed")
                 || player.getPersistentData().getCompound("CyberIntro").getBoolean("Pending")) {
             reject(player, "Your character is not ready for this crossing.");
@@ -244,10 +252,10 @@ public final class RiftFinaleService {
         long now = server.overworld().getGameTime();
         if (!PROMPTS.isEmpty() && now % 5L == 0L) {
             // Keep the offered decision alive while the player reads the GUI.
-            // The old '!touchingRift' check dropped it within five ticks as
-            // their movement settled just outside the thin tear; Yes then
-            // silently did nothing. Acceptance still validates Rift integrity,
-            // dimension, proximity and the absolute 30-second deadline.
+            // The no-collision tear does not hold the player stationary and
+            // GUI screens don't pause server physics. Validate the original
+            // offer's deadline and on acceptance the same Rift and dimension,
+            // not the player's position after they've had time to read.
             PROMPTS.entrySet().removeIf(e -> now > e.getValue().expires()
                     || server.getPlayerList().getPlayer(e.getKey()) == null);
         }
