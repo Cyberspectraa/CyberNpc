@@ -24,6 +24,14 @@ public final class RiftCreditsScreen extends Screen {
         Minecraft.getInstance().setScreen(new RiftCreditsScreen(summary));
     }
 
+    /** The server may end a test/recovery session before the farewell finishes. */
+    public static void closeFromServer() {
+        Minecraft client = Minecraft.getInstance();
+        if (client.screen instanceof RiftCreditsScreen) {
+            client.setScreen(null);
+        }
+    }
+
     @Override
     public void tick() {
         elapsed++;
