@@ -111,7 +111,7 @@ public final class RiftFinaleService {
             return;
         }
         long now = player.getServer().overworld().getGameTime();
-        if (now > offered.expires() || player.level().dimension() != offered.dimension()
+        if (now > offered.expires() || !player.level().dimension().equals(offered.dimension())
                 || !validRift(player, offered.lower())
                 || player.distanceToSqr(offered.lower().getX() + 0.5D,
                         offered.lower().getY() + 1D,
