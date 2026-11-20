@@ -2,6 +2,9 @@ package com.cyberspectraa.cybernpc.block;
 
 import com.cyberspectraa.cybernpc.registry.ModBlockEntities;
 import com.cyberspectraa.cybernpc.rift.RiftBlockEntity;
+import com.cyberspectraa.cybernpc.rift.RiftFinaleService;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.LivingEntity;
@@ -29,9 +32,10 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import javax.annotation.Nullable;
 
 /**
- * Two blocks high, one block wide: a noninteractive tear in world space.
- * The model and mandatory Photon FX are cosmetic only; no quests, travel,
- * discovery tracking or NPC logic. Preserve the 'island_rift' registry ID.
+ * Two blocks high, one block wide: the series' final crossing.
+ * Keep the existing model and mandatory Photon FX. Physically touching the
+ * tear offers a server-verified confirmation; never begin on contact alone.
+ * Preserve the existing island_rift block/item ID and save compatibility.
  */
 public final class IslandRiftBlock extends Block implements EntityBlock {
     public static final EnumProperty<DoubleBlockHalf> HALF =
@@ -99,11 +103,19 @@ public final class IslandRiftBlock extends Block implements EntityBlock {
     @Override
     public VoxelShape getCollisionShape(BlockState state, BlockGetter level,
             BlockPos pos, CollisionContext context) {
-        // Passing through the inactive tear has no gameplay consequence.
+        // No collision: a player can physically cross into the tear to
+        // receive an opt-in, irreversible departure confirmation.
         return Shapes.empty();
     }
 
-    // No use() handler, teleportation, discovery, quest or NPC logic.
+    // Do not teleport on contact, or add a right-click menu to the Rift.
+    @Override
+    public void entityInside(BlockState state, Level level, BlockPos pos, Entity entity) {
+        if (!level.isClientSide && entity instanceof ServerPlayer player) {
+            RiftFinaleService.touch(player, pos);
+        }
+        super.entityInside(state, level, pos, entity);
+    }
 
     @Override
     @Nullable
