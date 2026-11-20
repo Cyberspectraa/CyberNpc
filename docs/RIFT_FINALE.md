@@ -1,4 +1,4 @@
-# Rift finale — CyberNpc 0.44.99 (development-no-actions)
+# Rift finale — CyberNpc 0.45.0 (development-no-actions)
 
 The owner's 20 November 2026 direction is now an **opt-in series outro** on
 `cybernpc:island_rift`. This replaces the Rift's prior gameplay-inactive rule
@@ -15,11 +15,12 @@ no-collision behaviour or Photon FX. Do not move this system into CyberServer.
 3. **Enter the Rift** is validated server-side against a live 30-second offer,
    the current dimension, Rift integrity and player proximity. After acceptance,
    the player becomes invisible, invulnerable and fixed in place while a private
-   42-second credits sequence plays. The Rift is NOT a teleport.
+   72-second credits sequence plays. The Rift is NOT a teleport.
 4. Credits display: farewell title; *Minecraft's own* lifetime play time,
    mob kills and deaths; the Main Seven's total visits, most frequently talked
    to character and runner-up; count of established trusted relationships;
-   thank-you; a deliberately non-specific next-series teaser. All counters
+   thank-you; acknowledgements for the requested community resources and tools;
+   a deliberately non-specific next-series teaser. All counters
    derive from actual persistent player data or vanilla stats, not simulation.
 5. At the end, CyberNpc saves `CyberNpcRiftDeparture` on the player and
    disconnects them with a farewell reason. On dedicated servers, later logins
@@ -65,15 +66,17 @@ no-collision behaviour or Photon FX. Do not move this system into CyberServer.
 
 1. On `development-no-actions`, run `git pull --ff-only` and
    `build-local.bat`, replace the old JAR and confirm a **real build success**.
-   Forge 1.20.1 / Java 17, mandatory Photon, and **matching CyberNpc 0.44.99
-   on client and server** are required. Network protocol is now `8`.
+   Forge 1.20.1 / Java 17, mandatory Photon, and **matching CyberNpc 0.45.0
+   on client and server** are required. Network protocol is now `9`.
 2. Walk into both Rift halves: confirm the warning appears once, neither side
    automatically accepts. Escape/Stay must NOT alter your character.
 3. Leave its block and walk back; warning should reappear only after re-entry.
    Stand near (but not inside) the Rift; it must never trigger.
 4. Accept once. Check player becomes invisible, cannot move, and receives
-   complete, readable credits with genuine recorded stats.
-5. Let all 42 seconds finish; confirm the disconnect reason. In a
+   complete, readable credits with genuine recorded stats, acknowledgements
+   and the uploaded AtlasAudio music. UI must say 'The Rift is opening...' until
+   the server sends the credits packet, never silently close or repeat.
+5. Let all 72 seconds finish; confirm the disconnect reason. In a
    multiplayer test, rejoin and confirm server refuses a departed player.
 6. Operator reset and confirm the outro is testable again. If using a dedicated
    server, check offline UUID recovery.
@@ -88,3 +91,40 @@ dimension, quest completion gate, transfer/export of the Main Seven, or auto-
 escort. Those are separate world/story systems requiring approval and a clear
 cross-project data format. The outro text is intentionally a teaser, not
 unapproved canon about the destination. No GitHub Actions builds should run.
+
+## 0.45.0 fix: confirmation and music
+
+The previous release cleared its pending prompt every five ticks whenever the
+player was no longer intersecting a Rift block. Movement can settle just
+outside the narrow tear as the warning opens, so a delayed click on **Enter**
+was refused without any user feedback. **Now** the offer stays valid until its
+30-second deadline. The server still validates the 1×2 Rift, dimension,
+proximity (within 3 blocks), departure flags and original invitation. If it
+rejects the request, the client receives an explicit explanation rather than
+sitting on a silent warning. Clicking Enter shows **The Rift is opening...**
+while awaiting authoritative server acknowledgement; Escape/Stay always declines.
+
+### Soundtrack
+
+- Supplied file: `atlasaudio-background-music-635570.mp3` (128.6 seconds).
+- Mod asset: `assets/cybernpc/sounds/music/rift_outro.ogg` — 72 seconds,
+  mono Ogg Vorbis at 22.05 kHz, faded in over 2 seconds and out over 5.
+- Sound event: `cybernpc:rift_outro_music` is streamed in `sounds.json`.
+  The credits screen plays it on the Minecraft music channel and stops it
+  on completion, server abort or screen removal. Credits length is 72 seconds.
+- Attribution on the credits page: **AtlasAudio (via Pixabay)**, based on the
+  file's supplied name. Keep a copy of the exact source URL/licence when the
+  pack is publicly distributed; the metadata in the MP3 did not include it.
+
+### Credits acknowledgements (as requested by the owner)
+
+Fresh Animations; Fresh Animations: Player Extension; Just Expressions;
+Voice Studio; StarlightSkins; Pixabay; Blockbench;
+Epic Knights: Shields, Armor and Weapons; Skin Layers 3D; Photon;
+Iron's Spells 'n Spellbooks. These are acknowledgements of third-party
+resources/tools, **not** a statement that they sponsor CyberNpc or all use the
+same license. The owner should check each asset's redistribution terms before
+pack release.
+
+**Source and OGG binary are committed on `development-no-actions`; no compiled
+JAR or in-game test has been verified. No GitHub Actions were run.**
