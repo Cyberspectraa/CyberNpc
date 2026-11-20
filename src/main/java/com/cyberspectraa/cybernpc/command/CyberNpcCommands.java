@@ -2,6 +2,9 @@ package com.cyberspectraa.cybernpc.command;
 
 import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.intro.CyberIntroService;
+import com.cyberspectraa.cybernpc.rift.RiftFinaleService;
+import net.minecraft.server.level.ServerPlayer;
+import java.util.UUID;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.mojang.brigadier.arguments.BoolArgumentType;
@@ -38,6 +41,14 @@ public final class CyberNpcCommands {
                                         .executes(ctx -> CyberIntroService.setArrival(ctx.getSource())))
                                 .then(Commands.literal("setpopewait")
                                         .executes(ctx -> CyberIntroService.setPopeWait(ctx.getSource()))))
+                        .then(Commands.literal("rift")
+                                .then(Commands.literal("reset")
+                                        .executes(ctx -> resetRift(ctx.getSource())))
+                                .then(Commands.literal("recover")
+                                        .then(Commands.argument("uuid", StringArgumentType.word())
+                                                .executes(ctx -> recoverRift(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "uuid"))))))
                         .then(Commands.literal("admin")
                         .then(Commands.literal("role")
                                 .then(Commands.argument("target", EntityArgument.entity())
@@ -71,6 +82,39 @@ public final class CyberNpcCommands {
                                                 EntityArgument.getEntity(context, "target")
                                         ))))
         );
+    }
+
+
+    /** Operators may replay the finale on their own integrated/test world. */
+    private static int resetRift(CommandSourceStack source)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        RiftFinaleService.reset(player);
+        source.sendSuccess(() -> Component.literal(
+                "Your Rift departure record was cleared for testing."), false);
+        return 1;
+    }
+
+    /** Dedicated-server recovery for someone whose departure blocks login. */
+    private static int recoverRift(CommandSourceStack source, String value) {
+        UUID uuid;
+        try {
+            uuid = UUID.fromString(value);
+        } catch (IllegalArgumentException ex) {
+            source.sendFailure(Component.literal(
+                    "Expected a player UUID. No Rift records were changed."));
+            return 0;
+        }
+        ServerPlayer online = source.getServer().getPlayerList().getPlayer(uuid);
+        if (online != null) {
+            RiftFinaleService.reset(online);
+        } else {
+            RiftFinaleService.permitRecovery(uuid);
+        }
+        source.sendSuccess(() -> Component.literal(
+                "Rift recovery authorised for " + uuid
+                        + (online == null ? " on their next login." : ".")), true);
+        return 1;
     }
 
     private static int spawn(CommandSourceStack source, String requestedName) {
