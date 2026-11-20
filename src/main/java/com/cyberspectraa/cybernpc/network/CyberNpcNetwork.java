@@ -9,7 +9,7 @@ import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class CyberNpcNetwork {
-    private static final String PROTOCOL = "7";
+    private static final String PROTOCOL = "8";
 
     public static final SimpleChannel CHANNEL =
             NetworkRegistry.ChannelBuilder.named(
@@ -87,6 +87,26 @@ public final class CyberNpcNetwork {
                 .encoder(WorkplaceRemovePacket::encode)
                 .decoder(WorkplaceRemovePacket::decode)
                 .consumerMainThread(WorkplaceRemovePacket::handle)
+                .add();
+
+        // Append new IDs only; do not renumber existing intro/dialogue packets.
+        CHANNEL.messageBuilder(
+                RiftPromptPacket.class, nextId++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RiftPromptPacket::encode)
+                .decoder(RiftPromptPacket::decode)
+                .consumerMainThread(RiftPromptPacket::handle)
+                .add();
+        CHANNEL.messageBuilder(
+                RiftChoicePacket.class, nextId++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(RiftChoicePacket::encode)
+                .decoder(RiftChoicePacket::decode)
+                .consumerMainThread(RiftChoicePacket::handle)
+                .add();
+        CHANNEL.messageBuilder(
+                RiftCreditsPacket.class, nextId++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RiftCreditsPacket::encode)
+                .decoder(RiftCreditsPacket::decode)
+                .consumerMainThread(RiftCreditsPacket::handle)
                 .add();
     }
 
