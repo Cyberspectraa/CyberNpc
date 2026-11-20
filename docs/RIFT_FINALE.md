@@ -1,4 +1,4 @@
-# Rift finale — CyberNpc 0.45.0 (development-no-actions)
+# Rift finale — CyberNpc 0.45.1 (development-no-actions)
 
 The owner's 20 November 2026 direction is now an **opt-in series outro** on
 `cybernpc:island_rift`. This replaces the Rift's prior gameplay-inactive rule
@@ -12,7 +12,7 @@ no-collision behaviour or Photon FX. Do not move this system into CyberServer.
 2. The player chooses **Stay on the Island** (or Escape) and retains all
    control/progress. They will not be repeatedly prompted until they leave the
    Rift and walk back into it.
-3. **Enter the Rift** is validated server-side against a live 30-second offer,
+3. **Enter the Rift** is validated server-side against a live 90-second offer,
    the current dimension, Rift integrity and player proximity. After acceptance,
    the player becomes invisible, invulnerable and fixed in place while a private
    72-second credits sequence plays. The Rift is NOT a teleport.
@@ -66,7 +66,7 @@ no-collision behaviour or Photon FX. Do not move this system into CyberServer.
 
 1. On `development-no-actions`, run `git pull --ff-only` and
    `build-local.bat`, replace the old JAR and confirm a **real build success**.
-   Forge 1.20.1 / Java 17, mandatory Photon, and **matching CyberNpc 0.45.0
+   Forge 1.20.1 / Java 17, mandatory Photon, and **matching CyberNpc 0.45.1
    on client and server** are required. Network protocol is now `9`.
 2. Walk into both Rift halves: confirm the warning appears once, neither side
    automatically accepts. Escape/Stay must NOT alter your character.
@@ -98,8 +98,10 @@ The previous release cleared its pending prompt every five ticks whenever the
 player was no longer intersecting a Rift block. Movement can settle just
 outside the narrow tear as the warning opens, so a delayed click on **Enter**
 was refused without any user feedback. **Now** the offer stays valid until its
-30-second deadline. The server still validates the 1×2 Rift, dimension,
-proximity (within 3 blocks), departure flags and original invitation. If it
+90-second deadline. The server validates the same 1×2 Rift, dimension,
+departure flags and original single-use invitation, but deliberately does not
+recheck proximity at acceptance time: players naturally fall or drift out of
+the non-colliding Rift while reading the non-pausing warning. If it
 rejects the request, the client receives an explicit explanation rather than
 sitting on a silent warning. Clicking Enter shows **The Rift is opening...**
 while awaiting authoritative server acknowledgement; Escape/Stay always declines.
@@ -128,3 +130,20 @@ pack release.
 
 **Source and OGG binary are committed on `development-no-actions`; no compiled
 JAR or in-game test has been verified. No GitHub Actions were run.**
+
+## 0.45.1 fix: player fell away while reading
+
+A valid warning could display but **Enter the Rift** responded “The Rift is too
+far away.” The issue was the second distance-to-Rift check, not the original
+physical contact: the tear has no collision and the non-pausing warning lets
+the player's physics continue, carrying them more than three blocks from the
+Rift before clicking. The 0.45.1 server now trusts the *one-use prompt issued
+at touch*, provided it is less than **90 seconds** old, the same complete Rift
+still exists in the same dimension, the player explicitly chooses Enter and
+has not already departed. Fake Yes packets without such a prompt still fail.
+The intro, soundtrack, credits and disconnect behaviour are unchanged.
+
+Test specifically with the Rift suspended above the ground: open the warning,
+let the player fall while reading, then choose Enter. The real credits screen
+should replace the warning. Test Stay and Escape separately; neither should
+start the ending. Confirm both server and client are using 0.45.1.
