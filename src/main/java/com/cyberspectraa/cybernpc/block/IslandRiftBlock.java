@@ -112,7 +112,13 @@ public final class IslandRiftBlock extends Block implements EntityBlock {
     @Override
     public void entityInside(BlockState state, Level level, BlockPos pos, Entity entity) {
         if (!level.isClientSide && entity instanceof ServerPlayer player) {
-            RiftFinaleService.touch(player, pos);
+            // Only the narrow visible tear, not the entire 1x1 block cell,
+            // should offer the irreversible end-of-series decision.
+            VoxelShape tear = state.getValue(FACING).getAxis() == Direction.Axis.X
+                    ? EAST_WEST : NORTH_SOUTH;
+            if (tear.bounds().move(pos).intersects(player.getBoundingBox())) {
+                RiftFinaleService.touch(player, pos);
+            }
         }
         super.entityInside(state, level, pos, entity);
     }
