@@ -5,6 +5,7 @@ import com.cyberspectraa.cybernpc.block.IslandRiftBlock;
 import com.cyberspectraa.cybernpc.dialogue.TownCharacterDialogue;
 import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.network.RiftCreditsPacket;
+import com.cyberspectraa.cybernpc.network.RiftAbortPacket;
 import com.cyberspectraa.cybernpc.network.RiftPromptPacket;
 import com.cyberspectraa.cybernpc.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
@@ -350,7 +351,11 @@ public final class RiftFinaleService {
         DECLINED_UNTIL_EXIT.remove(id);
         RESUME_AT.remove(id);
         Credits credits = ACTIVE.remove(id);
-        if (credits != null) release(player, credits);
+        if (credits != null) {
+            release(player, credits);
+            CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                    new RiftAbortPacket());
+        }
         player.getPersistentData().remove(DATA);
     }
 
