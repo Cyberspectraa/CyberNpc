@@ -203,8 +203,13 @@ public final class CyberIntroService {
 
     @SubscribeEvent
     public static void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
-        UUID id = event.getEntity().getUUID();
-        QUEUE.remove(id);
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        UUID id = player.getUUID();
+        if (QUEUE.remove(id) != null) {
+            // Intro progress is still pending and will resume on login,
+            // but never persist the cinematic's no-gravity/lock flags.
+            release(player);
+        }
         if (id.equals(active)) {
             active = null;
             chosenPope = null;
@@ -255,11 +260,11 @@ public final class CyberIntroService {
                     sendQueue(player, true);
                 }
             } else if (session.stage == Stage.CINEMATIC) {
-                // This is essential: do not re-hide a player after the reveal.
+                // Cinematic stays locked until the camera hands back control.
                 hold(player, !session.revealed);
-            } else if (session.stage == Stage.GREETING) {
-                hold(player, false);
             }
+            // GREETING deliberately applies no hold. The player is free to
+            // fall, move and talk while the Pope approaches them.
         }
 
         long now = server.overworld().getGameTime();
@@ -395,6 +400,10 @@ public final class CyberIntroService {
         reveal(player, session);
         session.stage = Stage.GREETING;
         session.stageTick = player.getServer().overworld().getGameTime();
+        // Restore vanilla physics and controls at the cinematic -> greeting
+        // transition, rather than forcing the player to hover until they
+        // finish the Pope conversation.
+        release(player);
         CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new IntroScenePacket(false, BlockPos.ZERO, 0F));
     }
@@ -403,6 +412,15 @@ public final class CyberIntroService {
         player.setInvisible(concealed);
         player.setInvulnerable(true);
         player.setNoGravity(true);
+        player.setDeltaMovement(Vec3.ZERO);
+        player.fallDistance = 0F;
+    }
+
+    /** Undo only the temporary player flags applied by hold(). */
+    private static void release(ServerPlayer player) {
+        player.setInvisible(false);
+        player.setInvulnerable(false);
+        player.setNoGravity(false);
         player.setDeltaMovement(Vec3.ZERO);
         player.fallDistance = 0F;
     }
@@ -416,11 +434,7 @@ public final class CyberIntroService {
     public static void finish(ServerPlayer player) {
         QUEUE.remove(player.getUUID());
         mark(player, false, true);
-        player.setInvisible(false);
-        player.setInvulnerable(false);
-        player.setNoGravity(false);
-        player.setDeltaMovement(Vec3.ZERO);
-        player.fallDistance = 0F;
+        release(player);
         sendQueue(player, false);
         CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new IntroScenePacket(false, BlockPos.ZERO, 0F));
@@ -433,7 +447,7 @@ public final class CyberIntroService {
 
     /** Admin testing reset hook; CyberRaces still owns /cyberresetall. */
     public static void resetForRetest(ServerPlayer player) {
-        QUEUE.remove(player.getUUID());
+        if (QUEUE.remove(player.getUUID()) != null) release(player);
         player.getPersistentData().remove(ROOT);
         if (player.getUUID().equals(active)) {
             active = null;
