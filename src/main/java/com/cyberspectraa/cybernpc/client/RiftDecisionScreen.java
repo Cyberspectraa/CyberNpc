@@ -11,6 +11,10 @@ import net.minecraft.network.chat.Component;
 /** The only way to begin the finale: a deliberate Yes. Escape always declines. */
 public final class RiftDecisionScreen extends Screen {
     private boolean answered;
+    private boolean waiting;
+    private int waitingTicks;
+    private Button yesButton;
+    private Button stayButton;
 
     private RiftDecisionScreen() {
         super(Component.literal("The Final Crossing"));
@@ -18,7 +22,8 @@ public final class RiftDecisionScreen extends Screen {
 
     public static void open() {
         Minecraft client = Minecraft.getInstance();
-        if (!(client.screen instanceof RiftCreditsScreen)) {
+        if (!(client.screen instanceof RiftCreditsScreen)
+                && !(client.screen instanceof RiftDecisionScreen)) {
             client.setScreen(new RiftDecisionScreen());
         }
     }
@@ -28,9 +33,9 @@ public final class RiftDecisionScreen extends Screen {
         super.init();
         int center = width / 2;
         int y = Math.min(height - 55, height / 2 + 45);
-        addRenderableWidget(Button.builder(Component.literal("Enter the Rift"),
+        yesButton = addRenderableWidget(Button.builder(Component.literal("Enter the Rift"),
                 b -> answer(true)).bounds(center - 150, y, 145, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Stay on the Island"),
+        stayButton = addRenderableWidget(Button.builder(Component.literal("Stay on the Island"),
                 b -> answer(false)).bounds(center + 5, y, 145, 20).build());
     }
 
@@ -38,12 +43,38 @@ public final class RiftDecisionScreen extends Screen {
         if (answered) return;
         answered = true;
         CyberNpcNetwork.CHANNEL.sendToServer(new RiftChoicePacket(enter));
-        Minecraft.getInstance().setScreen(null);
+        if (enter) {
+            // Keep the confirmation visible until the server sends the real
+            // credits screen. Never pretend the departure was accepted.
+            waiting = true;
+            yesButton.active = false;
+            stayButton.active = false;
+        } else {
+            Minecraft.getInstance().setScreen(null);
+        }
+    }
+
+    /** Called when the server rejects a stale or out-of-range Yes packet. */
+    public static void rejected(String reason) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.screen instanceof RiftDecisionScreen) {
+            client.setScreen(null);
+        }
+        if (client.player != null) {
+            client.player.displayClientMessage(Component.literal(reason), false);
+        }
+    }
+
+    @Override
+    public void tick() {
+        if (waiting && ++waitingTicks >= 160) {
+            rejected("The Rift did not respond. Step away and try entering again.");
+        }
     }
 
     @Override
     public void onClose() {
-        answer(false);
+        if (!answered) answer(false);
     }
 
     @Override
@@ -63,6 +94,10 @@ public final class RiftDecisionScreen extends Screen {
                 width / 2, height / 2 + 7, 0xFFFFC59F);
         graphics.drawCenteredString(font, "Finish anything you wish to leave behind.",
                 width / 2, height / 2 + 22, 0xFFB9ACCE);
+        if (waiting) {
+            graphics.drawCenteredString(font, "The Rift is opening...",
+                    width / 2, height / 2 + 83, 0xFFDCC4FF);
+        }
         super.render(graphics, x, y, partialTick);
     }
 
