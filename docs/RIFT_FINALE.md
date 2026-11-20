@@ -1,4 +1,4 @@
-# Rift finale — CyberNpc 0.45.2 (development-no-actions)
+# Rift finale — CyberNpc 0.45.3 (development-no-actions)
 
 The owner's 20 November 2026 direction is now an **opt-in series outro** on
 `cybernpc:island_rift`. This replaces the Rift's prior gameplay-inactive rule
@@ -13,7 +13,9 @@ no-collision behaviour or Photon FX. Do not move this system into CyberServer.
    control/progress. They will not be repeatedly prompted until they leave the
    Rift and walk back into it.
 3. **Enter the Rift** is validated server-side against a live 90-second offer,
-   the current dimension, Rift integrity and player proximity. After acceptance,
+   original arrival dimension and server-issued invitation. The Rift is
+   verified before the warning is offered; its block state and the player's
+   distance are intentionally not rechecked after they confirm. After acceptance,
    the player becomes invisible, invulnerable and fixed in place while a private
    72-second credits sequence plays. The Rift is NOT a teleport.
 4. Credits display: farewell title; *Minecraft's own* lifetime play time,
@@ -66,7 +68,7 @@ no-collision behaviour or Photon FX. Do not move this system into CyberServer.
 
 1. On `development-no-actions`, run `git pull --ff-only` and
    `build-local.bat`, replace the old JAR and confirm a **real build success**.
-   Forge 1.20.1 / Java 17, mandatory Photon, and **matching CyberNpc 0.45.2
+   Forge 1.20.1 / Java 17, mandatory Photon, and **matching CyberNpc 0.45.3
    on client and server** are required. Network protocol is now `9`.
 2. Walk into both Rift halves: confirm the warning appears once, neither side
    automatically accepts. Escape/Stay must NOT alter your character.
@@ -170,3 +172,45 @@ directly into the credits with AtlasAudio music. Press Stay/Escape in another
 run to verify no departure or lock. The credits/end disconnect must still work.
 
 This is a GitHub source patch; local build and game testing remain necessary.
+
+## 0.45.3 credit presentation
+
+No gameplay or network changes. The **72-second** server-owned outro and streamed
+AtlasAudio music are preserved exactly. The client credits renderer uses:
+
+- A plain, restrained Minecraft-font screen with two thin pixel lines instead
+  of the old moving fake-rift particles and thick purple ornament.
+- Static headings, statistics and names. No per-frame zoom or positional drift.
+- 24-tick C1-smoothstep crossfades overlapping at page boundaries, so a card
+  fades into the next instead of vanishing abruptly.
+- Static reusable entries (no per-render arrays); automatic width fitting for
+  exceptionally long project titles.
+- Eight cards in 72 seconds: title (0–7s), personal stats (7–16s), town NPCs
+  (16–25s), thank-you (25–31s), resource packs (31–42s), mods (42–53s),
+  tools/websites/creators (53–62s), and next-series tease (62–72s).
+
+### Exact credit categories
+
+| Credited resource | On-screen description |
+|---|---|
+| Fresh Animations | Resource pack - mob animations |
+| Fresh Animations: Player Extension | Resource pack - player animations |
+| Just Expressions | Resource pack - player expressions |
+| Epic Knights: Shields, Armor and Weapons | Mod - medieval equipment |
+| Skin Layers 3D | Mod - 3D player skins |
+| Photon | Mod - visual effects editor |
+| Iron's Spells 'n Spellbooks | Mod - spells and magic |
+| Blockbench | Tool - 3D modelling |
+| Voice Studio | Tool - voice / audio |
+| StarlightSkins | Minecraft skin creator |
+| Pixabay | Website - stock media |
+| AtlasAudio | Outro music - via Pixabay |
+
+StarlightSkins is classified as a skin creator, not assumed to be a mod or
+website; "Voice Studio" is deliberately described broadly without assuming
+a particular product URL. The music credit is separate from the website credit.
+
+The changes are confined to `RiftCreditsScreen.java` plus mod version and
+documentation. Build locally on Java 17/Forge 1.20.1 and check line fitting,
+fade smoothness, credit readability at both GUI scale 2 and GUI scale 4,
+music continuity and the final disconnect. Do **not** run GitHub Actions.
