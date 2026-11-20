@@ -108,7 +108,7 @@ while awaiting authoritative server acknowledgement; Escape/Stay always declines
 
 - Supplied file: `atlasaudio-background-music-635570.mp3` (128.6 seconds).
 - Mod asset: `assets/cybernpc/sounds/music/rift_outro.ogg` — 72 seconds,
-  mono Ogg Vorbis at 22.05 kHz, faded in over 2 seconds and out over 5.
+  stereo Ogg Vorbis at 44.1 kHz, faded in over 2 seconds and out over 5.
 - Sound event: `cybernpc:rift_outro_music` is streamed in `sounds.json`.
   The credits screen plays it on the Minecraft music channel and stops it
   on completion, server abort or screen removal. Credits length is 72 seconds.
