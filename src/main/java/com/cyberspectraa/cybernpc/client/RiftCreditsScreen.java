@@ -34,6 +34,14 @@ public final class RiftCreditsScreen extends Screen {
         int mid = width / 2;
         int baseY = height / 2 - 31;
         graphics.fill(0, 0, width, height, 0xFF0B0911);
+        // Slow, deterministic void motes; entirely visual and client-only.
+        // Nothing depends on frame rate or world ticks except their motion.
+        for (int i = 0; i < 48; i++) {
+            int starX = Math.floorMod(i * 167 + elapsed / 5, Math.max(1, width));
+            int starY = Math.floorMod(i * 89 + elapsed / 12, Math.max(1, height));
+            graphics.fill(starX, starY, starX + 1, starY + 1,
+                    i % 3 == 0 ? 0xFF66478F : 0xFF30243E);
+        }
         graphics.fill(0, 0, width, 3, 0xFF8B62C2);
         graphics.fill(width / 2 - Math.min(120, width / 3), height - 24,
                 width / 2 + Math.min(120, width / 3), height - 23, 0xFF47345F);
@@ -65,12 +73,12 @@ public final class RiftCreditsScreen extends Screen {
         } else if (seconds < 36) {
             heading(graphics, mid, baseY, "THANK YOU FOR PLAYING");
             line(graphics, mid, baseY + 27, "Thank you for spending your time on the island.");
-            line(graphics, mid, baseY + 46, "The world you leave behind will remember you.");
+            line(graphics, mid, baseY + 46, "The memories you made here will stay with you.");
         } else {
             heading(graphics, mid, baseY, "BEYOND THE FRACTURE");
-            line(graphics, mid, baseY + 27, "Where the Rift leads is not yet known.");
-            line(graphics, mid, baseY + 46, "But this is not where your story ends...");
-            line(graphics, mid, baseY + 70, "Until the next chapter.");
+            line(graphics, mid, baseY + 27, "Beyond the island, another world awaits.");
+            line(graphics, mid, baseY + 46, "Beneath unfamiliar skies, a new chapter begins.");
+            line(graphics, mid, baseY + 70, "Until we meet again.");
         }
 
         graphics.drawCenteredString(font, "A CYBERSPECTRA STORY", mid,
@@ -79,11 +87,22 @@ public final class RiftCreditsScreen extends Screen {
     }
 
     private void heading(GuiGraphics g, int x, int y, String text) {
-        g.drawCenteredString(font, text, x, y, 0xFFD3A5FF);
+        g.drawCenteredString(font, text, x, y, (slideAlpha() << 24) | 0xD3A5FF);
     }
 
     private void line(GuiGraphics g, int x, int y, String text) {
-        g.drawCenteredString(font, text, x, y, 0xFFE7DFF2);
+        g.drawCenteredString(font, text, x, y, (slideAlpha() << 24) | 0xE7DFF2);
+    }
+
+    private int slideAlpha() {
+        int[] bounds = {0, 140, 300, 460, 600, 720, 840};
+        for (int i = 0; i < bounds.length - 1; i++) {
+            if (elapsed < bounds[i + 1]) {
+                int edge = Math.min(elapsed - bounds[i], bounds[i + 1] - elapsed);
+                return Math.max(0, Math.min(255, edge * 255 / 17));
+            }
+        }
+        return 255;
     }
 
     private static String playtime(int ticks) {
