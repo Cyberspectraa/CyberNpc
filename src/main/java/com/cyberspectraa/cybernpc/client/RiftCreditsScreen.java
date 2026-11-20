@@ -9,44 +9,47 @@ import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 
 /**
- * A quiet, Minecraft-font farewell: fixed-position text, readable timing and
- * smooth crossfades, not animated particle fields or moving/scaling paragraphs.
+ * Credits in the style of Minecraft's own ending: a few quiet cards, then one
+ * steady scrolling credit roll. No overlapping cards, moving backgrounds,
+ * synthetic glows, font animations or interpolated text scaling.
  *
- * The server still owns the 72-second deadline, invisibility and disconnect.
- * The soundtrack belongs only to this screen and stops when it is removed.
+ * The dedicated server still controls all 72 seconds of the finale, player
+ * invisibility, the saved departure and the final disconnect.
  */
 public final class RiftCreditsScreen extends Screen {
-    // Every page uses the same clock. Crossfades overlap at these boundaries
-    // so neither the heading nor the text abruptly pops to a new page.
-    private static final int[] PAGE_TICKS = {
-            0, 140, 320, 500, 620, 840, 1060, 1240, 1440
-    };
-    private static final float FADE_HALF_TICKS = 12F;
-    private static final int BACKGROUND = 0xFF101010;
-    private static final int FRAME = 0xFF39342C;
-    private static final int HEADING = 0xFFE7D2A7;
-    private static final int BODY = 0xFFE5E5E5;
-    private static final int DETAIL = 0xFFA8A39B;
+    private static final int INTRO_END = 150;
+    private static final int STATS_END = 320;
+    private static final int PEOPLE_END = 500;
+    private static final int THANKS_END = 600;
+    private static final int ROLL_END = 1240;
+    private static final int END = 1440;
 
-    private static final CreditEntry[] RESOURCE_PACKS = {
-            new CreditEntry("Fresh Animations", "Resource pack - mob animations"),
-            new CreditEntry("Fresh Animations: Player Extension",
-                    "Resource pack - player animations"),
-            new CreditEntry("Just Expressions", "Resource pack - player expressions")
-    };
-    private static final CreditEntry[] MODS = {
-            new CreditEntry("Epic Knights: Shields, Armor and Weapons",
-                    "Mod - medieval equipment"),
-            new CreditEntry("Skin Layers 3D", "Mod - 3D player skins"),
-            new CreditEntry("Photon", "Mod - visual effects editor"),
-            new CreditEntry("Iron's Spells 'n Spellbooks", "Mod - spells and magic")
-    };
-    private static final CreditEntry[] TOOLS_AND_CREATORS = {
-            new CreditEntry("Blockbench", "Tool - 3D modelling"),
-            new CreditEntry("Voice Studio", "Tool - voice / audio"),
-            new CreditEntry("StarlightSkins", "Minecraft skin creator"),
-            new CreditEntry("Pixabay", "Website - stock media"),
-            new CreditEntry("AtlasAudio", "Outro music - via Pixabay")
+    private record CreditEntry(String name, String description) {}
+    private record CreditGroup(String title, CreditEntry[] entries) {}
+
+    private static final CreditGroup[] GROUPS = {
+            new CreditGroup("RESOURCE PACKS", new CreditEntry[]{
+                    new CreditEntry("Fresh Animations", "Mob animation resource pack"),
+                    new CreditEntry("Fresh Animations: Player Extension",
+                            "Player animation resource pack"),
+                    new CreditEntry("Just Expressions", "Expression resource pack")
+            }),
+            new CreditGroup("MODS", new CreditEntry[]{
+                    new CreditEntry("Epic Knights: Shields, Armor and Weapons",
+                            "Medieval equipment mod"),
+                    new CreditEntry("Skin Layers 3D", "3D player-skin mod"),
+                    new CreditEntry("Photon", "Visual effects mod"),
+                    new CreditEntry("Iron's Spells 'n Spellbooks", "Magic mod")
+            }),
+            new CreditGroup("TOOLS & WEBSITES", new CreditEntry[]{
+                    new CreditEntry("Blockbench", "3D modelling tool"),
+                    new CreditEntry("Voice Studio", "Voice and audio tool"),
+                    new CreditEntry("StarlightSkins", "Minecraft skin creator"),
+                    new CreditEntry("Pixabay", "Stock media website")
+            }),
+            new CreditGroup("MUSIC", new CreditEntry[]{
+                    new CreditEntry("AtlasAudio", "Outro soundtrack via Pixabay")
+            })
     };
 
     private final RiftCreditsPacket summary;
@@ -54,7 +57,7 @@ public final class RiftCreditsScreen extends Screen {
     private int elapsed;
 
     private RiftCreditsScreen(RiftCreditsPacket summary) {
-        super(Component.literal("The Fractured Island - Credits"));
+        super(Component.literal("Fractured Island - Credits"));
         this.summary = summary;
     }
 
@@ -62,7 +65,7 @@ public final class RiftCreditsScreen extends Screen {
         Minecraft.getInstance().setScreen(new RiftCreditsScreen(summary));
     }
 
-    /** Server reset is the only permitted interruption of the departure. */
+    /** The server may cancel a retest without leaving audio or a locked GUI. */
     public static void closeFromServer() {
         Minecraft client = Minecraft.getInstance();
         if (client.screen instanceof RiftCreditsScreen) {
@@ -97,136 +100,142 @@ public final class RiftCreditsScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, width, height, BACKGROUND);
-
-        // Two simple pixel lines, the usual Minecraft font, no drifting
-        // particles or ornamental glowing panels.
-        graphics.fill(0, 0, width, 2, FRAME);
-        graphics.fill(0, height - 2, width, height, FRAME);
-        graphics.fill(width / 2 - Math.min(72, width / 4), height - 30,
-                width / 2 + Math.min(72, width / 4), height - 29, FRAME);
-        graphics.drawCenteredString(font, "FRACTURED ISLAND",
-                width / 2, height - 23, DETAIL);
-
+        RiftUiStyle.background(graphics, width, height);
         float time = elapsed + Math.max(0F, Math.min(1F, partialTick));
-        for (int page = 0; page < PAGE_TICKS.length - 1; page++) {
-            float opacity = pageOpacity(time, page);
-            if (opacity > 0F) renderPage(graphics, page, opacity);
+
+        // There is exactly ONE page at any instant. The final frames of one
+        // page fade to black before the next page begins; none are superimposed.
+        if (time < INTRO_END) {
+            opening(graphics, RiftUiStyle.cardOpacity(time, 0, INTRO_END));
+        } else if (time < STATS_END) {
+            statistics(graphics, RiftUiStyle.cardOpacity(time, INTRO_END, STATS_END));
+        } else if (time < PEOPLE_END) {
+            townsfolk(graphics, RiftUiStyle.cardOpacity(time, STATS_END, PEOPLE_END));
+        } else if (time < THANKS_END) {
+            thanks(graphics, RiftUiStyle.cardOpacity(time, PEOPLE_END, THANKS_END));
+        } else if (time < ROLL_END) {
+            roll(graphics, time, RiftUiStyle.cardOpacity(time, THANKS_END, ROLL_END));
+        } else if (time < END) {
+            farewell(graphics, RiftUiStyle.cardOpacity(time, ROLL_END, END));
         }
+
+        RiftUiStyle.footer(graphics, font, width, height);
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 
-    /** C1 smoothstep: both old and new cards move through 50% at a boundary. */
-    private static float smooth(float value) {
-        float t = Math.max(0F, Math.min(1F, value));
-        return t * t * (3F - 2F * t);
+    private void opening(GuiGraphics graphics, float opacity) {
+        text(graphics, height / 2 - 21, "THE FRACTURED ISLAND",
+                RiftUiStyle.HEADING, opacity);
+        text(graphics, height / 2 + 9, "Thank you for playing.",
+                RiftUiStyle.TEXT, opacity);
+        text(graphics, height / 2 + 31, "A CYBERSPECTRA SERIES",
+                RiftUiStyle.DETAIL, opacity);
     }
 
-    private float pageOpacity(float time, int page) {
-        float fadeIn = page == 0
-                ? smooth(time / (2F * FADE_HALF_TICKS))
-                : smooth((time - PAGE_TICKS[page] + FADE_HALF_TICKS)
-                        / (2F * FADE_HALF_TICKS));
-        float fadeOut = page == PAGE_TICKS.length - 2
-                ? smooth((PAGE_TICKS[page + 1] - time) / (2F * FADE_HALF_TICKS))
-                : 1F - smooth((time - PAGE_TICKS[page + 1] + FADE_HALF_TICKS)
-                        / (2F * FADE_HALF_TICKS));
-        return Math.min(fadeIn, fadeOut);
-    }
-
-    private void renderPage(GuiGraphics g, int page, float fade) {
-        int mid = width / 2;
+    private void statistics(GuiGraphics graphics, float opacity) {
         int y = height / 2;
-        switch (page) {
-            case 0 -> {
-                heading(g, mid, y - 24, "THE FRACTURED ISLAND", fade);
-                body(g, mid, y + 4, "Thank you for playing.", fade);
-                detail(g, mid, y + 25, "A CYBERSPECTRA SERIES", fade);
-            }
-            case 1 -> {
-                heading(g, mid, y - 55, "YOUR TIME ON THE ISLAND", fade);
-                body(g, mid, y - 17, "Time played: " + playtime(summary.playTicks()), fade);
-                body(g, mid, y + 5, "Creatures defeated: " + summary.mobKills(), fade);
-                body(g, mid, y + 27, "Deaths: " + summary.deaths(), fade);
-            }
-            case 2 -> {
-                heading(g, mid, y - 57, "THE PEOPLE YOU MET", fade);
-                body(g, mid, y - 27,
-                        "Conversations with the Seven: " + summary.conversations(), fade);
-                body(g, mid, y - 4,
-                        "Most visited: " + summary.favouriteName(), fade);
-                detail(g, mid, y + 10, summary.favouriteVisits() + " visits", fade);
-                if (!summary.runnerUpName().isBlank() && summary.runnerUpVisits() > 0) {
-                    detail(g, mid, y + 29,
-                            "Also visited: " + summary.runnerUpName(), fade);
+        text(graphics, y - 51, "YOUR TIME HERE", RiftUiStyle.HEADING, opacity);
+        text(graphics, y - 17, "Time played: " + playtime(summary.playTicks()),
+                RiftUiStyle.TEXT, opacity);
+        text(graphics, y + 6, "Creatures defeated: " + summary.mobKills(),
+                RiftUiStyle.TEXT, opacity);
+        text(graphics, y + 29, "Deaths: " + summary.deaths(),
+                RiftUiStyle.TEXT, opacity);
+    }
+
+    private void townsfolk(GuiGraphics graphics, float opacity) {
+        int y = height / 2;
+        text(graphics, y - 57, "THE PEOPLE YOU MET", RiftUiStyle.HEADING, opacity);
+        text(graphics, y - 28, "Conversations with the Seven: " + summary.conversations(),
+                RiftUiStyle.TEXT, opacity);
+        text(graphics, y - 6, "Most visited: " + summary.favouriteName(),
+                RiftUiStyle.TEXT, opacity);
+        text(graphics, y + 12, summary.favouriteVisits() + " visits",
+                RiftUiStyle.DETAIL, opacity);
+        if (!summary.runnerUpName().isBlank() && summary.runnerUpVisits() > 0) {
+            text(graphics, y + 30, "Also visited: " + summary.runnerUpName(),
+                    RiftUiStyle.DETAIL, opacity);
+        }
+        text(graphics, y + 49, "Town friendships: " + summary.friends() + " / 7",
+                RiftUiStyle.DETAIL, opacity);
+    }
+
+    private void thanks(GuiGraphics graphics, float opacity) {
+        int y = height / 2;
+        text(graphics, y - 24, "THANK YOU", RiftUiStyle.HEADING, opacity);
+        text(graphics, y + 5, "For spending your time here.",
+                RiftUiStyle.TEXT, opacity);
+        text(graphics, y + 28, "And for making it to the Rift.",
+                RiftUiStyle.DETAIL, opacity);
+    }
+
+    /**
+     * Classic vertically scrolling credits. Movement uses a fractional render
+     * tick, not integer text coordinates or one-page-at-a-time jumps.
+     *
+     * Starting below the viewing area and ending above it ensures every entry
+     * passes through the visible window at the same steady rate.
+     */
+    private void roll(GuiGraphics graphics, float time, float opacity) {
+        if (opacity <= 0.01F) return;
+        int top = Math.max(46, Math.min(62, height / 5));
+        int bottom = Math.max(top + 32, height - 40);
+        int middle = width / 2;
+        int totalHeight = rollHeight();
+
+        // A scroll from below the clipping window to completely above it.
+        float progress = Math.max(0F, Math.min(1F,
+                (time - THANKS_END) / (ROLL_END - THANKS_END)));
+        float travel = totalHeight + bottom - top + 28F;
+        float origin = bottom + 10F - progress * travel;
+
+        text(graphics, top - 25, "CREDITS", RiftUiStyle.HEADING, opacity);
+        graphics.enableScissor(0, top, width, bottom);
+        graphics.pose().pushPose();
+        try {
+            graphics.pose().translate(0F, origin, 0F);
+            int y = 0;
+            for (CreditGroup group : GROUPS) {
+                RiftUiStyle.centered(graphics, font, width, middle, y,
+                        group.title(), RiftUiStyle.HEADING, opacity);
+                y += 29;
+                for (CreditEntry entry : group.entries()) {
+                    RiftUiStyle.centered(graphics, font, width, middle, y,
+                            entry.name(), RiftUiStyle.TEXT, opacity);
+                    RiftUiStyle.centered(graphics, font, width, middle, y + 12,
+                            entry.description(), RiftUiStyle.DETAIL, opacity);
+                    y += 30;
                 }
-                detail(g, mid, y + 49,
-                        "Town friendships: " + summary.friends() + " / 7", fade);
+                y += 17;
             }
-            case 3 -> {
-                heading(g, mid, y - 25, "THANK YOU", fade);
-                body(g, mid, y + 2, "For spending your time here.", fade);
-                detail(g, mid, y + 24, "And for making it to the Rift.", fade);
-            }
-            case 4 -> credits(g, fade, "RESOURCE PACKS", RESOURCE_PACKS);
-            case 5 -> credits(g, fade, "MINECRAFT MODS", MODS);
-            case 6 -> credits(g, fade, "TOOLS, WEBSITES & CREATORS",
-                    TOOLS_AND_CREATORS);
-            case 7 -> {
-                heading(g, mid, y - 33, "BEYOND THE RIFT", fade);
-                body(g, mid, y - 4, "The island is behind you now.", fade);
-                body(g, mid, y + 16, "What waits on the other side?", fade);
-                detail(g, mid, y + 45, "TO BE CONTINUED", fade);
-            }
-            default -> { }
+        } finally {
+            graphics.pose().popPose();
+            graphics.disableScissor();
         }
     }
 
-    private record CreditEntry(String name, String category) {}
+    private static int rollHeight() {
+        int height = 0;
+        for (CreditGroup group : GROUPS) {
+            height += 29 + 30 * group.entries().length + 17;
+        }
+        return height;
+    }
 
-    private void credits(GuiGraphics g, float fade, String heading,
-                         CreditEntry[] entries) {
-        int mid = width / 2;
+    private void farewell(GuiGraphics graphics, float opacity) {
         int y = height / 2;
-        heading(g, mid, y - 69, heading, fade);
-        int step = Math.min(24, Math.max(17, (height - 70) / 5));
-        int top = y - 43;
-        for (int i = 0; i < entries.length; i++) {
-            CreditEntry entry = entries[i];
-            body(g, mid, top + i * step, entry.name(), fade);
-            detail(g, mid, top + i * step + 10, entry.category(), fade);
-        }
+        text(graphics, y - 33, "BEYOND THE RIFT", RiftUiStyle.HEADING, opacity);
+        text(graphics, y - 5, "The island is behind you now.",
+                RiftUiStyle.TEXT, opacity);
+        text(graphics, y + 16, "What waits on the other side?",
+                RiftUiStyle.TEXT, opacity);
+        text(graphics, y + 45, "TO BE CONTINUED",
+                RiftUiStyle.DETAIL, opacity);
     }
 
-    private void heading(GuiGraphics g, int x, int y, String value, float fade) {
-        drawFitted(g, x, y, value, HEADING, fade);
-    }
-
-    private void body(GuiGraphics g, int x, int y, String value, float fade) {
-        drawFitted(g, x, y, value, BODY, fade);
-    }
-
-    private void detail(GuiGraphics g, int x, int y, String value, float fade) {
-        drawFitted(g, x, y, value, DETAIL, fade);
-    }
-
-    private void drawFitted(GuiGraphics g, int x, int y,
-                            String value, int rgb, float fade) {
-        int color = ((Math.round(255F * fade) & 0xFF) << 24)
-                | (rgb & 0xFFFFFF);
-        // Scale long names ONLY when the window width demands it. There is
-        // never a per-frame zoom or shift to make text appear animated.
-        float scale = Math.min(1F,
-                (float) Math.max(40, width - 24) / Math.max(1, font.width(value)));
-        if (scale >= 1F) {
-            g.drawCenteredString(font, value, x, y, color);
-        } else {
-            g.pose().pushPose();
-            g.pose().translate(x, y, 0F);
-            g.pose().scale(scale, scale, 1F);
-            g.drawCenteredString(font, value, 0, 0, color);
-            g.pose().popPose();
-        }
+    private void text(GuiGraphics graphics, int y, String value, int color, float opacity) {
+        RiftUiStyle.centered(graphics, font, width, width / 2,
+                y, value, color, opacity);
     }
 
     private static String playtime(int ticks) {
