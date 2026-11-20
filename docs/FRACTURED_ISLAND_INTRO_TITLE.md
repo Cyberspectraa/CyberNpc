@@ -1,6 +1,6 @@
 # The Fractured Island — intro title replacement
 
-**CyberNpc 0.44.97 | development-no-actions**
+**CyberNpc 0.44.98 | development-no-actions**
 
 Replaces the temporary wooden `testing_version_title.png` intro with the
 owner-provided **Fractured Island** Blockbench title from
@@ -20,18 +20,21 @@ and optimized losslessly. This pre-rendered sprite is stored at:
 `assets/cybernpc/textures/gui/fractured_island_title.png`
 
 The title's image dimensions were updated in
-`SummoningCinematicScreen`. In 0.44.97 the GUI title pose is mirrored
-horizontally so that the source bake reads *FRACTURED ISLAND* in the
-correct direction, then rotated 1° clockwise to visually level the
-line of lettering shown in the owner's 20 November screenshot. This
-correction applies only inside the title's isolated push/pop pose; the
-skip hint is not mirrored. Because the original OBJ's 9°/6° perspective
-was baked into the PNG, the 1° correction levels the title but does
-not fully remove its 3D perspective. A truly orthographic re-render
-would require the original Blockbench/OBJ export and should replace
-this small correction only if the owner requests it. The existing
-centered blit, opening/closing fade, subtle push, black background and
-2.25-second title window remain unchanged. So do the subsequent summoning camera arc, teleport, Photon
+`SummoningCinematicScreen`. In 0.44.97 the GUI title was mirrored with
+a negative X pose scale, which reversed the quad winding and made it
+disappear in-game (confirmed by the owner's 20 November video).
+0.44.98 corrects this regression by retaining a **positive pose scale**
+and reversing the U texture coordinates in the existing GUI blit:
+U offset = -sprite width and texture-atlas width = -sprite width.
+This produces UVs 1.0 → 0.0 while keeping the textured quad front-facing.
+The small 1° Z correction levels the screenshot's perceived incline.
+Only the title image is mirrored, not the skip hint.
+
+Because the original OBJ's 9°/6° perspective was baked into the PNG,
+the 1° correction levels the title but does not fully remove its 3D
+perspective. A truly orthographic re-render needs the original OBJ source.
+The centered blit, opening/closing fade, subtle push, black background
+and 2.25-second title window remain unchanged. So do the subsequent summoning camera arc, teleport, Photon
 effects, player controls, skip behaviour, Pope greeting and network IDs.
 
 ## Why not render OBJ live?
