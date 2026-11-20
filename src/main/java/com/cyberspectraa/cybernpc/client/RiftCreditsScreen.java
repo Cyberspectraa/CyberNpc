@@ -28,6 +28,27 @@ public final class RiftCreditsScreen extends Screen {
     private static final int BODY = 0xFFE5E5E5;
     private static final int DETAIL = 0xFFA8A39B;
 
+    private static final CreditEntry[] RESOURCE_PACKS = {
+            new CreditEntry("Fresh Animations", "Resource pack - mob animations"),
+            new CreditEntry("Fresh Animations: Player Extension",
+                    "Resource pack - player animations"),
+            new CreditEntry("Just Expressions", "Resource pack - player expressions")
+    };
+    private static final CreditEntry[] MODS = {
+            new CreditEntry("Epic Knights: Shields, Armor and Weapons",
+                    "Mod - medieval equipment"),
+            new CreditEntry("Skin Layers 3D", "Mod - 3D player skins"),
+            new CreditEntry("Photon", "Mod - visual effects editor"),
+            new CreditEntry("Iron's Spells 'n Spellbooks", "Mod - spells and magic")
+    };
+    private static final CreditEntry[] TOOLS_AND_CREATORS = {
+            new CreditEntry("Blockbench", "Tool - 3D modelling"),
+            new CreditEntry("Voice Studio", "Tool - voice / audio"),
+            new CreditEntry("StarlightSkins", "Minecraft skin creator"),
+            new CreditEntry("Pixabay", "Website - stock media"),
+            new CreditEntry("AtlasAudio", "Outro music - via Pixabay")
+    };
+
     private final RiftCreditsPacket summary;
     private SimpleSoundInstance backgroundMusic;
     private int elapsed;
@@ -147,26 +168,10 @@ public final class RiftCreditsScreen extends Screen {
                 body(g, mid, y + 2, "For spending your time here.", fade);
                 detail(g, mid, y + 24, "And for making it to the Rift.", fade);
             }
-            case 4 -> credits(g, fade, "RESOURCE PACKS", new CreditEntry[]{
-                    new CreditEntry("Fresh Animations", "Resource pack - mob animations"),
-                    new CreditEntry("Fresh Animations: Player Extension",
-                            "Resource pack - player animations"),
-                    new CreditEntry("Just Expressions", "Resource pack - player expressions")
-            });
-            case 5 -> credits(g, fade, "MINECRAFT MODS", new CreditEntry[]{
-                    new CreditEntry("Epic Knights: Shields, Armor and Weapons",
-                            "Mod - medieval equipment"),
-                    new CreditEntry("Skin Layers 3D", "Mod - 3D player skins"),
-                    new CreditEntry("Photon", "Mod - visual effects editor"),
-                    new CreditEntry("Iron's Spells 'n Spellbooks", "Mod - spells and magic")
-            });
-            case 6 -> credits(g, fade, "TOOLS, WEBSITES & CREATORS", new CreditEntry[]{
-                    new CreditEntry("Blockbench", "Tool - 3D modelling"),
-                    new CreditEntry("Voice Studio", "Tool - voice / audio"),
-                    new CreditEntry("StarlightSkins", "Minecraft skin creator"),
-                    new CreditEntry("Pixabay", "Website - stock media"),
-                    new CreditEntry("AtlasAudio", "Outro music - via Pixabay")
-            });
+            case 4 -> credits(g, fade, "RESOURCE PACKS", RESOURCE_PACKS);
+            case 5 -> credits(g, fade, "MINECRAFT MODS", MODS);
+            case 6 -> credits(g, fade, "TOOLS, WEBSITES & CREATORS",
+                    TOOLS_AND_CREATORS);
             case 7 -> {
                 heading(g, mid, y - 33, "BEYOND THE RIFT", fade);
                 body(g, mid, y - 4, "The island is behind you now.", fade);
