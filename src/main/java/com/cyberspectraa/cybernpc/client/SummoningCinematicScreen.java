@@ -1,6 +1,7 @@
 package com.cyberspectraa.cybernpc.client;
 
 import com.cyberspectraa.cybernpc.CyberNpc;
+import com.mojang.math.Axis;
 import com.cyberspectraa.cybernpc.intro.CyberIntroService;
 import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.network.IntroControlPacket;
@@ -323,7 +324,13 @@ public final class SummoningCinematicScreen extends Screen {
 
         graphics.pose().pushPose();
         graphics.pose().translate(width / 2.0F, height / 2.0F - 8.0F, 0.0F);
-        graphics.pose().scale(scale, scale, 1.0F);
+        // The original OBJ title was baked from its reverse side with a slight
+        // screen-space incline. Mirror only the title sprite (not the HUD)
+        // and counter-rotate it so the lettering reads left-to-right, level.
+        // The correction remains local to this pose; all intro timing,
+        // fades, controls and world-camera angles are unchanged.
+        graphics.pose().mulPose(Axis.ZP.rotationDegrees(1.0F));
+        graphics.pose().scale(-scale, scale, 1.0F);
         graphics.setColor(1F, 1F, 1F, alpha);
         graphics.blit(TITLE_ART,
                 -TITLE_ART_WIDTH / 2, -TITLE_ART_HEIGHT / 2,
