@@ -74,6 +74,11 @@ public final class ModSounds {
     public static final RegistryObject<SoundEvent> WILD_FEMALE_UH =
             registerDialogueVoice("wild_voice_female_uh");
 
+    public static final RegistryObject<SoundEvent> RIFT_OUTRO_MUSIC =
+            SOUND_EVENTS.register("rift_outro_music",
+                    () -> SoundEvent.createVariableRangeEvent(
+                            new ResourceLocation(CyberNpc.MOD_ID, "rift_outro_music")));
+
     private static RegistryObject<SoundEvent> registerDialogueVoice(String key) {
         return SOUND_EVENTS.register(key, () -> SoundEvent.createVariableRangeEvent(
                 new ResourceLocation(CyberNpc.MOD_ID, key)));
