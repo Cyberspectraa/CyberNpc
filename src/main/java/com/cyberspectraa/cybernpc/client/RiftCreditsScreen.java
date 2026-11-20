@@ -87,11 +87,26 @@ public final class RiftCreditsScreen extends Screen {
     }
 
     private void heading(GuiGraphics g, int x, int y, String text) {
-        g.drawCenteredString(font, text, x, y, (slideAlpha() << 24) | 0xD3A5FF);
+        fittedText(g, x, y, text, (slideAlpha() << 24) | 0xD3A5FF);
     }
 
     private void line(GuiGraphics g, int x, int y, String text) {
-        g.drawCenteredString(font, text, x, y, (slideAlpha() << 24) | 0xE7DFF2);
+        fittedText(g, x, y, text, (slideAlpha() << 24) | 0xE7DFF2);
+    }
+
+    /** Scale down long personal names and stats instead of clipping them. */
+    private void fittedText(GuiGraphics g, int x, int y, String text, int color) {
+        float scale = Math.min(1.0F,
+                (float) Math.max(40, width - 24) / Math.max(1, font.width(text)));
+        if (scale == 1.0F) {
+            g.drawCenteredString(font, text, x, y, color);
+            return;
+        }
+        g.pose().pushPose();
+        g.pose().translate(x, y, 0F);
+        g.pose().scale(scale, scale, 1F);
+        g.drawCenteredString(font, text, 0, 0, color);
+        g.pose().popPose();
     }
 
     private int slideAlpha() {
