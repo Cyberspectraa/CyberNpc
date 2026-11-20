@@ -20,6 +20,7 @@ public final class RiftDecisionScreen extends Screen {
     private int waitingTicks;
     private Button yesButton;
     private Button stayButton;
+    private int buttonsTop;
 
     private RiftDecisionScreen() {
         super(Component.literal("The Final Crossing"));
@@ -37,15 +38,16 @@ public final class RiftDecisionScreen extends Screen {
     protected void init() {
         super.init();
         int center = width / 2;
-        int buttonY = Math.min(height - 46, height / 2 + 43);
+        // Keep space for the shared footer even at GUI scale 4 on 720p.
+        buttonsTop = Math.min(height - 62, height / 2 + 37);
         int buttonWidth = Math.min(136, Math.max(72, (width - 34) / 2));
         int gap = 8;
         stayButton = addRenderableWidget(Button.builder(
                 Component.literal("Stay on the Island"), b -> answer(false))
-                .bounds(center - gap / 2 - buttonWidth, buttonY, buttonWidth, 20).build());
+                .bounds(center - gap / 2 - buttonWidth, buttonsTop, buttonWidth, 20).build());
         yesButton = addRenderableWidget(Button.builder(
                 Component.literal("Enter the Rift"), b -> answer(true))
-                .bounds(center + gap / 2, buttonY, buttonWidth, 20).build());
+                .bounds(center + gap / 2, buttonsTop, buttonWidth, 20).build());
     }
 
     private void answer(boolean enter) {
@@ -58,6 +60,10 @@ public final class RiftDecisionScreen extends Screen {
             waiting = true;
             yesButton.active = false;
             stayButton.active = false;
+            // Replace the buttons with the waiting caption instead of
+            // showing both a confirmation choice and a pending transition.
+            yesButton.visible = false;
+            stayButton.visible = false;
         } else {
             Minecraft.getInstance().setScreen(null);
         }
@@ -99,13 +105,14 @@ public final class RiftDecisionScreen extends Screen {
         RiftUiStyle.centered(graphics, font, width, center, midY - 9,
                 "You cannot return once you leave.",
                 RiftUiStyle.CAUTION, 1F);
-        RiftUiStyle.centered(graphics, font, width, center, midY + 10,
+        RiftUiStyle.centered(graphics, font, width, center,
+                midY + (height < 190 ? 3 : 10),
                 "The credits will play before you disconnect.",
                 RiftUiStyle.DETAIL, 1F);
 
         if (waiting) {
             RiftUiStyle.centered(graphics, font, width, center,
-                    Math.min(height - 37, midY + 76), "Opening the Rift...",
+                    buttonsTop + 6, "Opening the Rift...",
                     RiftUiStyle.DETAIL, 1F);
         }
 
