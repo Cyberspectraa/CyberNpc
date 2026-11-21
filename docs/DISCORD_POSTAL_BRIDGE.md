@@ -1,5 +1,14 @@
 # Discord-to-Minecraft Post Office — CyberNpc 0.45.6
 
+> **Hosting change (21 November 2026):** The preferred Discord bot now runs
+> **inside CyberServer 0.2.5 on the dedicated Minecraft server**. This Node.js
+> implementation is a retained fallback/prototype; **do not install or start it**
+> when using the embedded CyberServer bot. Both approaches target the same
+> CyberNpc 0.45.6 postal importer. For the server-mod setup, follow
+> [CyberServer's Discord Post Office guide](https://github.com/Cyberspectraa/CyberServer/blob/development-no-actions/docs/DISCORD_POST_OFFICE.md)
+> instead. No change to in-game mail, IDs or courier AI is required.
+
+
 This restores the owner's intended **public Discord embed → Write a Letter
 modal → Minecraft Drop Box → NPC courier → player/letterbox** flow. Discord
 members use their Discord usernames as senders; no account linking.
