@@ -9,7 +9,7 @@ import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class CyberNpcNetwork {
-    private static final String PROTOCOL = "9";
+    private static final String PROTOCOL = "10";
 
     public static final SimpleChannel CHANNEL =
             NetworkRegistry.ChannelBuilder.named(
@@ -119,6 +119,21 @@ public final class CyberNpcNetwork {
                 .encoder(RiftDecisionFeedbackPacket::encode)
                 .decoder(RiftDecisionFeedbackPacket::decode)
                 .consumerMainThread(RiftDecisionFeedbackPacket::handle)
+                .add();
+
+        // Append merchant messages: existing client/server packet IDs must
+        // never change because intro and dialogue packets are shared.
+        CHANNEL.messageBuilder(
+                ShopSnapshotPacket.class, nextId++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ShopSnapshotPacket::encode)
+                .decoder(ShopSnapshotPacket::decode)
+                .consumerMainThread(ShopSnapshotPacket::handle)
+                .add();
+        CHANNEL.messageBuilder(
+                ShopTradePacket.class, nextId++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(ShopTradePacket::encode)
+                .decoder(ShopTradePacket::decode)
+                .consumerMainThread(ShopTradePacket::handle)
                 .add();
     }
 
