@@ -10,7 +10,6 @@ import net.minecraft.world.level.Level;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.loading.FMLPaths;
 
@@ -180,7 +179,7 @@ public final class DiscordMailInboxService {
         StringBuilder out = new StringBuilder(value.length());
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
-            if (c == '\\u00a7' || Character.isISOControl(c)) {
+            if (c == 167 || Character.isISOControl(c)) {
                 throw new IllegalArgumentException("Formatting/control character in letter");
             }
             out.append(c);
