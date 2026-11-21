@@ -1,5 +1,6 @@
 package com.cyberspectraa.cybernpc.mail;
 
+import com.cyberspectraa.cybernpc.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -27,6 +28,9 @@ public final class MailSavedData extends SavedData {
     private final Map<Long, MailRecord> records = new HashMap<>();
     private final Map<UUID, PostalAddress> letterBoxes = new HashMap<>();
     private final Set<PostalAddress> dropBoxes = new HashSet<>();
+    // Request identifiers are saved alongside mail, so reprocessing a file
+    // after a restart never posts the same Discord message twice.
+    private final Map<UUID, Long> discordRequestIds = new HashMap<>();
     private long nextId = 1L;
 
     public static MailSavedData get(ServerLevel level) {
@@ -76,6 +80,14 @@ public final class MailSavedData extends SavedData {
             }
         }
 
+        ListTag requests = tag.getList("DiscordRequests", Tag.TAG_COMPOUND);
+        for (int i = 0; i < requests.size(); i++) {
+            CompoundTag row = requests.getCompound(i);
+            if (row.hasUUID("RequestId") && row.contains("MailId", Tag.TAG_LONG)) {
+                data.discordRequestIds.put(row.getUUID("RequestId"), row.getLong("MailId"));
+            }
+        }
+
         // Any courier assignment from before a crash/restart is released.
         // The authoritative record safely returns to its pending pickup.
         for (MailRecord record : data.records.values()) {
@@ -112,7 +124,55 @@ public final class MailSavedData extends SavedData {
         }
         tag.put("DropBoxes", dropsTag);
 
+        ListTag requests = new ListTag();
+        discordRequestIds.forEach((requestId, mailId) -> {
+            CompoundTag row = new CompoundTag();
+            row.putUUID("RequestId", requestId);
+            row.putLong("MailId", mailId);
+            requests.add(row);
+        });
+        tag.put("DiscordRequests", requests);
+
         return tag;
+    }
+
+    /**
+     * A Discord entry is ordinary postal mail with a stable external request
+     * identity. This is server-only; the client never controls these values.
+     */
+    public long postDiscordOnce(UUID requestId, MailItemData.Draft draft,
+                                PostalAddress pickup) {
+        if (requestId == null || draft == null || pickup == null) return -1L;
+        Long previous = discordRequestIds.get(requestId);
+        if (previous != null) return previous;
+        long id = post(draft, pickup.dimension(), pickup.pos());
+        if (id >= 0L) {
+            discordRequestIds.put(requestId, id);
+            setDirty();
+        }
+        return id;
+    }
+
+    /**
+     * Only queue into a loaded, real Drop Box with room for more mail.
+     * Prefer the overworld, then a smaller queue and stable coordinates.
+     * If no box is ready, Discord submissions stay on disk until one is.
+     */
+    @Nullable
+    public PostalAddress availableDiscordDropBox(MinecraftServer server) {
+        return dropBoxes.stream()
+                .filter(address -> {
+                    ServerLevel level = server.getLevel(address.dimension());
+                    return level != null && level.hasChunkAt(address.pos())
+                            && level.getBlockState(address.pos()).is(ModBlocks.DROP_BOX.get())
+                            && pendingCountAt(address.dimension(), address.pos()) < 64;
+                })
+                .min(Comparator
+                        .comparingInt((PostalAddress a) -> a.dimension().equals(Level.OVERWORLD) ? 0 : 1)
+                        .thenComparingInt(a -> pendingCountAt(a.dimension(), a.pos()))
+                        .thenComparing(a -> a.dimension().location().toString())
+                        .thenComparingLong(a -> a.pos().asLong()))
+                .orElse(null);
     }
 
     public long post(
