@@ -33,6 +33,7 @@ public final class NpcShopScreen extends Screen {
     private final List<Button> rowButtons = new ArrayList<>();
     private int panelX, panelY, panelW, panelH, rows;
     private boolean waiting;
+    private int waitingTicks;
 
     private NpcShopScreen(ShopSnapshotPacket snapshot, boolean selling, int page) {
         super(Component.literal("Shopkeeper"));
@@ -48,6 +49,14 @@ public final class NpcShopScreen extends Screen {
             client.setScreen(new NpcShopScreen(snapshot, old.selling, old.page));
         } else {
             client.setScreen(new NpcShopScreen(snapshot, false, 0));
+        }
+    }
+
+    public static void closeFromServer(String message) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.screen instanceof NpcShopScreen) client.setScreen(null);
+        if (client.player != null) {
+            client.player.displayClientMessage(Component.literal(message), false);
         }
     }
 
@@ -173,6 +182,13 @@ public final class NpcShopScreen extends Screen {
                 panelX + 67, panelY + panelH - 20, SUBTEXT, false);
 
         super.render(graphics, mouseX, mouseY, partialTick);
+    }
+
+    @Override
+    public void tick() {
+        if (waiting && ++waitingTicks >= 160) {
+            closeFromServer("The Shopkeeper did not respond. Please try again.");
+        }
     }
 
     @Override
