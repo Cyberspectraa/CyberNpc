@@ -7,6 +7,7 @@ import com.mojang.authlib.GameProfile;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.LevelResource;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -21,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -218,12 +220,21 @@ public final class DiscordMailInboxService {
         if (recipient.isEmpty() || recipient.get().getId() == null) {
             return new Receipt(false, -1L, "No known Minecraft player has that name.");
         }
+        GameProfile to = recipient.get();
+        // A valid Mojang username is not proof the person belongs to this
+        // server. Only mail real participants of this Minecraft world.
+        Path savedPlayer = server.getWorldPath(LevelResource.PLAYER_DATA_DIR)
+                .resolve(to.getId() + ".dat");
+        if (server.getPlayerList().getPlayer(to.getId()) == null
+                && !Files.isRegularFile(savedPlayer, LinkOption.NOFOLLOW_LINKS)) {
+            return new Receipt(false, -1L,
+                    "That Minecraft player has not joined this server yet.");
+        }
         MailSavedData.PostalAddress dropBox = mail.availableDiscordDropBox(server);
         if (dropBox == null) return null;
 
         UUID senderId = UUID.nameUUIDFromBytes(
                 ("cybernpc:discord:" + request.discordUserId()).getBytes(StandardCharsets.UTF_8));
-        GameProfile to = recipient.get();
         MailItemData.Draft draft = new MailItemData.Draft(
                 senderId, request.sender(), to.getId(), to.getName(), request.message());
         long mailId = mail.postDiscordOnce(request.requestId(), draft, dropBox);
@@ -244,9 +255,14 @@ public final class DiscordMailInboxService {
         status.addProperty("status", receipt.accepted() ? "accepted" : "rejected");
         status.addProperty("mailId", receipt.mailId());
         status.addProperty("message", receipt.description());
-        Path temp = results.resolve(id + ".tmp");
-        Files.writeString(temp, status.toString(), StandardCharsets.UTF_8);
-        move(temp, results.resolve(id + ".json"));
+        Path temp = results.resolve(id + "." + UUID.randomUUID() + ".tmp");
+        try {
+            Files.writeString(temp, status.toString(), StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            move(temp, results.resolve(id + ".json"));
+        } finally {
+            Files.deleteIfExists(temp);
+        }
     }
 
     private static void move(Path from, Path to) throws IOException {
