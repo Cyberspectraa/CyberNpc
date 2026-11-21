@@ -295,8 +295,8 @@ public final class SummoningCinematicScreen extends Screen {
         }
 
         String hint = "ESC - Skip intro";
-        graphics.drawString(font, hint, width - font.width(hint) - 12, 17,
-                0xFFD8C8AC, false);
+        graphics.drawString(font, hint, width - font.width(hint) - 12, 12,
+                RiftUiStyle.DETAIL, false);
         super.render(graphics, mouseX, mouseY, delta);
     }
 
@@ -304,23 +304,18 @@ public final class SummoningCinematicScreen extends Screen {
         // The final Blockbench Fractured Island lettering is baked once to
         // this transparent sprite, preserving its authored purple texture and
         // a subtle view of its 3D depth without runtime model loading.
-        graphics.fill(0, 0, width, height, 0xFF101016);
+        RiftUiStyle.background(graphics, width, height);
         double opacity = Math.min(1D,
                 Math.min(titleTime / 12D, (TITLE_TICKS - titleTime) / 13D));
         float alpha = (float) Math.max(0D, opacity);
 
-        // Very gentle title push without altering the already-stable
-        // world-camera movement or server-owned summoning timings.
-        float progress = (float) Math.max(0D,
-                Math.min(1D, titleTime / TITLE_TICKS));
-        float smooth = progress * progress * (3F - 2F * progress);
+        // Keep the owner's authored title art stationary, like the final
+        // credits: fade only, no per-frame scale, drift or title zoom.
         float fitWidth = Math.min(width - 24F, 700F);
         float fitHeight = height * 0.34F;
-        float baseScale = Math.min(
+        float scale = Math.max(0.01F, Math.min(
                 fitWidth / TITLE_ART_WIDTH,
-                fitHeight / TITLE_ART_HEIGHT);
-        float scale = Math.max(0.01F, baseScale)
-                * (0.965F + 0.035F * smooth);
+                fitHeight / TITLE_ART_HEIGHT));
 
         graphics.pose().pushPose();
         graphics.pose().translate(width / 2.0F, height / 2.0F - 8.0F, 0.0F);
@@ -340,6 +335,10 @@ public final class SummoningCinematicScreen extends Screen {
                 -TITLE_ART_WIDTH, TITLE_ART_HEIGHT);
         graphics.setColor(1F, 1F, 1F, 1F);
         graphics.pose().popPose();
+        RiftUiStyle.centered(graphics, font, width, width / 2,
+                Math.min(height - 43, height / 2 + 43),
+                "A CYBERSPECTRA SERIES", RiftUiStyle.DETAIL, alpha);
+        RiftUiStyle.footer(graphics, font, width, height);
     }
 
     private void renderSummoningOverlay(GuiGraphics graphics, double elapsed) {
@@ -359,13 +358,15 @@ public final class SummoningCinematicScreen extends Screen {
         }
 
         double offset = Math.abs(elapsed - (REVEAL_TICKS - TITLE_TICKS));
-        int flash = offset < 7D ? (int) (110D * (1D - offset / 7D)) : 0;
+        int flash = offset < 7D ? (int) (72D * (1D - offset / 7D)) : 0;
         if (flash > 0) {
-            graphics.fill(0, 0, width, height, (flash << 24) | 0x00E8D8F6);
+            graphics.fill(0, 0, width, height, (flash << 24) | 0x00F1DEB6);
         }
 
-        graphics.fill(0, 0, width, 10, 0xCE090811);
-        graphics.fill(0, height - 10, width, height, 0xCE090811);
+        // Thin Minecraft-pixel rules echo the restrained outro instead of
+        // thick, glowing cinema bars hiding the world and summoning effect.
+        graphics.fill(0, 0, width, 2, RiftUiStyle.BORDER);
+        graphics.fill(0, height - 2, width, height, RiftUiStyle.BORDER);
     }
 
     @Override
