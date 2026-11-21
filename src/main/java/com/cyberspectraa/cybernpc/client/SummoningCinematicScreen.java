@@ -338,7 +338,8 @@ public final class SummoningCinematicScreen extends Screen {
         RiftUiStyle.centered(graphics, font, width, width / 2,
                 Math.min(height - 43, height / 2 + 43),
                 "A CYBERSPECTRA SERIES", RiftUiStyle.DETAIL, alpha);
-        RiftUiStyle.footer(graphics, font, width, height);
+        // The custom Blockbench lettering is already the title, so do not
+        // repeat its name in a footer and clutter the opening card.
     }
 
     private void renderSummoningOverlay(GuiGraphics graphics, double elapsed) {
