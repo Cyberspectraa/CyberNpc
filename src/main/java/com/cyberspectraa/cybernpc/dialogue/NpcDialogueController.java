@@ -133,12 +133,19 @@ public final class NpcDialogueController {
         if (TownCharacterDialogue.recognises(npc)) return true;
         NpcServiceRole role = NpcServiceRole.fromRole(npc.getRole());
         return role == NpcServiceRole.POPE
-                || role == NpcServiceRole.GUILD_RECEPTIONIST;
+                || role == NpcServiceRole.GUILD_RECEPTIONIST
+                || role == NpcServiceRole.SHOPKEEPER;
     }
 
     public static void open(ServerPlayer player, CyberNpcEntity npc) {
         if (!valid(player, npc) || !canInteract(npc)) return;
         clearSession(player);
+        if (NpcShopService.isShopkeeper(npc)) {
+            // Merchant stock is not an NPC conversation. Keep the working
+            // split-dialogue interface exclusive to authored characters.
+            NpcShopService.open(player, npc);
+            return;
+        }
         String page = "root";
         SESSIONS.put(player.getUUID(),
             new Session(npc.getUUID(), page, player.level().getGameTime() + SESSION_LIFETIME));
@@ -288,17 +295,6 @@ public final class NpcDialogueController {
                     invokeQuestWork(player, npc);
                 }
             }
-            case "shop" -> {
-                page = "shop";
-                player.sendSystemMessage(Component.literal(
-                        "Coins: " + NpcShopService.walletDescription(player)));
-            }
-            case "shop_sell" -> player.sendSystemMessage(
-                    Component.literal(NpcShopService.sellHeld(player)));
-            case "buy_bread", "buy_torches", "buy_beef", "buy_arrows",
-                 "buy_apples", "buy_leather_cap", "buy_iron_pickaxe" ->
-                    player.sendSystemMessage(
-                            Component.literal(NpcShopService.buy(player, action)));
             case "guild_class" -> {
                 if (!guildReceptionist(npc)) return;
                 // CyberClasses opens its own class creation screen and handles
@@ -429,16 +425,6 @@ public final class NpcDialogueController {
             options.add(option("leave", "Farewell."));
             return List.copyOf(options);
         }
-        if ("shop".equals(page)) {
-            if (role == NpcServiceRole.SHOPKEEPER) {
-                for (NpcShopService.Stock item : NpcShopService.stock()) {
-                    options.add(option(item.action(), item.label()));
-                }
-            }
-            options.add(option("back", "Something else..."));
-            return List.copyOf(options);
-        }
-
         switch (role) {
             case GUILD_RECEPTIONIST -> {
                 // The receptionist handles class registration for new
@@ -452,11 +438,6 @@ public final class NpcDialogueController {
                 options.add(option("guild_claim", "I'm here for my payment."));
                 options.add(option("guild_card", "Can I see my guild card?"));
                 options.add(option("guild_info", "How does the guild work?"));
-            }
-            case SHOPKEEPER -> {
-                options.add(option("shop", "What have you got for sale?"));
-                options.add(option("shop_sell", "Can I sell these?"));
-                options.add(option("shop_about", "What coins do you take?"));
             }
             case BANKER -> {
                 // Legacy banker NPCs may still exist in older saves.
