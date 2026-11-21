@@ -12,8 +12,10 @@ Implementation:
   atomic local JSON files from `config/cybernpc-discord-mail/incoming`,
   checks malformed requests, rejects unknown recipients, waits if no
   registered loaded Drop Box, and posts to the existing MailSavedData.
-- `MailSavedData`: selects a genuine loaded registered Drop Box with fewer
-  than 64 pending letters and saves a requestId→mailId mapping.
+- `MailSavedData`: defaults to a genuine loaded registered Drop Box with fewer
+  than 64 pending letters, or uses the operator-bound post office set by
+  `/cybernpc discordmail bind`. The binding and requestId→mailId mapping
+  are saved alongside normal mail records.
   On restart, the importer scans archived submissions, safely deduplicates
   accepted letters and replays ones not preserved before a sudden crash.
 
@@ -25,6 +27,8 @@ a transport connection.
 Testing:
 1. Install the new CyberNpc jar on client + server and confirm server starts.
 2. Place a Drop Box and assign an existing Courier near it; load the chunk.
+   Look directly at the box and run `/cybernpc discordmail bind`.
+   Check `/cybernpc discordmail status` and use `unbind` if desired.
 3. Run `discord-mail-bot` alongside the dedicated server, set its local
    shared folder and Discord application credentials in an untracked `.env`.
 4. In Discord, use `/mailpanel`, click **Write a Letter**, enter a player
