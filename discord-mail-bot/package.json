@@ -1,0 +1,16 @@
+{
+  "name": "cybernpc-discord-postal-bot",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Optional Discord letter form -> CyberNpc existing courier mail, via local server-only queue",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --env-file=.env bot.mjs"
+  },
+  "dependencies": {
+    "discord.js": "^14.18.0"
+  }
+}
