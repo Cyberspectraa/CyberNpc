@@ -37,7 +37,9 @@ import java.util.UUID;
 @Mod.EventBusSubscriber(modid = CyberNpc.MOD_ID)
 public final class NpcShopService {
     public static final int MAX_OFFERS = 24;
-    public static final long MAX_PRICE = 1_000_000_000L;
+    // Keep even the largest sell payouts bounded; one billion copper in
+    // physical items would drop thousands of coin stacks and lag a server.
+    public static final long MAX_PRICE = 100_000L;
     private static final String DATA = "CyberNpcShopV2";
     private static final long SESSION_TICKS = 2400L;
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
@@ -161,8 +163,10 @@ public final class NpcShopService {
         List<ShopSnapshotPacket.Line> sell = offers(npc, true).stream()
                 .map(o -> new ShopSnapshotPacket.Line(o.sample(), o.count(), o.price()))
                 .toList();
+        String merchant = npc.getName().getString();
+        if (merchant.length() > 128) merchant = merchant.substring(0, 128);
         CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new ShopSnapshotPacket(npc.getId(), npc.getName().getString(),
+                new ShopSnapshotPacket(npc.getId(), merchant,
                         wallet(player), feedback, buy, sell));
     }
 
