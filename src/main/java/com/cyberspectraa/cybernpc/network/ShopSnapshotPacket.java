@@ -43,7 +43,7 @@ public record ShopSnapshotPacket(int npcId, String merchant, long wallet, String
             int bundle = buf.readVarInt();
             long price = buf.readVarLong();
             if (stack.isEmpty() || bundle <= 0 || bundle > 64
-                    || price < 1 || price > 1_000_000_000L) {
+                    || price < 1 || price > 100_000L) {
                 throw new IllegalArgumentException("Malformed shop offer");
             }
             result.add(new Line(stack, bundle, price));
