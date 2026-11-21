@@ -28,6 +28,10 @@ public final class MailSavedData extends SavedData {
     private final Map<Long, MailRecord> records = new HashMap<>();
     private final Map<UUID, PostalAddress> letterBoxes = new HashMap<>();
     private final Set<PostalAddress> dropBoxes = new HashSet<>();
+    // Optional fixed post-office address for incoming Discord letters.
+    // If set and unavailable, wait instead of silently switching boxes.
+    @Nullable
+    private PostalAddress discordDropBox;
     // Request identifiers are saved alongside mail, so reprocessing a file
     // after a restart never posts the same Discord message twice.
     private final Map<UUID, Long> discordRequestIds = new HashMap<>();
@@ -88,6 +92,10 @@ public final class MailSavedData extends SavedData {
             }
         }
 
+        if (tag.contains("DiscordDropBox", Tag.TAG_COMPOUND)) {
+            data.discordDropBox = PostalAddress.load(tag.getCompound("DiscordDropBox"));
+        }
+
         // Any courier assignment from before a crash/restart is released.
         // The authoritative record safely returns to its pending pickup.
         for (MailRecord record : data.records.values()) {
@@ -132,6 +140,9 @@ public final class MailSavedData extends SavedData {
             requests.add(row);
         });
         tag.put("DiscordRequests", requests);
+        if (discordDropBox != null) {
+            tag.put("DiscordDropBox", discordDropBox.save());
+        }
 
         return tag;
     }
@@ -159,26 +170,42 @@ public final class MailSavedData extends SavedData {
         return id;
     }
 
+    @Nullable
+    public PostalAddress getDiscordDropBox() {
+        return discordDropBox;
+    }
+
+    public void setDiscordDropBox(@Nullable PostalAddress location) {
+        discordDropBox = location;
+        setDirty();
+    }
+
     /**
      * Only queue into a loaded, real Drop Box with room for more mail.
-     * Prefer the overworld, then a smaller queue and stable coordinates.
-     * If no box is ready, Discord submissions stay on disk until one is.
+     * An explicitly assigned postal office is never silently substituted
+     * with another box if its chunk unloads or the block is removed.
      */
     @Nullable
     public PostalAddress availableDiscordDropBox(MinecraftServer server) {
+        if (discordDropBox != null) {
+            return readyDiscordDropBox(server, discordDropBox) ? discordDropBox : null;
+        }
         return dropBoxes.stream()
-                .filter(address -> {
-                    ServerLevel level = server.getLevel(address.dimension());
-                    return level != null && level.hasChunkAt(address.pos())
-                            && level.getBlockState(address.pos()).is(ModBlocks.DROP_BOX.get())
-                            && pendingCountAt(address.dimension(), address.pos()) < 64;
-                })
+                .filter(address -> readyDiscordDropBox(server, address))
                 .min(Comparator
                         .comparingInt((PostalAddress a) -> a.dimension().equals(Level.OVERWORLD) ? 0 : 1)
                         .thenComparingInt(a -> pendingCountAt(a.dimension(), a.pos()))
                         .thenComparing(a -> a.dimension().location().toString())
                         .thenComparingLong(a -> a.pos().asLong()))
                 .orElse(null);
+    }
+
+    private boolean readyDiscordDropBox(MinecraftServer server, PostalAddress address) {
+        if (!dropBoxes.contains(address)) return false;
+        ServerLevel level = server.getLevel(address.dimension());
+        return level != null && level.hasChunkAt(address.pos())
+                && level.getBlockState(address.pos()).is(ModBlocks.DROP_BOX.get())
+                && pendingCountAt(address.dimension(), address.pos()) < 64;
     }
 
     public long post(
