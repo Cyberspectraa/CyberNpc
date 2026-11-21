@@ -2,6 +2,7 @@ package com.cyberspectraa.cybernpc;
 
 import com.cyberspectraa.cybernpc.command.CyberNpcCommands;
 import com.cyberspectraa.cybernpc.command.ShopAdminCommands;
+import com.cyberspectraa.cybernpc.command.DiscordMailCommands;
 import com.cyberspectraa.cybernpc.client.PlayerHudConfig;
 import com.cyberspectraa.cybernpc.client.DialogueVoiceConfig;
 import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
@@ -41,5 +42,6 @@ public final class CyberNpc {
 
         MinecraftForge.EVENT_BUS.addListener(CyberNpcCommands::register);
         MinecraftForge.EVENT_BUS.addListener(ShopAdminCommands::register);
+        MinecraftForge.EVENT_BUS.addListener(DiscordMailCommands::register);
     }
 }
