@@ -136,6 +136,12 @@ public final class MailSavedData extends SavedData {
         return tag;
     }
 
+    /** Check whether a submission was already imported, including after restart. */
+    @Nullable
+    public Long discordMailId(UUID requestId) {
+        return discordRequestIds.get(requestId);
+    }
+
     /**
      * A Discord entry is ordinary postal mail with a stable external request
      * identity. This is server-only; the client never controls these values.
