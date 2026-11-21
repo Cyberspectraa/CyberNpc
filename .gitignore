@@ -21,3 +21,9 @@ Thumbs.db
 # Local verification outputs
 /CyberNpc.jar
 /build-local.log
+
+# Discord bot secrets and local postal queue (server-only)
+/discord-mail-bot/.env
+/discord-mail-bot/node_modules/
+/discord-mail-bot/.cache/
+/discord-mail-bot/cybernpc-discord-mail/
