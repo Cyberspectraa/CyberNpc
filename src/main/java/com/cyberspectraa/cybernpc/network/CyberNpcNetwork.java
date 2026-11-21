@@ -135,6 +135,12 @@ public final class CyberNpcNetwork {
                 .decoder(ShopTradePacket::decode)
                 .consumerMainThread(ShopTradePacket::handle)
                 .add();
+        CHANNEL.messageBuilder(
+                ShopClosedPacket.class, nextId++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ShopClosedPacket::encode)
+                .decoder(ShopClosedPacket::decode)
+                .consumerMainThread(ShopClosedPacket::handle)
+                .add();
     }
 
     private CyberNpcNetwork() {
