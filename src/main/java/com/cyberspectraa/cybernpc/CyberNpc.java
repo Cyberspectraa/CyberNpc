@@ -1,6 +1,7 @@
 package com.cyberspectraa.cybernpc;
 
 import com.cyberspectraa.cybernpc.command.CyberNpcCommands;
+import com.cyberspectraa.cybernpc.command.ShopAdminCommands;
 import com.cyberspectraa.cybernpc.client.PlayerHudConfig;
 import com.cyberspectraa.cybernpc.client.DialogueVoiceConfig;
 import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
@@ -39,5 +40,6 @@ public final class CyberNpc {
                 DialogueVoiceConfig.SPEC, "cybernpc-dialogue-client.toml");
 
         MinecraftForge.EVENT_BUS.addListener(CyberNpcCommands::register);
+        MinecraftForge.EVENT_BUS.addListener(ShopAdminCommands::register);
     }
 }
