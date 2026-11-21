@@ -6,6 +6,7 @@ import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
 import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
 import com.cyberspectraa.cybernpc.network.ShopSnapshotPacket;
+import com.cyberspectraa.cybernpc.network.ShopClosedPacket;
 import com.cyberspectraa.cybernpc.service.NpcServiceRole;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -177,8 +178,8 @@ public final class NpcShopService {
                 || session == null || !session.merchant().equals(npc.getUUID())
                 || player.level().getGameTime() > session.expiresAt()) {
             SESSIONS.remove(player.getUUID());
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                    "You're no longer trading with that Shopkeeper. Open the shop again."));
+            CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                    new ShopClosedPacket("You moved too far from that Shopkeeper. Reopen the shop."));
             return;
         }
         List<Offer> catalogue = offers(npc, selling);
