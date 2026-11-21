@@ -130,31 +130,41 @@ public final class DiscordMailInboxService {
         } catch (IllegalArgumentException ex) {
             return;
         }
+        final LetterRequest request;
         try {
             if (Files.size(file) > MAX_FILE_BYTES) {
                 reject(file, failed, results, fileId, "Letter exceeded the file size limit.", replay);
                 return;
             }
             String json = Files.readString(file, StandardCharsets.UTF_8);
-            LetterRequest request = parse(json);
+            request = parse(json);
             if (!request.requestId().equals(fileId)) {
                 reject(file, failed, results, fileId, "Mail request ID mismatch.", replay);
                 return;
             }
-
-            Receipt receipt = register(server, request);
-            if (receipt == null) return; // No active Drop Box; retry later.
-
-            writeReceipt(results, fileId, receipt);
-            if (!replay) move(file, archive.resolve(fileName));
         } catch (RuntimeException | IOException ex) {
             try {
-                reject(file, failed, results, fileId,
-                        "Invalid mail request or server processing error.", replay);
+                reject(file, failed, results, fileId, "Invalid mail request.", replay);
             } catch (IOException trouble) {
                 LOG.warning("Discord mail could not be rejected: " + trouble.getMessage());
             }
-            LOG.warning("Discarded invalid Discord mail " + fileId + ": " + ex.getMessage());
+            LOG.warning("Invalid Discord mail " + fileId + ": " + ex.getMessage());
+            return;
+        }
+
+        // A registered letter may already be saved in the world at this point.
+        // If writing its receipt or archiving the file fails, keep the request
+        // in place and retry. Never mark an accepted letter as rejected.
+        try {
+            Receipt receipt = register(server, request);
+            if (receipt == null) return; // No active Drop Box; retry later.
+            writeReceipt(results, fileId, receipt);
+            if (!replay) {
+                move(file, (receipt.accepted() ? archive : failed).resolve(fileName));
+            }
+        } catch (RuntimeException | IOException ex) {
+            LOG.warning("Discord mail " + fileId
+                    + " will retry after processing problem: " + ex.getMessage());
         }
     }
 
