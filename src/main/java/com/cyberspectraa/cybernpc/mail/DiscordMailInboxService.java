@@ -94,8 +94,11 @@ public final class DiscordMailInboxService {
             }
             while (remaining-- > 0 && !ARCHIVE_RECOVERY.isEmpty()) {
                 Path file = ARCHIVE_RECOVERY.poll();
-                if (file != null && Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
-                    importFile(server, file, archive, failed, results, true);
+                if (file != null && Files.exists(file, LinkOption.NOFOLLOW_LINKS)
+                        && !importFile(server, file, archive, failed, results, true)) {
+                    // If a crash lost a world save and no Drop Box is loaded
+                    // yet, keep the archived letter for another recovery pass.
+                    ARCHIVE_RECOVERY.add(file);
                 }
             }
         } catch (IOException ex) {
@@ -117,30 +120,31 @@ public final class DiscordMailInboxService {
         return files;
     }
 
-    private static void importFile(MinecraftServer server, Path file, Path archive,
+    /** @return true if imported/handled, false if this file needs another try. */
+    private static boolean importFile(MinecraftServer server, Path file, Path archive,
                                    Path failed, Path results, boolean replay) {
         String fileName = file.getFileName().toString();
         if (!fileName.matches("[0-9a-fA-F-]{36}\\.json")) {
             // An unrelated file must not stall the queue or be parsed.
-            return;
+            return true;
         }
         UUID fileId;
         try {
             fileId = UUID.fromString(fileName.substring(0, 36));
         } catch (IllegalArgumentException ex) {
-            return;
+            return true;
         }
         final LetterRequest request;
         try {
             if (Files.size(file) > MAX_FILE_BYTES) {
                 reject(file, failed, results, fileId, "Letter exceeded the file size limit.", replay);
-                return;
+                return true;
             }
             String json = Files.readString(file, StandardCharsets.UTF_8);
             request = parse(json);
             if (!request.requestId().equals(fileId)) {
                 reject(file, failed, results, fileId, "Mail request ID mismatch.", replay);
-                return;
+                return true;
             }
         } catch (RuntimeException | IOException ex) {
             try {
@@ -149,7 +153,7 @@ public final class DiscordMailInboxService {
                 LOG.warning("Discord mail could not be rejected: " + trouble.getMessage());
             }
             LOG.warning("Invalid Discord mail " + fileId + ": " + ex.getMessage());
-            return;
+            return true;
         }
 
         // A registered letter may already be saved in the world at this point.
@@ -157,14 +161,16 @@ public final class DiscordMailInboxService {
         // in place and retry. Never mark an accepted letter as rejected.
         try {
             Receipt receipt = register(server, request);
-            if (receipt == null) return; // No active Drop Box; retry later.
+            if (receipt == null) return false; // No active Drop Box; retry later.
             writeReceipt(results, fileId, receipt);
             if (!replay) {
                 move(file, (receipt.accepted() ? archive : failed).resolve(fileName));
             }
+            return true;
         } catch (RuntimeException | IOException ex) {
             LOG.warning("Discord mail " + fileId
                     + " will retry after processing problem: " + ex.getMessage());
+            return false;
         }
     }
 
