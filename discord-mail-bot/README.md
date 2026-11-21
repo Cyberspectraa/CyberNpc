@@ -50,11 +50,20 @@ the exact same shared mail directory.
    `MAIL_DIR=C:/MinecraftServer/config/cybernpc-discord-mail`.
 6. Run `npm start`. Leave the bot process running alongside the Minecraft
    server. The terminal should report it is online.
-7. A Discord member with **Manage Server** permission types `/mailpanel`
+7. In Minecraft, look directly at the **Drop Box you want Discord letters
+   to enter**, within seven blocks, then run as an operator:
+
+       /cybernpc discordmail bind
+
+   Use `/cybernpc discordmail status` to check the selected box.
+   `/cybernpc discordmail unbind` returns to automatic selection among
+   loaded registered boxes. If a bound box is unloaded, missing, or full,
+   the incoming letters wait; they are not routed to a different box.
+8. A Discord member with **Manage Server** permission types `/mailpanel`
    in the desired channel. This posts the public letter-writing embed
    and button. Everyone who can click the button may submit a letter.
    The bot does not need to see or read ordinary channel messages.
-8. Test sending to a Minecraft player who has previously joined this
+9. Test sending to a Minecraft player who has previously joined this
    server. Use a valid Java Edition username (3–16 characters). The
    Discord user writes up to 256 characters. The sender will show
    their Discord username (not a fake Minecraft user).
@@ -65,7 +74,8 @@ the exact same shared mail directory.
   in a public channel or any outbound Discord notification.
 - The bot rate-limits each Discord sender to **one letter per 2 minutes**
   and **six per hour**, and caps the unfinished queue at 128 files.
-- If a loaded Drop Box is available, the server registers the letter as
+- If the assigned (or automatically selected) Drop Box is loaded, the server
+  registers the letter as
   normal PENDING mail, with a recorded recipient player UUID and synthetic
   UUID derived from the sender's Discord user ID.
 - The **existing** Courier picks it up from the Drop Box, carries it
