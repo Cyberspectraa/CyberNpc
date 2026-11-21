@@ -1,177 +1,286 @@
 package com.cyberspectraa.cybernpc.dialogue;
 
+import com.cyberspectraa.cybernpc.CyberNpc;
 import com.cyberspectraa.cybernpc.economy.CurrencyValue;
+import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
+import com.cyberspectraa.cybernpc.entity.NpcType;
+import com.cyberspectraa.cybernpc.network.CyberNpcNetwork;
+import com.cyberspectraa.cybernpc.network.ShopSnapshotPacket;
+import com.cyberspectraa.cybernpc.service.NpcServiceRole;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.network.PacketDistributor;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
- * Temporary shop stock. All purchases and payouts use physical CyberNpc coins
- * in player inventory; no emeralds, bank account, or virtual money is accepted.
+ * Each authored Shopkeeper owns their own NBT-backed, infinite-supply catalogue
+ * of buy and sell offers. Pricing and payment are server authoritative.
+ *
+ * Old global demo stock was never attached to an NPC, so new merchants start
+ * empty until an operator configures them. Never consume bank balances.
  */
+@Mod.EventBusSubscriber(modid = CyberNpc.MOD_ID)
 public final class NpcShopService {
-    public record Stock(String action, String description, Item item, int count, long cost) {
-        public String label() {
-            return description + " (" + CurrencyValue.formatCoins(cost) + ")";
+    public static final int MAX_OFFERS = 24;
+    public static final long MAX_PRICE = 1_000_000_000L;
+    private static final String DATA = "CyberNpcShopV2";
+    private static final long SESSION_TICKS = 2400L;
+    private static final Map<UUID, Session> SESSIONS = new HashMap<>();
+
+    public record Offer(ItemStack sample, int count, long price) {
+        public Offer {
+            sample = sample.copy();
+            sample.setCount(1);
+        }
+
+        public ItemStack delivery() {
+            ItemStack stack = sample.copy();
+            stack.setCount(count);
+            return stack;
         }
     }
 
-    private static final List<Stock> GOODS = List.of(
-        new Stock("buy_bread", "3 bread", Items.BREAD, 3, 20),
-        new Stock("buy_torches", "16 torches", Items.TORCH, 16, 10),
-        new Stock("buy_beef", "4 cooked beef", Items.COOKED_BEEF, 4, 40),
-        new Stock("buy_arrows", "8 arrows", Items.ARROW, 8, 20),
-        new Stock("buy_apples", "6 apples", Items.APPLE, 6, 10),
-        new Stock("buy_leather_cap", "Leather cap", Items.LEATHER_HELMET, 1, 50),
-        new Stock("buy_iron_pickaxe", "Iron pickaxe", Items.IRON_PICKAXE, 1, 180)
-    );
-
+    private record Session(UUID merchant, long expiresAt) {}
     private NpcShopService() {}
 
-    public static List<Stock> stock() {
-        return GOODS;
+    public static boolean isShopkeeper(CyberNpcEntity npc) {
+        return npc != null && npc.isAlive() && npc.getNpcType() != NpcType.WILD
+                && NpcServiceRole.fromRole(npc.getRole()) == NpcServiceRole.SHOPKEEPER;
     }
 
-    /** Only registered physical coins count toward a player's funds. */
+    private static boolean canTrade(ServerPlayer player, CyberNpcEntity npc) {
+        return player != null && isShopkeeper(npc) && player.level() == npc.level()
+                && player.distanceToSqr(npc) <= 36D;
+    }
+
+    private static List<Offer> offers(CyberNpcEntity npc, boolean selling) {
+        CompoundTag shop = npc.getPersistentData().getCompound(DATA);
+        ListTag list = shop.getList(selling ? "Sell" : "Buy", Tag.TAG_COMPOUND);
+        List<Offer> result = new ArrayList<>();
+        for (int i = 0; i < list.size() && result.size() < MAX_OFFERS; i++) {
+            CompoundTag row = list.getCompound(i);
+            ItemStack item = ItemStack.of(row.getCompound("Item"));
+            int count = row.getInt("Count");
+            long price = row.getLong("Price");
+            if (item.isEmpty() || count <= 0 || count > item.getMaxStackSize()
+                    || price <= 0 || price > MAX_PRICE) continue;
+            result.add(new Offer(item, count, price));
+        }
+        return result;
+    }
+
+    private static void saveOffers(CyberNpcEntity npc, boolean selling, List<Offer> offers) {
+        CompoundTag root = npc.getPersistentData().getCompound(DATA);
+        ListTag list = new ListTag();
+        for (Offer offer : offers) {
+            CompoundTag row = new CompoundTag();
+            row.put("Item", offer.sample().save(new CompoundTag()));
+            row.putInt("Count", offer.count());
+            row.putLong("Price", offer.price());
+            list.add(row);
+        }
+        root.put(selling ? "Sell" : "Buy", list);
+        npc.getPersistentData().put(DATA, root);
+    }
+
+    /** Operator configuration; held item is copied, never consumed. */
+    public static String configure(ServerPlayer admin, CyberNpcEntity npc,
+                                   boolean selling, int count, long price) {
+        if (!isShopkeeper(npc)) return "Target must be a living Shopkeeper NPC.";
+        ItemStack held = admin.getMainHandItem();
+        if (held.isEmpty() || CurrencyValue.isCurrency(held)) {
+            return "Hold the item to list; coins cannot be offered as goods.";
+        }
+        if (count < 1 || count > held.getMaxStackSize()
+                || price <= 0 || price > MAX_PRICE) {
+            return "Invalid bundle size or price.";
+        }
+        List<Offer> current = offers(npc, selling);
+        if (current.size() >= MAX_OFFERS) return "That tab is full (24 offers max).";
+        current.add(new Offer(held, count, price));
+        saveOffers(npc, selling, current);
+        return (selling ? "Sell-to-shop" : "Shop-sells") + " offer "
+                + (current.size() - 1) + ": " + count + " x "
+                + held.getHoverName().getString() + " for "
+                + CurrencyValue.formatCoins(price) + ".";
+    }
+
+    public static String remove(CyberNpcEntity npc, boolean selling, int index) {
+        if (!isShopkeeper(npc)) return "Target must be a Shopkeeper NPC.";
+        List<Offer> current = offers(npc, selling);
+        if (index < 0 || index >= current.size()) return "Offer number not found.";
+        Offer removed = current.remove(index);
+        saveOffers(npc, selling, current);
+        return "Removed offer " + index + " (" + removed.sample().getHoverName().getString() + ").";
+    }
+
+    public static String list(CyberNpcEntity npc) {
+        if (!isShopkeeper(npc)) return "Target must be a Shopkeeper NPC.";
+        StringBuilder text = new StringBuilder("Shop: ").append(npc.getName().getString());
+        for (boolean selling : new boolean[]{false, true}) {
+            List<Offer> rows = offers(npc, selling);
+            text.append("\n").append(selling ? "Sell (player to shop)" : "Buy (shop to player)")
+                    .append(": ").append(rows.size()).append(" offers");
+            for (int i = 0; i < rows.size(); i++) {
+                Offer offer = rows.get(i);
+                text.append("\n#").append(i).append(": ").append(offer.count())
+                        .append(" x ").append(offer.sample().getHoverName().getString())
+                        .append(" - ").append(CurrencyValue.formatCoins(offer.price()));
+            }
+        }
+        return text.toString();
+    }
+
+    public static void open(ServerPlayer player, CyberNpcEntity npc) {
+        if (!canTrade(player, npc)) return;
+        SESSIONS.put(player.getUUID(),
+                new Session(npc.getUUID(), player.level().getGameTime() + SESSION_TICKS));
+        npc.getLookControl().setLookAt(player, 25F, 25F);
+        send(player, npc, "");
+    }
+
+    private static void send(ServerPlayer player, CyberNpcEntity npc, String feedback) {
+        List<ShopSnapshotPacket.Line> buy = offers(npc, false).stream()
+                .map(o -> new ShopSnapshotPacket.Line(o.sample(), o.count(), o.price()))
+                .toList();
+        List<ShopSnapshotPacket.Line> sell = offers(npc, true).stream()
+                .map(o -> new ShopSnapshotPacket.Line(o.sample(), o.count(), o.price()))
+                .toList();
+        CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new ShopSnapshotPacket(npc.getId(), npc.getName().getString(),
+                        wallet(player), feedback, buy, sell));
+    }
+
+    public static void purchase(ServerPlayer player, int entityId, boolean selling, int index) {
+        Session session = SESSIONS.get(player.getUUID());
+        Entity target = player.level().getEntity(entityId);
+        if (!(target instanceof CyberNpcEntity npc) || !canTrade(player, npc)
+                || session == null || !session.merchant().equals(npc.getUUID())
+                || player.level().getGameTime() > session.expiresAt()) {
+            SESSIONS.remove(player.getUUID());
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                    "You're no longer trading with that Shopkeeper. Open the shop again."));
+            return;
+        }
+        List<Offer> catalogue = offers(npc, selling);
+        String response;
+        if (index < 0 || index >= catalogue.size()) {
+            response = "That offer is no longer available.";
+        } else {
+            Offer offer = catalogue.get(index);
+            response = selling ? sell(player, offer) : buy(player, offer);
+        }
+        // Rebuild fresh prices and wallet after every server-approved action.
+        SESSIONS.put(player.getUUID(),
+                new Session(npc.getUUID(), player.level().getGameTime() + SESSION_TICKS));
+        send(player, npc, response);
+    }
+
     public static long wallet(ServerPlayer player) {
-        Inventory inventory = player.getInventory();
         long total = 0L;
-        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
-            total += CurrencyValue.valueOf(inventory.getItem(slot));
+        Inventory inv = player.getInventory();
+        for (int slot = 0; slot < inv.getContainerSize(); slot++) {
+            total += CurrencyValue.valueOf(inv.getItem(slot));
         }
         return total;
     }
 
-    public static String walletDescription(ServerPlayer player) {
-        return CurrencyValue.formatCoins(wallet(player));
+    private static String buy(ServerPlayer player, Offer offer) {
+        if (wallet(player) < offer.price()) return "Not enough coins for this purchase.";
+        long change = chargeCoins(player, offer.price());
+        if (change < 0) return "Payment could not be completed; no coins were taken.";
+        if (change > 0) pay(player, change);
+        ItemStack goods = offer.delivery();
+        if (!player.getInventory().add(goods) && !goods.isEmpty()) player.drop(goods, false);
+        player.getInventory().setChanged();
+        player.playNotifySound(SoundEvents.VILLAGER_YES, SoundSource.PLAYERS, 0.45F, 1F);
+        return "Bought " + offer.count() + " x " + offer.sample().getHoverName().getString() + ".";
     }
 
-    public static String buy(ServerPlayer player, String action) {
-        Stock offer = GOODS.stream().filter(x -> x.action().equals(action))
-                .findFirst().orElse(null);
-        if (offer == null || offer.cost() <= 0L || offer.count() <= 0)
-            return "Item unavailable.";
-
-        long available = wallet(player);
-        if (available < offer.cost()) {
-            player.playNotifySound(SoundEvents.VILLAGER_NO, SoundSource.PLAYERS, 0.45F, 1.0F);
-            return "Insufficient coins. Cost: " + CurrencyValue.formatCoins(offer.cost())
-                + " | Available: " + CurrencyValue.formatCoins(available) + ".";
+    private static String sell(ServerPlayer player, Offer offer) {
+        Inventory inv = player.getInventory();
+        int[] removal = new int[inv.getContainerSize()];
+        int remaining = offer.count();
+        // Selling never removes equipped armour or offhand; only main slots.
+        for (int slot = 0; slot < Math.min(36, inv.getContainerSize()) && remaining > 0; slot++) {
+            ItemStack stack = inv.getItem(slot);
+            if (!ItemStack.isSameItemSameTags(stack, offer.sample())) continue;
+            int taken = Math.min(remaining, stack.getCount());
+            removal[slot] = taken;
+            remaining -= taken;
         }
-
-        // Plan the entire payment first: never take partial coins for a failed buy.
-        // Prefer exact change in descending denomination order. When exact
-        // payment isn't possible, use one larger physical coin and give change.
-        long change = chargeCoins(player, offer.cost());
-        if (change < 0L) {
-            return "Payment failed. No coins were charged.";
+        if (remaining != 0) return "You don't have enough matching items to sell.";
+        for (int slot = 0; slot < removal.length; slot++) {
+            if (removal[slot] > 0) inv.getItem(slot).shrink(removal[slot]);
         }
-
-        if (change > 0L) pay(player, change);
-
-        ItemStack goods = new ItemStack(offer.item(), offer.count());
-        if (!player.getInventory().add(goods) && !goods.isEmpty()) {
-            player.drop(goods, false);
-        }
-        player.getInventory().setChanged();
-        player.playNotifySound(SoundEvents.VILLAGER_YES, SoundSource.PLAYERS, 0.45F, 1.0F);
-        return "Purchase complete. Cost: " + CurrencyValue.formatCoins(offer.cost())
-                + " | Balance: " + walletDescription(player) + ".";
+        pay(player, offer.price());
+        inv.setChanged();
+        player.playNotifySound(SoundEvents.VILLAGER_YES, SoundSource.PLAYERS, 0.45F, 1F);
+        return "Sold " + offer.count() + " x " + offer.sample().getHoverName().getString() + ".";
     }
 
     /**
-     * @return copper-value overpayment for change, or -1 on failure.
-     * Nothing is removed unless the complete payment has been planned.
+     * Plan before mutating, preferring the needed denominations and giving
+     * change from larger physical coins when exact payment is impossible.
      */
     private static long chargeCoins(ServerPlayer player, long cost) {
         Inventory inv = player.getInventory();
         int slots = inv.getContainerSize();
-        int[] toRemove = new int[slots];
-        long remaining = cost;
-        long paid = 0L;
-
-        long[] denominations = {
-            CurrencyValue.DRAGON, CurrencyValue.PLATINUM,
-            CurrencyValue.GOLD, CurrencyValue.SILVER, CurrencyValue.COPPER
-        };
-        for (long denomination : denominations) {
-            if (remaining < denomination) continue;
-            for (int slot = 0; slot < slots && remaining >= denomination; slot++) {
+        int[] remove = new int[slots];
+        long remaining = cost, paid = 0L;
+        long[] denominations = {CurrencyValue.DRAGON, CurrencyValue.PLATINUM,
+                CurrencyValue.GOLD, CurrencyValue.SILVER, CurrencyValue.COPPER};
+        for (long unit : denominations) {
+            for (int slot = 0; slot < slots && remaining >= unit; slot++) {
                 ItemStack stack = inv.getItem(slot);
-                if (CurrencyValue.unitValueOf(stack) != denomination) continue;
-                long count = Math.min((long) stack.getCount() - toRemove[slot],
-                        remaining / denomination);
-                if (count <= 0L) continue;
-                toRemove[slot] += (int) count;
-                long portion = count * denomination;
-                paid += portion;
-                remaining -= portion;
+                if (CurrencyValue.unitValueOf(stack) != unit) continue;
+                int count = (int) Math.min(stack.getCount() - remove[slot], remaining / unit);
+                if (count <= 0) continue;
+                remove[slot] += count;
+                remaining -= count * unit;
+                paid += count * unit;
             }
         }
-
-        if (remaining > 0L) {
-            int bestSlot = -1;
-            long bestValue = Long.MAX_VALUE;
+        if (remaining > 0) {
+            int best = -1;
+            long value = Long.MAX_VALUE;
             for (int slot = 0; slot < slots; slot++) {
                 ItemStack stack = inv.getItem(slot);
                 long unit = CurrencyValue.unitValueOf(stack);
-                if (unit >= remaining
-                        && unit < bestValue
-                        && stack.getCount() > toRemove[slot]) {
-                    bestValue = unit;
-                    bestSlot = slot;
+                if (unit >= remaining && unit < value && stack.getCount() > remove[slot]) {
+                    best = slot;
+                    value = unit;
                 }
             }
-            if (bestSlot < 0) return -1L;
-            toRemove[bestSlot]++;
-            paid += bestValue;
+            if (best < 0) return -1;
+            remove[best]++;
+            paid += value;
         }
-
-        if (paid < cost) return -1L;
-        // Revalidate before making any destructive changes.
+        if (paid < cost) return -1;
         for (int slot = 0; slot < slots; slot++) {
-            if (toRemove[slot] > 0) {
-                ItemStack stack = inv.getItem(slot);
-                if (!CurrencyValue.isCurrency(stack)
-                        || stack.getCount() < toRemove[slot]) return -1L;
-            }
+            if (remove[slot] > 0 && (!CurrencyValue.isCurrency(inv.getItem(slot))
+                    || inv.getItem(slot).getCount() < remove[slot])) return -1;
         }
         for (int slot = 0; slot < slots; slot++) {
-            if (toRemove[slot] > 0) inv.getItem(slot).shrink(toRemove[slot]);
+            if (remove[slot] > 0) inv.getItem(slot).shrink(remove[slot]);
         }
         inv.setChanged();
         return paid - cost;
-    }
-
-    /** Selling stays as a way to earn the same physical coins used for buying. */
-    public static String sellHeld(ServerPlayer player) {
-        ItemStack held = player.getMainHandItem();
-        long unit = switch (net.minecraftforge.registries.ForgeRegistries.ITEMS
-                .getKey(held.getItem()) == null ? "" :
-                net.minecraftforge.registries.ForgeRegistries.ITEMS
-                    .getKey(held.getItem()).toString()) {
-            case "minecraft:wheat", "minecraft:coal", "minecraft:oak_log",
-                    "minecraft:spruce_log", "minecraft:birch_log" -> 1;
-            case "minecraft:leather", "minecraft:iron_ingot" -> 3;
-            default -> 0;
-        };
-        if (unit == 0 || held.isEmpty()) {
-            return "Accepted sale items: wheat, coal, logs, leather and iron. Hold the item to sell.";
-        }
-
-        long payment = unit * held.getCount();
-        held.setCount(0);
-        pay(player, payment);
-        player.getInventory().setChanged();
-        player.playNotifySound(SoundEvents.VILLAGER_YES, SoundSource.PLAYERS, 0.45F, 1.0F);
-        return "Sale complete. Received: " + CurrencyValue.formatCoins(payment)
-                + " | Balance: " + walletDescription(player) + ".";
     }
 
     private static void pay(ServerPlayer player, long amount) {
@@ -179,5 +288,10 @@ public final class NpcShopService {
             if (!player.getInventory().add(coins) && !coins.isEmpty())
                 player.drop(coins, false);
         }
+    }
+
+    @SubscribeEvent
+    public static void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        SESSIONS.remove(event.getEntity().getUUID());
     }
 }
