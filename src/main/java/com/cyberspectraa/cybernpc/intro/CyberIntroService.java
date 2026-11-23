@@ -52,11 +52,16 @@ public final class CyberIntroService {
     private static final String DONE = "Completed";
     private static final String LEGACY_DEATH = "SummoningDeath";
 
-    /** 2.25-second title prelude; then preserve the original 6.5-second summoning. */
-    public static final int TITLE_TICKS = 45;
-    public static final int SUMMON_TICKS = 130;
+    /**
+     * A deliberate 13-second opening: 3.5 seconds for the author's title,
+     * then 9.5 seconds of summoning, including a second effect pulse.
+     * Keep the same first-arrival state machine and skip semantics.
+     */
+    public static final int TITLE_TICKS = 70;
+    public static final int SUMMON_TICKS = 190;
     public static final int SCENE_TICKS = TITLE_TICKS + SUMMON_TICKS;
-    public static final int REVEAL_TICKS = TITLE_TICKS + 62;
+    public static final int SECOND_PULSE_TICKS = TITLE_TICKS + 94;
+    public static final int REVEAL_TICKS = TITLE_TICKS + 142;
     private static final int SCENE_GRACE_TICKS = 35;
     private static final int POPE_TIMEOUT_TICKS = 800;
 
@@ -74,6 +79,7 @@ public final class CyberIntroService {
         boolean queueScreenSent;
         boolean revealed;
         boolean effectsStarted;
+        boolean secondPulseStarted;
         boolean completionRequested;
         Session(UUID id, Stage stage) { this.id = id; this.stage = stage; }
     }
@@ -289,6 +295,10 @@ public final class CyberIntroService {
                 session.effectsStarted = true;
                 startSummoningEffects(player);
             }
+            if (elapsed >= SECOND_PULSE_TICKS && !session.secondPulseStarted) {
+                session.secondPulseStarted = true;
+                secondSummoningPulse(player);
+            }
             if (elapsed >= REVEAL_TICKS && !session.revealed) reveal(player, session);
             // The client's final frame can arrive slightly before the server
             // reaches its own tick deadline. Remember the request and finish
@@ -341,17 +351,20 @@ public final class CyberIntroService {
         session.stageTick = player.getServer().overworld().getGameTime();
         session.revealed = false;
         session.effectsStarted = false;
+        session.secondPulseStarted = false;
         session.completionRequested = false;
         CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new IntroScenePacket(true, arrival.pos(), arrival.yaw()));
-        // Summoning particles and sounds begin AFTER the title card, so the
-        // existing 6.5-second effect is not hidden behind the opening text.
+        // Summoning begins after the opening title. The original 64-tick
+        // Photon effect is played at the start and reprised later, so the
+        // longer cinematic has no several-second stretch with nothing happening.
         ensurePopeReady(player.getServer());
     }
 
     private static void startSummoningEffects(ServerPlayer player) {
         ServerLevel level = player.serverLevel();
-        // Reuse the optional CyberServer visual system without changing it.
+        // CyberServer owns the existing first golden Photon FX and its sounds.
+        // Use reflection so CyberNpc also works if CyberServer isn't installed.
         if (ModList.get().isLoaded("cyberserver")) {
             try {
                 Class<?> fx = Class.forName(
@@ -359,10 +372,54 @@ public final class CyberIntroService {
                 fx.getMethod("startArrival", ServerLevel.class,
                         double.class, double.class, double.class)
                         .invoke(null, level, player.getX(), player.getY(), player.getZ());
+                return;
             } catch (ReflectiveOperationException | RuntimeException ignored) {
-                // Without the optional CyberServer FX, our own reveal remains.
+                // Fall back to vanilla particles rather than a silent opening.
             }
         }
+        level.sendParticles(ParticleTypes.END_ROD,
+                player.getX(), player.getY() + 1D, player.getZ(),
+                42, 1.0D, 1.3D, 1.0D, 0.04D);
+        level.sendParticles(ParticleTypes.ENCHANT,
+                player.getX(), player.getY() + 0.5D, player.getZ(),
+                40, 1.4D, 0.4D, 1.4D, 0.08D);
+        level.playSound(null, player.blockPosition(),
+                SoundEvents.BEACON_POWER_SELECT, SoundSource.PLAYERS, 0.75F, 1.25F);
+    }
+
+    /**
+     * Second, quieter ritual wave. When Photon + CyberServer are present,
+     * replay the exact bundled effect by its existing ID WITHOUT starting
+     * another CyberServer arrival sequence or repeating all arrival sounds.
+     * Without Photon, a restrained vanilla burst keeps the beat visible.
+     */
+    private static void secondSummoningPulse(ServerPlayer player) {
+        ServerLevel level = player.serverLevel();
+        boolean photonPlayed = false;
+        if (ModList.get().isLoaded("cyberserver")
+                && ModList.get().isLoaded("photon")) {
+            try {
+                Class<?> bridge = Class.forName(
+                        "com.cyberspectraa.cyberserver.PhotonBridge");
+                photonPlayed = Boolean.TRUE.equals(
+                        bridge.getMethod("play", ServerLevel.class,
+                                double.class, double.class, double.class)
+                                .invoke(null, level, player.getX(),
+                                        player.getY(), player.getZ()));
+            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                // Missing optional effects must not interrupt the intro.
+            }
+        }
+        if (!photonPlayed) {
+            level.sendParticles(ParticleTypes.END_ROD,
+                    player.getX(), player.getY() + 1D, player.getZ(),
+                    38, 0.9D, 1.1D, 0.9D, 0.035D);
+            level.sendParticles(ParticleTypes.ENCHANT,
+                    player.getX(), player.getY() + 0.2D, player.getZ(),
+                    44, 1.2D, 0.5D, 1.2D, 0.09D);
+        }
+        level.playSound(null, player.blockPosition(),
+                SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.8F, 0.78F);
     }
 
     private static void reveal(ServerPlayer player, Session session) {
@@ -380,7 +437,7 @@ public final class CyberIntroService {
 
     /**
      * A valid client completion is accepted only after the title prelude
-     * and complete 6.5-second summoning. Slow clients get a grace
+     * and full extended summoning. Slow clients get a grace
      * period before the server advances them to avoid an indefinite freeze.
      */
     public static void advanceFromScene(ServerPlayer player) {
