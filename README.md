@@ -1,10 +1,20 @@
 # CyberNpc
 
-**Current version: 0.44.61** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current development version: 0.45.8** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
 CyberNpc is a reusable gameplay mod. [CyberRaces](https://github.com/Cyberspectraa/CyberRaces) owns race definitions, [CyberClasses](https://github.com/Cyberspectraa/CyberClasses) owns shared class definitions, [CyberQuest](https://github.com/Cyberspectraa/CyberQuest) owns quests and guild contracts, and [CyberServer](https://github.com/Cyberspectraa/CyberServer) owns this world's progression rules. Optional integrations are checked before use.
+
+## Extended Fractured Island intro (0.45.8)
+
+The first-arrival presentation now lasts **13 seconds** instead of 8.75:
+a slightly longer stationary Blockbench title, two staged beats of the
+original bundled golden summoning effect, and a more deliberate character
+reveal. The queue screen matches the simple Minecraft-style Rift outro.
+The existing FIFO arrival queue, creator, Pope dialogue, camera safety and
+ESC/reconnect recovery are preserved. The FX is part of CyberNpc's JAR,
+not an external resource pack. [Full notes](docs/EXTENDED_SUMMONING_INTRO.md).
 
 ### Developer Glasses removal (0.44.52)
 
@@ -366,7 +376,7 @@ When both locations are configured, CyberNpc coordinates a one-at-a-time first-a
 3. CyberServer summoning visuals when CyberServer is present, followed by the character reveal.
 4. A short closing fade, restoration of the **player's normal camera**, then the Pope's welcome dialogue.
 
-The cinematic is **2.25 seconds of title followed by 6.5 seconds of summoning**, with server-authoritative timing, an ESC skip option and recovery from interruptions. The camera and presentation in **0.44.39** are the accepted baseline; there is no plan to change the animation without a new request.
+The intro was originally 2.25 seconds of title plus 6.5 seconds of summoning (0.44.39 baseline). In **0.45.8** it is deliberately extended to a **3.5-second title followed by 9.5 seconds of summoning**, with a second effect pulse, a measured reveal, server-authoritative timing, ESC skip and interruption recovery. See [the updated timings](docs/EXTENDED_SUMMONING_INTRO.md).
 
 Set the locations while standing at the required blocks:
 
