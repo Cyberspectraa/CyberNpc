@@ -1,10 +1,28 @@
 # CyberNpc
 
-**Current development version: 0.45.8** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current development version: 0.45.9** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
 
 CyberNpc is a reusable gameplay mod. [CyberRaces](https://github.com/Cyberspectraa/CyberRaces) owns race definitions, [CyberClasses](https://github.com/Cyberspectraa/CyberClasses) owns shared class definitions, [CyberQuest](https://github.com/Cyberspectraa/CyberQuest) owns quests and guild contracts, and [CyberServer](https://github.com/Cyberspectraa/CyberServer) owns this world's progression rules. Optional integrations are checked before use.
+
+## Unified Cyber command hub (0.45.9)
+
+All installed Cyber mods now share the single `/cyber` command hub, with
+sections `npc`, `quest`, `races`, `classes`, `server`, `arrival`,
+`reset` and `balance`. Use `/cyber help` to browse available sections,
+or `/cyber help npc` for an example of nested command discovery.
+`/cyber doctor` is an operator-only, non-destructive registration audit.
+
+The hub forwards to each mod's **existing Brigadier commands**; it does
+not duplicate gameplay logic, bypass operator checks, require the other
+mods as dependencies, or delete original commands. CyberNpc also now
+registers the previously forgotten `/bal` handler so player balances
+work through both `/bal` and `/cyber balance`.
+
+See [all command aliases and tests](docs/UNIFIED_COMMAND_HUB.md). Install
+CyberNpc 0.45.9 on clients and server; the other Cyber mods don't need
+new builds for this command consolidation.
 
 ## Extended Fractured Island intro (0.45.8)
 
