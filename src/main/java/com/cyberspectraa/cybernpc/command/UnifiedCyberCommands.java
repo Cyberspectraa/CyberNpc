@@ -17,7 +17,6 @@ import net.minecraftforge.fml.common.Mod;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * One entry point for Cyber-series commands, without copying or taking
@@ -95,9 +94,16 @@ public final class UnifiedCyberCommands {
         for (Section section : SECTIONS) {
             CommandNode<CommandSourceStack> original = target(dispatcher, section);
             if (original != null) {
-                hub.then(Commands.literal(section.alias())
-                        .requires(original.getRequirement())
-                        .redirect(original));
+                LiteralArgumentBuilder<CommandSourceStack> alias = Commands
+                        .literal(section.alias())
+                        .requires(original.getRequirement());
+                // A redirect only parses the target's children when more
+                // text follows. Preserve zero-argument original commands too
+                // (/bal -> /cyber balance; /cyberresetall -> /cyber reset).
+                if (original.getCommand() != null) {
+                    alias.executes(original.getCommand());
+                }
+                hub.then(alias.redirect(original));
             }
         }
 
