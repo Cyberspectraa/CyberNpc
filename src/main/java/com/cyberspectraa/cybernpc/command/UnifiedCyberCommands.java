@@ -72,11 +72,13 @@ public final class UnifiedCyberCommands {
                         .executes(ctx -> showSections(ctx.getSource(), dispatcher))
                         .then(Commands.argument("section", StringArgumentType.word())
                                 .suggests((context, suggestions) -> {
+                                    String remaining = suggestions.getRemainingLowerCase();
                                     for (Section section : SECTIONS) {
                                         CommandNode<CommandSourceStack> target =
                                                 target(dispatcher, section);
                                         if (target != null
-                                                && target.canUse(context.getSource())) {
+                                                && target.canUse(context.getSource())
+                                                && section.alias().startsWith(remaining)) {
                                             suggestions.suggest(section.alias());
                                         }
                                     }
