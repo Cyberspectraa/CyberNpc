@@ -6,9 +6,9 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * Players who have completed race and class selection remain concealed
- * while another newcomer is being welcomed by the Pope.
- * The server closes this screen before starting the built-in camera scene.
+ * While another newcomer is greeted by the Pope, show a restrained holding
+ * page in the same Minecraft-font style as the Rift credits and opening title.
+ * Never expose the concealed staging world behind this screen.
  */
 public final class SummoningQueueScreen extends Screen {
     private long start = System.currentTimeMillis();
@@ -30,20 +30,30 @@ public final class SummoningQueueScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        // Entirely hide the staging world behind a dark customiser-themed
-        // backdrop, including first-person hands and inventory.
-        g.fill(0, 0, width, height, 0xFF101016);
-        g.fill(width/2-127, height/2-55, width/2+127, height/2+55, 0xFF272029);
-        g.fill(width/2-125, height/2-53, width/2+125, height/2+53, 0xFF1A1520);
-        g.drawCenteredString(font, "YOUR CHARACTER IS READY", width/2, height/2-32, 0xFFFFD59B);
-        g.drawCenteredString(font, "Waiting for the summoning circle...", width/2, height/2-11, 0xFFE5E0D4);
-        g.drawCenteredString(font, "The Pope is welcoming another adventurer.",
-                width/2, height/2+4, 0xFFB6A8C6);
-        int dots = 1 + (int)((System.currentTimeMillis()-start)/700 % 3);
-        g.drawCenteredString(font, ".".repeat(dots), width/2, height/2+25, 0xFFFFD59B);
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        RiftUiStyle.background(graphics, width, height);
+        int center = width / 2;
+        int middle = height / 2;
+        RiftUiStyle.centered(graphics, font, width, center, middle - 37,
+                "AWAITING SUMMONING", RiftUiStyle.HEADING, 1F);
+        RiftUiStyle.centered(graphics, font, width, center, middle - 10,
+                "Your character is ready.", RiftUiStyle.TEXT, 1F);
+        RiftUiStyle.centered(graphics, font, width, center, middle + 11,
+                "The Pope is welcoming another adventurer.",
+                RiftUiStyle.DETAIL, 1F);
+        int dots = 1 + (int) ((System.currentTimeMillis() - start) / 700L % 3L);
+        RiftUiStyle.centered(graphics, font, width, center, middle + 32,
+                ".".repeat(dots), RiftUiStyle.HEADING, 1F);
+        RiftUiStyle.footer(graphics, font, width, height);
     }
 
-    @Override public boolean shouldCloseOnEsc() { return false; }
-    @Override public boolean isPauseScreen() { return false; }
+    @Override
+    public boolean shouldCloseOnEsc() {
+        return false;
+    }
+
+    @Override
+    public boolean isPauseScreen() {
+        return false;
+    }
 }
