@@ -31,7 +31,7 @@ the new prefix as well. Examples:
     /cyber npc intro setarrival
     /cyber npc discordmail status
     /cyber quest journal
-    /cyber quest npc inspect <target>
+    /cyber quest npc inspect <entity>
     /cyber races race list
     /cyber races character status
     /cyber classes info
