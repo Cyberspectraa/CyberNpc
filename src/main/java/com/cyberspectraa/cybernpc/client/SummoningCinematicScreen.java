@@ -30,8 +30,9 @@ import net.minecraftforge.fml.common.Mod;
 import javax.annotation.Nullable;
 
 /**
- * Two-part intro: a quiet pack title on black followed by the original
- * summoning effects with a small, deterministic cinematic camera arc.
+ * Two-part, thirteen-second intro: the owner's title card, then a staged
+ * summoning with two Photon/vanilla effect beats and a measured reveal.
+ * The camera uses a deterministic continuous arc instead of jump cuts.
  *
  * The focus never moves: it is the saved arrival location used by the server
  * teleport (X + 0.5, Y, Z + 0.5). The camera curve depends only on elapsed
@@ -69,8 +70,8 @@ public final class SummoningCinematicScreen extends Screen {
     @Nullable private ArmorStand camera;
     @Nullable private Vec3 cameraEye;
 
-    // Chosen once per client level. If the arc crosses walls, use the
-    // already-proven fixed camera instead of clipping mid-cutscene.
+    // Chosen once per client level. If the arc crosses walls, use a
+    // fixed camera instead of clipping through scenery mid-cutscene.
     private boolean allowArc;
     private double baseAngle;
     @Nullable private Vec3 staticShot;
