@@ -2,6 +2,7 @@ package com.cyberspectraa.cybernpc;
 
 import com.cyberspectraa.cybernpc.command.CyberNpcCommands;
 import com.cyberspectraa.cybernpc.command.ShopAdminCommands;
+import com.cyberspectraa.cybernpc.command.BankMailCommands;
 import com.cyberspectraa.cybernpc.command.DiscordMailCommands;
 import com.cyberspectraa.cybernpc.client.PlayerHudConfig;
 import com.cyberspectraa.cybernpc.client.DialogueVoiceConfig;
@@ -41,6 +42,9 @@ public final class CyberNpc {
                 DialogueVoiceConfig.SPEC, "cybernpc-dialogue-client.toml");
 
         MinecraftForge.EVENT_BUS.addListener(CyberNpcCommands::register);
+        // /bal was defined but never registered; the unified /cyber balance
+        // alias resolves to this original root only when it actually exists.
+        MinecraftForge.EVENT_BUS.addListener(BankMailCommands::register);
         MinecraftForge.EVENT_BUS.addListener(ShopAdminCommands::register);
         MinecraftForge.EVENT_BUS.addListener(DiscordMailCommands::register);
     }
