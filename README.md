@@ -2,432 +2,138 @@
 
 **Current development version: 0.45.9** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
-CyberNpc supplies the living NPC layer for the CyberSpectra Season 2 modpack: world inhabitants, Wild NPC adventurers, professions, dialogue, combat, households, shops, banking, postal services and the first-arrival introduction.
-
-CyberNpc is a reusable gameplay mod. [CyberRaces](https://github.com/Cyberspectraa/CyberRaces) owns race definitions, [CyberClasses](https://github.com/Cyberspectraa/CyberClasses) owns shared class definitions, [CyberQuest](https://github.com/Cyberspectraa/CyberQuest) owns quests and guild contracts, and [CyberServer](https://github.com/Cyberspectraa/CyberServer) owns this world's progression rules. Optional integrations are checked before use.
-
-## Unified Cyber command hub (0.45.9)
-
-All installed Cyber mods now share the single `/cyber` command hub, with
-sections `npc`, `quest`, `races`, `classes`, `server`, `arrival`,
-`reset` and `balance`. Use `/cyber help` to browse available sections,
-or `/cyber help npc` for an example of nested command discovery.
-`/cyber doctor` is an operator-only, non-destructive registration audit.
-
-The hub forwards to each mod's **existing Brigadier commands**; it does
-not duplicate gameplay logic, bypass operator checks, require the other
-mods as dependencies, or delete original commands. CyberNpc also now
-registers the previously forgotten `/bal` handler so player balances
-work through both `/bal` and `/cyber balance`.
-
-See [all command aliases and tests](docs/UNIFIED_COMMAND_HUB.md). Install
-CyberNpc 0.45.9 on clients and server; the other Cyber mods don't need
-new builds for this command consolidation.
-
-## Extended Fractured Island intro (0.45.8)
-
-The first-arrival presentation now lasts **13 seconds** instead of 8.75:
-a slightly longer stationary Blockbench title, two staged beats of the
-original bundled golden summoning effect, and a more deliberate character
-reveal. The queue screen matches the simple Minecraft-style Rift outro.
-The existing FIFO arrival queue, creator, Pope dialogue, camera safety and
-ESC/reconnect recovery are preserved. The FX is part of CyberNpc's JAR,
-not an external resource pack. [Full notes](docs/EXTENDED_SUMMONING_INTRO.md).
-
-### Developer Glasses removal (0.44.52)
-
-Developer Glasses and the associated tabbed developer HUD have been
-removed, along with their creative item, model, texture, translation entries
-and client V-key binding. Existing world items referencing
-`cybernpc:developer_glasses` will no longer resolve when worlds are loaded.
-This does not change NPC AI, data, dialogue, typed-chat speech bubbles, or
-the ordinary tools used to register towns and houses. The separate
-voice-to-bubble experimental feature remains reverted.
-
-## Native Minecraft HUD icons (0.44.61)
-
-The CyberNpc RPG HUD now references the **native Minecraft 1.20.1
-`textures/gui/icons.png`** directly, rather than the hand-drawn 9x9
-symbols in CyberNpc's texture atlas. Health uses the full vanilla heart
-and hunger the full vanilla drumstick, each with its proper vanilla
-outline/background. The armour label beneath the portrait likewise
-shows the vanilla full-armour sprite.
-
-Since vanilla Minecraft has no mana symbol, the blue mana orb is taken
-from its original 16x16 `textures/item/heart_of_the_sea.png` item art
-and drawn at 12x12 pixels in the existing column. This is a static
-visual representation only and does not consume an item.
-
-No third-party icons or copied vanilla texture files are bundled.
-Minecraft resource packs that replace these assets automatically affect
-the displayed icons. The existing custom stone frames, compact layout,
-2D skin face, actual health/food/armour values, optional Iron's mana
-integration and zero-mana hide behavior are unchanged. This is a
-CyberNpc-only client HUD change. Install CyberNpc 0.44.61 on client and
-server; no other Cyber mod updates are needed.
-
-## Readable pixel-art HUD icons (0.44.60)
-
-The three nine-pixel HUD glyphs have been redrawn as original, deliberately
-small Minecraft pixel art: a clear red heart, an orange roast drumstick with
-a bone, and a **round blue mana orb with a pale centre and tiny glints**.
-The icons now sit in a dedicated column just to the left of each stone bar,
-instead of being drawn over the frame's top and bottom rails. The bar cluster
-moves 14 GUI pixels to the right to avoid overlapping the fixed 2D skin
-portrait, and bar text has more space. Maximum width is 214 GUI pixels
-(previously 200), still much smaller than the original wide RPG HUD.
-
-All actual health, hunger, armour and Iron's Spells mana values are unchanged.
-Zero-capacity mana still hides its entire gauge; other HUD features, config
-keys, optional mod safety and server gameplay are untouched. Update only the
-CyberNpc JAR to version 0.44.60 on client and server.
-
-## Compact classic HUD polish (0.44.59)
-
-The top-left player HUD keeps its original Minecraft-style stone sprites,
-but all three gauges now share the same **140-pixel** frame width. Original
-8-pixel right-hand stone end caps are preserved instead of stretching or
-clipping the atlas art. The portrait is now a stationary 38x38 skin face, the
-gauge/portrait spacing is tighter, and the overall HUD fits within 200x68
-GUI pixels instead of 253x93. Small original nine-pixel heart, food and
-mana glyphs are shown *inside* their respective gauges. Food is no longer
-repeated below the portrait; actual armour stays directly below the face.
-
-Existing client HUD config keys and defaults are unchanged. The prior
-zero-mana bar hiding, Iron's optional integration, actual status values,
-vanilla HUD replacement, hotbar and gameplay are unchanged. Test across
-GUI scales and with/without Iron's Spells installed. This is a **CyberNpc-only**
-client visual update; install CyberNpc 0.44.59 on client and server, leaving
-the other Cyber mod JARs unchanged.
-
-## Mana gauge visibility (0.44.58)
-
-The player HUD now hides its blue mana gauge when the effective Iron's Spells
-max-mana attribute is zero or lower. This includes non-magic CyberClasses
-paths with `ManaTier.NONE`, plus any future race/ability that produces an
-actual zero-capacity mana pool. CyberClasses already applies the class mana
-tier to that attribute server-side, so no new class packets or dependencies
-are needed. The original Iron's mana overlay is also suppressed for this
-known zero-capacity state, while missing or incompatible optional APIs are
-left alone. Magic-capable characters continue showing their true synced
-current/max mana; the health, food, armour, face and other UI remain unchanged.
-
-Only CyberNpc is updated. Replace the old CyberNpc JAR on both server and
-client with 0.44.58, and keep other Cyber mods at their existing versions.
-
-## Static player face HUD (0.44.57)
-
-The live, rotating full-body player preview has been replaced with a **static
-2D face portrait** from the player's own Minecraft skin. It renders the 8x8
-face texture (skin UV 8,8) and its transparent 8x8 hat/outer hair layer
-(UV 40,8) enlarged with crisp Minecraft pixels inside a simple stone border.
-There are no player-model pose, head movement, rotation, Pehkui scale or idle
-animation effects in this portrait.
-
-The existing health, hunger, armor and Iron's Spells mana displays are
-unchanged for this iteration. The existing
-`config/cybernpc-hud-client.toml` setting
-`rpg_hud.show_character_preview` controls the new face portrait; saved
-client configs remain valid. Only CyberNpc changes, so CyberServer stays on
-v0.2.4. Install v0.44.57 on both client and server as usual.
-
-## Pixel-art top-left player HUD (0.44.56)
-
-**Client-side Minecraft pixel-style HUD**, following the *layout* (not art)
-of the user's Souls Combat HUD reference. The gauge frame, trim, food and
-armor icons are original, nearest-neighbour PNG sprites in
-`assets/cybernpc/textures/gui/player_hud.png`; there is **no large modern
-blue dashboard panel**. The fixed 2D skin portrait draws the player's own face and hair/hat
-overlay on the left, with stone-rimmed health
-(red), hunger (green) and Iron's mana (blue) gauges extending to the right.
-Numbers are rendered using Minecraft's own pixel font.
-
-* **Health:** current/max, including modded max-health bonuses.
-* **Hunger:** current/20 in a green bar and a compact pixel food icon.
-* **Armor:** real numerical armor stat beside a small pixel helmet icon.
-* **Mana:** real client-synced Iron's Spells 'n Spellbooks mana/max mana.
-  The blue gauge **disappears completely** when that optional mod is
-  not installed or the API is unavailable.
-* Vanilla hearts, armor icons and hunger icons are hidden only while the
-  replacement is displayed and `replace_vanilla_bars` is enabled. Iron's
-  native mana gauge is hidden only if this mod successfully reads mana.
-* Hotbar, XP bar, crosshair, air/mount meters, bosses and chat remain untouched.
-* Uses the original 2D Minecraft skin face texture and its outer
-  head layer; the portrait never moves. Custom 3D race-specific head
-  geometry is intentionally not shown in the flat portrait.
-* Client configuration at `config/cybernpc-hud-client.toml`:
-  `rpg_hud.enabled`, `rpg_hud.replace_vanilla_bars`,
-  `rpg_hud.show_character_preview`, `rpg_hud.x_offset`,
-  `rpg_hud.y_offset`. Set `enabled = false` to restore the default HUD.
-* No gameplay changes or new packets. CyberNpc **0.44.56** should be
-  installed on server and client as usual, keeping CyberServer 0.2.4.
-
-**Test:** World load with/without Iron's Spells installed, health/hunger
-changes, player scale/armor textures, different GUI scales, and optional
-HUD mods. Appearance and race compatibility still require in-game verification.
-
-## Workstation removal keybind (0.44.55)
-
-**J — Remove Registered Workstation** is a new configurable key in
-Minecraft Controls > Key Binds. Hold the **Town Register in your main
-hand**, switch it to **WORK MODE**, look directly at a registered
-workstation from within six blocks, then press **J**.
-
-* Only the CyberNpc workplace registration is removed. The actual
-  workstation block, its inventory, town homes, and old Work markers
-  are untouched.
-* Removing an **extra** station leaves the main job and employee intact.
-* Removing the **main** workstation of a group promotes an available
-  linked station to main and preserves the assigned employee and
-  original job. Distant chunks are never force-loaded to do this.
-* Removing a single/final workstation dissolves that job registration;
-  the employee becomes unemployed and may later be hired elsewhere.
-* The removal is validated and ray-traced by the server. The client
-  does not get to specify arbitrary target coordinates.
-* Removing a station clears the register's current multiselect root,
-  so choosing the next main station is explicit. The K multiselect
-  switch itself stays on/off as chosen.
-* This update advances CyberNpc's network protocol. **Both client and
-  server must run CyberNpc 0.44.55**. No CyberServer update is needed.
-
-## Multiple workstations per job (0.44.54)
-
-A single registered town job can now own **up to eight linked workstations**.
-This is useful for a forge with a smithing table, anvil, grindstone and furnace,
-without hiring four separate blacksmiths.
-
-**How to use:**
-
-1. In the Town Register, enter WORK MODE (sneak + right-click air).
-2. With the register in your **main hand**, press **K** (configurable in
-   Minecraft Controls) to enable WORKSTATION MULTISELECT.
-3. Click the **main workstation** to select it. If it has not been registered,
-   it is registered first. Its original job type becomes the job for the group.
-4. Click additional supported work blocks within **24 blocks**, in the same
-   town, to attach them as activity points. A previously registered empty
-   single-station job can be attached; a station with an employee or already
-   belonging to a multi-station workplace cannot be stolen.
-5. **Sneak-click an extra station** while grouping to unregister/detach it.
-   The main station itself cannot be detached this way.
-6. Press **K** again to finish. The Town Register remembers normal WORK MODE.
-   Assign an employee normally by selecting a housed Main NPC and sneak-clicking
-   any workstation in the group, or let an unemployed resident claim the vacancy.
-
-All linked stations share **one job slot and one worker**. The worker
-periodically moves between **loaded, valid and walkable** station positions
-during their existing work shifts, roughly every 65 seconds. There are no
-automatic production/crafting effects yet.
-
-Saved format `cybernpc_town_work_v1` is backward compatible. Any workplace
-from 0.44.53 without a `Root` field remains an independent one-station job.
-Legacy invisible Work markers and the original housing system are unchanged.
-If a main station is broken, the registry attempts to promote a valid loaded
-extra while keeping the original job title and worker; other chunks are not
-force-loaded. The new key/control packet requires **CyberNpc 0.44.54 on both
-server and client**. CyberServer 0.2.4 is still compatible.
-
-## Town workplace and employment prototype (0.44.53)
-
-The first, **opt-in** workplace system works alongside the registered towns
-and homes introduced in 0.44.46. It does not overwrite or reinterpret old
-building markers, existing home assignments, or special-service NPC workplaces.
-
-**Town Register modes:**
-
-1. Hold the Town Register. **Sneak + right-click the air** to switch between
-   HOME and WORK modes. HOME mode retains normal bell/door house registration,
-   population toggle and manual house assignments.
-2. In WORK mode, **normal-click a vanilla workstation** to register one job
-   slot for the nearest registered town bell (within 256 blocks). There must
-   be one walkable block beside the station; the system reserves this place
-   for NPC pathfinding and displays a short registration/status message.
-3. Residents who own a **registered town home** may automatically claim
-   vacant workstations in the same town. One nearby, loaded worker at most
-   is hired per 60-second check per loaded dimension, within 96 blocks of
-   their station; no chunks are loaded by the job system.
-4. Optionally select a housed ordinary Main NPC with the Town Register,
-   then **sneak-click a registered station in WORK mode** to assign them
-   immediately. Sneak-click again with that same selected NPC to unassign
-   them; the vacancy may be claimed again by an unemployed resident.
-5. Registered stations display a subtle gold particle indicator only to
-   nearby players holding the Town Register in WORK mode (at most 8 stations
-   per holder every 12 ticks). In HOME mode, registered house doors retain
-   their own emerald indicators.
-
-**Initially supported vanilla blocks:** Smithing Table / Blast Furnace /
-Grindstone / Anvil (Blacksmith), Lectern (Librarian), Composter (Farmer),
-Smoker (Cook), Brewing Stand (Alchemist), Barrel (Merchant), Fletching
-Table (Fletcher), Cartography Table (Cartographer), Stonecutter (Mason),
-Loom (Tailor), Crafting Table (Artisan) and Furnace (Smelter).
-
-Job assignments are persisted in separate Overworld saved data
-`cybernpc_town_work_v1`; existing player home ownership is untouched.
-Unloaded residents keep their reserved jobs. Once the original station
-block is removed/replaced and its chunk is loaded, its registration is
-invalidated on the next employment check. A dead NPC releases their job.
-
-**Prototype daytime behaviour:** new station employees commute to a free
-adjacent standing spot during two staggered daily work shifts, with a
-midday break, brief breathers, and free-time wandering/social behaviour
-between shifts. They return to their registered home at night using the
-existing home brain. Existing **Work marker** NPCs remain on their old
-exact-position AI (intentionally preserved). This first update does not
-simulate production, trades, crafting or multi-station buildings yet.
-
-**Test caveat:** The workstation/job engine is a first in-game test build;
-check navigation near doors, enclosed workplaces, daily activity balance,
-and saved assignment persistence. Be sure CyberNpc 0.44.53 is installed
-on both the server and clients. No CyberServer version change is needed.
-
-## NPC types and daily life
-
-- **Main NPCs:** persistent named residents that can be given homes, beds and workstations.
-- **Quest NPCs:** entities usable as quest givers by CyberQuest, including entities with a stable `CyberQuestNpcId`.
-- **Wild NPCs:** naturally generated adventurers with random appearances, races (when CyberRaces is available), classes, gear quality, personality, progression and survival behaviour.
-- **Special service roles:** Banker, Courier, Guard, Pope, Guild Receptionist and Shopkeeper; dedicated spawn eggs and service AI.
-- **Mason:** special named NPC with a matching spawn egg, skin and the Choso Plush storyline supplied through CyberServer/CyberQuest.
-
-NPCs have humanoid models, visual armour/equipment, generated names, speech/reaction bubbles and social responses. **Wild NPCs never open the written NPC dialogue UI**: right-clicking one produces a contextual, non-verbal reaction bubble and its existing grunt/vocalisation. Only Main, Quest and service NPCs can speak through scripted dialogue. This restriction is checked both during entity interaction and by the server dialogue controller to prevent stale sessions or indirect calls. Administrative tools, race abilities, social behaviour and Wild NPC reactions remain compatible. Wild NPCs can become friends, form parties, assist allies, respond to threats, flee, ride compatible horses, hunt animals, collect food, cook, eat, sleep and recover. Their 18-slot inventories and important world data are persistent. Environmental and navigation logic includes fence/trapdoor avoidance and stuck-path recovery.
-
-### Natural Wild NPC expedition groups (0.44.43)
-
-Natural Wild NPCs now spawn as **small expeditions of 2–4 in the Overworld** and **2–3 in the Nether** (rare; Forge biome spawner weights 2 and 1 respectively). **No natural CyberNpc Wild NPCs spawn in the End**; spawn eggs and admin-created NPCs continue to work without restrictions. The existing Forge natural spawn caps and spawn checks still apply, so pack size may be smaller if nearby positions are blocked.
-
-Members of the same vanilla natural-spawn pack receive a persistent shared party ID, a leader and seeded friendships. When CyberRaces is installed, their base race is picked using the natural-spawn pack ID and the local habitat, so same-biome expedition members generally belong to the same race. Race evolutions remain **players-only**, and Undead remains excluded from Wild NPCs.
-
-**Spawn frequency (0.44.43):** Overworld biome spawn weight is 4 and Nether weight is 2. In established worlds where the passive-mob cap blocks ordinary spawns, the server also checks for a bounded expedition opportunity every 30 seconds per loaded Overworld/Nether dimension, with a maximum of 12 Wild NPCs in a 96-block radius per player. It searches nearby cave floors for underground players rather than only the surface, and checks neighbouring elevations when assembling packs. This respects `doMobSpawning`, stays away from players, never generates chunks and never creates natural groups in the End. The check is probabilistic, so encounters are not guaranteed every 30 seconds.\n\n**World-loading safety (0.44.43):** Camps are never constructed from entity-join callbacks during chunk generation. Pack leaders wait until they have ticked in a playable server world before attempting their one-off campfire. Terrain and camp checks operate only on fully loaded chunks, avoiding synchronous worldgen requests. Supplemental spawn scans have a short startup grace and check no more than two players per 30-second pass, rotating across players on multiplayer servers. Natural biome spawning, pack identity, classes, races, campfire safety and End restrictions remain intact.
-
-The first member of a natural pack **tries to establish one campfire** a short distance from its arrival position. A camp is placed only in clear air over ordinary naturally occurring ground, away from dangerous nearby structures and other campfires. Existing terrain and blocks are not excavated or replaced. This respects the `mobGriefing` gamerule, avoids the End, and records the placement attempt so an NPC/chunk reload cannot leave additional campfires. Some terrain or protected sites may have no safe camp spot.
-
-Wild NPCs already hunt, store raw food, claim free campfire slots, cook their food and pick up cooked results; this release reuses that AI rather than creating a parallel cooking system. Camps are **stationary** wilderness stops, not carried while roaming. When `mobGriefing=false` camps are not placed, though existing placed campfires remain usable.
-
-### Wild NPC town-spawn protection (0.44.49)
-
-Wild NPCs **do not spawn naturally inside or near protected towns**. This includes standard Forge biome/pack spawns and the bounded supplemental expedition generator. The exclusion is horizontal (also protects caves and rooftops), persists in the existing town save data, and does not generate/load chunks:
-
-- Within **320 blocks** of a registered Town Register bell (256-block house registration area plus a 64-block wilderness buffer).
-- Within **144 blocks** of each registered house door, including houses far from the town bell.
-- Within **192 blocks** of the Overworld world spawn point, whether or not a bell town has been established.
-- Within **192 blocks** of CyberNpc's configured first-arrival/summoning position in its dimension, when set.
-
-Wild NPC camps will also never be newly constructed within these protected areas, even when a previously spawned Wild NPC wanders into town. **This does not remove or teleport existing Wild NPCs, stop them walking through towns, change the Nether wilderness outside the protected area, or restrict spawn eggs/admin spawns or Main NPC town residents.** No setup changes are required for already registered bells and houses. The constants are in `TownWildSpawnProtection` for future tuning.
-
-### Wild combat and class equipment
-
-CyberNpc executes NPC combat and equipment; CyberClasses defines class identities, rarities, restrictions and Level 20 advancements when installed. Normal **Classless** NPCs remain common. Wild NPCs may have melee, ranged, guard, support or casting behaviour depending on their class. Weapon and armour sets improve with gear quality:
-
-| Gear tier | Generation chance |
-| --- | ---: |
-| Standard | 70% |
-| Fine | 20% |
-| Rare | 8% |
-| Elite | 2% |
-
-These percentages describe the Wild NPC gear-tier roll, **not** the chance of receiving a particular class. Armour and combat behaviour respond to the assigned class and advancement; naturally spawned levels/advancement gates can additionally be controlled by CyberServer.
-
-With **Iron's Spells 'n Spellbooks** installed, compatible Wild casters use real Iron's spells and spellbooks, school-appropriate armour, casting times and animations. Implemented mage schools include Fire, Ice, Lightning, Nature, Holy, Ender, Blood and Evocation. School-specific spellbooks are used where available; Ice and Lightning can use generic Iron's books. The spellbooks remain in NPC inventories and are not duplicated into Curios. Instant and long-cast spells are supported; continuous/channelled spell casting is not yet supported by the NPC casting bridge.
-
-With **CyberRaces 0.3.2-alpha.47+**, Slime Wild NPCs render their colour as part of the base skin rather than a second translucent animated model. This keeps female slim arms aligned with bow-drawing poses. If CyberRaces is missing or an older release is installed, CyberNpc keeps the original renderer and does not crash. No race, class, NPC inventory or save data changes are required.
-
-Other optional combat/equipment bridges include **Better Combat**, **Epic Knights** and **Tinkers' Construct**. **CyberRaces** applies base-race appearances, stats, biome-aware natural race rolls and race-owned AI to Wild NPCs (no Wild NPC evolutions). **Pehkui** is accommodated for scaled NPC visuals and speech bubble positioning.
-
-### Zombie NPCs
-
-CyberNpc includes Wild NPC zombies and a zombification effect. The spawn-replacement handler replaces **exact vanilla `minecraft:zombie` entities** with CyberNpc zombie variants, retaining suitable original entity state. Drowned, Husks and Zombie Villagers are not part of this replacement.
-
-## Towns, buildings and NPC jobs
-
-### Separate house ownership (0.44.50)
-
-Registering a home must never count other houses in the same terrace, row, apartment building or roofed street. House scanning keeps the **128-block horizontal / 48-block vertical safety limits** but now recognises exterior doors, treats **other registered house entrances as solid ownership boundaries**, and rejects beds nearer a competing exterior entrance than the clicked front door. True interior room doors remain traversable. Both leaves of a double entrance count as one house, rather than creating two homes.
-
-Each real bed can belong to **at most one registered home**. On a new registration, beds accidentally claimed by an older home may be reassigned to the new, nearer front door **only if unoccupied**. Occupied/assigned beds and persistent residents are protected from automatic reassignment; the game reports excluded neighbouring beds. Repeat the Town Register click on an older home to refresh its exclusive beds and correct stale scans. Scans are still on-demand, bounded, and never force chunks to load. If two buildings have no meaningful structural division or use an unusual shared entrance, add a proper dividing doorway/wall so the scanner can tell where the homes separate.
-
-### New town homes and mixed households (0.44.46 — opt-in)
-
-The new housing registry is independent of the previous building-marker registry. **Main NPC housing only** is being migrated first; workplaces, market stalls and service jobs will be revisited separately. Existing world buildings, residents, work markers and special NPC anchors are preserved.
-
-1. Hold the **Town Register**, right-click an ordinary **bell** to found a town. Another normal click shows its house/bed/resident counts.
-2. Build a **walled, walkable house with real beds** and right-click its **front door** with the Town Register. The server performs a one-off bounded interior scan, on already-loaded chunks only. Door registration does not create NPCs automatically.
-3. Optionally select an existing ordinary **Main NPC** using the Town Register, then **sneak-right-click the registered door** to give them a vacant bed. Every bed can belong to at most one resident.
-4. **Sneak-right-click the town bell** to enable/disable automatic move-ins. This is OFF by default. With a nearby player and safe loaded interior, at most one Main NPC moves into the dimension each minute. Households vary between singles, couples, families and roommates (limited by beds); new NPCs receive saved identities and social relationships.
-5. Clicking the front door again **refreshes** its rooms/beds without deleting residents. A missing bed leaves its resident temporarily unassigned until a vacant bed is found. Unloaded residents remain in persistent home records and are never respawned as replacements merely because a chunk unloaded.
-
-**Extra-large house scanning (0.44.48):** The one-click house scanner extends to **128 blocks horizontally and 48 blocks vertically** from the clicked entrance, with a hard limit of **25,000 traversed indoor cells**. It now distinguishes roofed, walkable interior rooms from uncovered streets and gardens, so a second open doorway no longer automatically makes the scan flood the whole village. The scan still never forces chunk loading; if distant rooms are unloaded, an otherwise valid house can register provisionally with its detected beds and reports that the scan is partial. Rescanning a partial home merges detected beds rather than erasing existing bed assignments. The town-to-house registration radius is also **256 blocks** from the bell. Re-click registered house doors to refresh them.
-
-**Larger house scanning (0.44.47):** The scan now reaches up to **48 blocks horizontally and 16 blocks vertically from the registered front door**, with an independent **12,000 walkable-cell work limit**. Larger houses, connected staircases and multi-storey builds fit without allowing unlimited outdoor scanning. If the flood reaches open ground, an unloaded chunk or the safety limit, the house must still be enclosed; the scan never loads chunks. Re-register an existing home by clicking its front door again to update detected beds.
-
-**Claimed-door glow (0.44.47):** Holding the **Town Register in either hand** reveals a soft mint-green particle frame around already registered house doors within **28 blocks**. Only the player holding the Register sees the effect, and only around registered doors in loaded chunks. It stops automatically when you put the Register away. This is visual feedback, not a solid marker or permanent world effect.
-
-Home scans do not force chunks to load, and refuse open ground or oversized interiors. Close gaps and have a connected, reachable bedroom if the scan fails; the new scanner has a 128-block horizontal and 48-block vertical envelope around the door. Bell and door interactions with the Town Register take precedence over vanilla bell ringing/door opening; use an empty hand for ordinary block use.
-
-**Old housing markers (legacy compatibility only):** the previous setup used **four invisible marker blocks**, with small interaction/selection outlines but no normal collision:
-
-| Marker | Purpose |
+The living NPC, dialogue and first-arrival layer of **Fractured Island / CyberSpectra Season 2**. Install matching CyberNpc JARs on the client and server.
+
+## Current features
+
+- **Main Seven:** Kai (stable story ID `mason`), Katie, Elara, Rowan, Felix, Nadia and Orin have individual spawn eggs, authored skins, branching personal dialogue, voice blips, per-player Trust/Affection and defensive combat. Their secret personal quests use CyberQuest; six new quests accompany Katie's original Yarn quest. Trust 2 and Affection 1 unlock the personal quest offer; ordinary interaction does not automatically start a quest.
+- **Dialogue:** restored split-corner speaker-swap layout, option pagination, voiced/typewritten replies, NPC facing, and Close/ESC recovery for empty or delayed replies. Pope and Guild Receptionist have authored story/service dialogue.
+- **Wild NPCs:** biome-appropriate natural expeditions and camps, racial identity, varied class/gear rolls, combat and survival behaviours. CyberRaces owns race choices; CyberClasses owns classes; CyberServer can control starting NPC progression. No natural End expeditions.
+- **Zombies:** custom generated appearances with Steve/Alex clothing overlays and a Minecraft-style zombification icon. Living NPC skins support optional Skin Layers 3D integration.
+- **Player HUD:** compact top-left static face preview, Minecraft-style health, hunger and armour icons, with optional Iron's Spells 'n Spellbooks mana display.
+- **Town services:** guards, Pope, Guild Receptionist, banker, courier and shopkeeper roles. Earlier automatic town housing, employment and guard-post systems are parked for now; old registry IDs and saved data are retained. Older housing/workstation instructions are historical, not the current recommended setup.
+
+## First arrival and guild registration
+
+When both arrival markers are set, new players finish race creation, wait in the one-at-a-time summoning queue, and experience the **13-second** first-arrival cinematic:
+
+1. 0–3.5 seconds: original Fractured Island Blockbench title.
+2. 3.5 seconds: first summoning pulse.
+3. 8.2 seconds: second pulse.
+4. 10.6 seconds: character reveal.
+5. 13 seconds: handoff to the Pope's greeting.
+
+The original Photon effect `cyberserver:summoning` is bundled in CyberNpc; the old CyberServer resource-pack ZIP is no longer required. Camera safety, skip and recovery behaviour are retained. With the configured intro, class selection happens later at the Guild Receptionist, with optional one-time starter equipment. There is no physical town-exit gate. CyberQuest supplies newcomer guidance and CyberRaces gates Cyber XP until class registration.
+
+Set the arrival and waiting positions as an operator:
+
+```mcfunction
+/cyber npc intro setarrival
+/cyber npc intro setpopewait
+/cyber arrival test
+```
+
+The last command requires CyberServer. See [intro timings](docs/EXTENDED_SUMMONING_INTRO.md) and [bundled effects](docs/INTRO_EFFECTS_BUNDLED.md).
+
+## Shops, banking and mail
+
+Shopkeepers have individual configurable Buy/Sell catalogues. Prices use physical copper-equivalent coins, with physical change and server-side inventory/range checks. New catalogues begin empty; entries are repeatable offers rather than finite warehouse stock.
+
+```mcfunction
+/cyber balance
+/cyber npc shop list <target>
+/cyber npc shop addbuy <target> <priceInCopper> <bundleCount>
+/cyber npc shop addsell <target> <priceInCopper> <bundleCount>
+/cyber npc shop removebuy <target> <index>
+/cyber npc shop removesell <target> <index>
+```
+
+Hold the example item in your main hand when adding stock. See [shopkeeper configuration](docs/SHOPKEEPERS.md).
+
+Physical letters travel through Drop Boxes, courier NPCs and player letterboxes. The optional Discord Post Office runs **inside CyberServer 0.2.7+** on the dedicated server. Discord users write letters via a `/mailpanel` embed; the CyberNpc importer validates and deduplicates queued requests. Bind a loaded physical Drop Box while looking at it:
+
+```mcfunction
+/cyber npc discordmail bind
+/cyber npc discordmail status
+/cyber npc discordmail unbind
+/cyber server discordmail setup
+```
+
+Discord credentials belong only in the server's private `config/cyberserver/discord-mail.properties` or environment. The retained standalone Node bot is a legacy alternative, not needed alongside the embedded bot. Follow [CyberServer's current setup guide](https://github.com/Cyberspectraa/CyberServer/blob/development-no-actions/docs/DISCORD_POST_OFFICE.md).
+
+## Island Rift and series finale
+
+The existing two-block Photon Rift is now an opt-in story ending. Walking through it opens a confirmation; declining leaves the character unchanged. Accepting starts a **72-second** scrolling farewell with the supplied soundtrack, real gameplay statistics, Main Seven relationship recap and acknowledgements. A completed departure disconnects the player and prevents normal dedicated-server re-entry. Interrupted credits replay on return. This is not a portal to another dimension.
+
+Operators can reset their own departure for testing or authorise offline UUID recovery. Use a backed-up test world:
+
+```mcfunction
+/cyber npc rift reset
+/cyber npc rift recover <uuid>
+```
+
+See [Rift finale and recovery](docs/RIFT_FINALE.md).
+
+## Unified commands (0.45.9)
+
+CyberNpc provides the shared `/cyber` command hub. It links to the original Brigadier commands of installed mods, retaining their arguments and permissions. Original prefixes still work.
+
+| Section | Original command |
 | --- | --- |
-| **Building Marker** | Scans and records a bounded interior building area using the surrounding solid walls. |
-| **Room Marker** | Extends the same building record into another room or section. Multiple room markers are supported. |
-| **Bed Marker** | Links the nearest usable bed within 8 blocks to that building. Residents can use available beds. |
-| **Work Marker** | Records the exact working block and facing direction for an assigned NPC. |
+| `/cyber npc` | `/cybernpc` |
+| `/cyber quest` | `/cyberquest` |
+| `/cyber races` | `/cyberraces` |
+| `/cyber classes` | `/cyberclasses` |
+| `/cyber server` | `/cyberserver` |
+| `/cyber arrival` | `/arrival` |
+| `/cyber reset` | `/cyberresetall` (destructive test reset) |
+| `/cyber balance` | `/bal` (now registered) |
 
-For old marker-based buildings, a convenient setup order is **Building → optional Room → Bed → Work**. Room/Bed/Work markers placed before the Building Marker can retry linking when interacted with later. Removing a main Building Marker removes its building record.
-
-Use the **Town Register** to select an NPC, then right-click a Building Marker to link its home and a Work Marker to assign its job. Main NPCs can travel to work during the day and return to their linked home/bed at night; special NPCs can also update their stored home/work anchors. Sneak-right-click marker removal and old-world data migration remain supported.
-
-The previous **Building Planner and legacy marker items** remain registered for save compatibility, but are not the recommended setup method.
-
-### Town services
-
-- **Guards:** guard posts, guard assignment, patrols, bell/alert responses, combat assistance and threat defence.
-- **Pope:** church routines, waiting positions and the scripted first-arrival greeting.
-- **Banker / currency:** persistent player balances, copper/silver/gold/platinum/dragon coins and banking interactions.
-- **Shopkeeper:** basic buying/selling using the coin economy.
-- **Courier / mail:** letter paper, addressed/sealed/opened letters, drop boxes, letter boxes, courier satchels and delivery routes.
-- **Guild Receptionist:** registration and turn-in of CyberQuest's physical Guild Board contracts when CyberQuest is installed.
-
-## First-arrival introduction
-
-When both locations are configured, CyberNpc coordinates a one-at-a-time first-arrival queue after character creation and class selection. The current cinematic includes:
-
-1. The wooden **TESTING VERSION** Blockbench title as **temporary artwork**, with a title fade.
-2. A controlled camera sweep aimed at the exact configured summoning block centre.
-3. CyberServer summoning visuals when CyberServer is present, followed by the character reveal.
-4. A short closing fade, restoration of the **player's normal camera**, then the Pope's welcome dialogue.
-
-The intro was originally 2.25 seconds of title plus 6.5 seconds of summoning (0.44.39 baseline). In **0.45.8** it is deliberately extended to a **3.5-second title followed by 9.5 seconds of summoning**, with a second effect pulse, a measured reveal, server-authoritative timing, ESC skip and interruption recovery. See [the updated timings](docs/EXTENDED_SUMMONING_INTRO.md).
-
-Set the locations while standing at the required blocks:
+`/cyber help <section>` lists available subcommands; `/cyber doctor` is an operator-only registration check, not a gameplay test. Other operator examples:
 
 ```mcfunction
-/cybernpc intro setarrival
-/cybernpc intro setpopewait
+/cyber npc spawn <name>
+/cyber npc mason spawn
+/cyber npc remove <target>
+/cyber npc admin role <target> <role>
+/cyber npc admin wander <target> <true|false>
+/cyber npc admin hunger <target> <0..20>
 ```
 
-With CyberServer installed, test the whole flow using `/arrival test`. With CyberRaces installed, the admin command `/cyberresetall` resets character progression and can re-arm the introduction for testing; **it is destructive to the targeted character's progression**.
+See [complete command hub guide](docs/UNIFIED_COMMAND_HUB.md).
 
-## Commands
+## Companion mods
 
-These CyberNpc commands require permission level 2:
+| Mod | Development version | Responsibility |
+| --- | --- | --- |
+| [CyberRaces](https://github.com/Cyberspectraa/CyberRaces/tree/development-no-actions) | 0.3.2-alpha.76 | Race creation, abilities, Cyber Level |
+| [CyberClasses](https://github.com/Cyberspectraa/CyberClasses/tree/development-no-actions) | 0.2.1-alpha.13 | Classes, equipment/magic, Class Books |
+| [CyberQuest](https://github.com/Cyberspectraa/CyberQuest/tree/development-no-actions) | 0.3.0-alpha.23 | Journal, quests, contracts and guild |
+| [CyberServer](https://github.com/Cyberspectraa/CyberServer/tree/development-no-actions) | 0.2.7 | Server world policy, arrival and Discord bot |
 
-```mcfunction
-/cybernpc spawn <name>
-/cybernpc mason spawn
-/cybernpc remove <target>
-/cybernpc intro setarrival
-/cybernpc intro setpopewait
-/cybernpc admin role <target> <role>
-/cybernpc admin wander <target> <true|false>
-/cybernpc admin hunger <target> <0..20>
+Photon is required for the Rift. Other integrations include optional Pehkui, Better Combat, Iron's Spells 'n Spellbooks and supported equipment/cosmetic mods. Install according to the modpack's dependency requirements.
+
+## Local Windows build
+
+Use Git and JDK 17. Do not run GitHub Actions or modify main.
+
+```powershell
+cd "$HOME\CyberMods\CyberNpc"
+git switch development-no-actions
+git pull --ff-only
+.\build-local.bat
 ```
 
-The old `/cyberintro` top-level commands and former top-level `/cybernpc role`, `wander` and `hunger` are no longer the current command paths. For server arrival testing, use the CyberServer `/arrival` commands.
+First checkout: `git clone --branch development-no-actions https://github.com/Cyberspectraa/CyberNpc.git` from the CyberMods directory. Replace the old JAR on both sides only after a successful local build. Back up test worlds.
 
-## Integration and implementation notes
+## Documentation and status
 
-- Core mod: **CyberNpc**. Compatible gameplay integrations are optional unless your modpack explicitly requires them.
-- **CyberRaces** provides race identity/scale and optional race-specific Wild NPC actions; **CyberClasses** owns the common class registry and advancement definitions.
-- **Iron's Spells 'n Spellbooks** provides real NPC magic; **Better Combat**, **Epic Knights**, **Tinkers' Construct**, **Better Horses** and **Pehkui** have optional compatibility paths.
-- **CyberQuest** integrates NPC quest IDs and guild services; **CyberServer** provides world policy, intro effects and seeded story content.
-- Not every class/advancement has unique combat AI, not every third-party modded block has custom pathfinding, and full gameplay/performance validation still requires in-pack testing.
+- [Main Seven personal quests](docs/MAIN_SEVEN_SECRET_QUESTS_AND_ZOMBIE_ICON.md)
+- [Current dialogue layout and recovery](docs/SPLIT_DIALOGUE_REPLY_RESTORE.md)
+- [NPC skins](docs/NAMED_NPC_SKINS.md)
+- [Guild Receptionist](docs/GUILD_RECEPTIONIST_DIALOGUE.md)
+- [Pope sanctuary dialogue](docs/FRACTURED_ISLAND_POPE_SANCTUARY.md)
+- [Local build guide](docs/BUILD_LOCALLY.md)
+- [Previous README and historical development notes](https://github.com/Cyberspectraa/CyberNpc/blob/9d20ba5d463e64755b3c1f778e7693205d5ced75/README.md)
 
-For detailed tuning, see the current Java implementation and the corresponding CyberRaces, CyberClasses, CyberQuest and CyberServer repositories. Do not delete legacy registry IDs or world data when updating existing saves.
+This is a development/test build, not a finished release. Older documents may describe superseded behaviour. Source updates do not establish successful compilation or multiplayer gameplay; verify the current versions locally before production use.
