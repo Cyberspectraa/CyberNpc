@@ -31,7 +31,7 @@ import javax.annotation.Nullable;
 
 /**
  * Two-part, thirteen-second intro: the owner's title card, then a staged
- * summoning with two Photon/vanilla effect beats and a measured reveal.
+ * summoning with quiet preparation, one beam and a measured reveal.
  * The camera uses a deterministic continuous arc instead of jump cuts.
  *
  * The focus never moves: it is the saved arrival location used by the server

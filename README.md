@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current development version: 0.45.13** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current development version: 0.45.14** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 The living NPC, dialogue and first-arrival layer of **Fractured Island / CyberSpectra Season 2**. Install matching CyberNpc JARs on the client and server.
 
@@ -26,9 +26,9 @@ Operators can unlock personal quest offers for a test player with `/cadmin npc f
 When both arrival markers are set, new players finish race creation, wait in the one-at-a-time summoning queue, and experience the **13-second** first-arrival cinematic:
 
 1. 0–3.5 seconds: original Fractured Island Blockbench title.
-2. 3.5 seconds: first summoning pulse.
-3. 8.2 seconds: second pulse.
-4. 10.6 seconds: character reveal.
+2. 3.5–7.5 seconds: quiet magical buildup with no beam replay.
+3. 7.5 seconds: the single original golden summoning beam begins.
+4. 10.6 seconds: the character appears, using the original 62-tick beam-to-reveal delay.
 5. 13 seconds: handoff to the Pope's greeting.
 
 The original Photon effect `cyberserver:summoning` is bundled in CyberNpc; the old CyberServer resource-pack ZIP is no longer required. Camera safety, skip and recovery behaviour are retained. With the configured intro, class selection happens later at the Guild Receptionist, with optional one-time starter equipment. There is no physical town-exit gate. CyberQuest supplies newcomer guidance and CyberRaces gates Cyber XP until class registration.

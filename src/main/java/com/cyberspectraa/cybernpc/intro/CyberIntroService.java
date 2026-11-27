@@ -54,14 +54,15 @@ public final class CyberIntroService {
 
     /**
      * A deliberate 13-second opening: 3.5 seconds for the author's title,
-     * then 9.5 seconds of summoning, including a second effect pulse.
+     * then 9.5 seconds of buildup, a single beam and the character reveal.
      * Keep the same first-arrival state machine and skip semantics.
      */
     public static final int TITLE_TICKS = 70;
     public static final int SUMMON_TICKS = 190;
     public static final int SCENE_TICKS = TITLE_TICKS + SUMMON_TICKS;
-    public static final int SECOND_PULSE_TICKS = TITLE_TICKS + 94;
-    public static final int REVEAL_TICKS = TITLE_TICKS + 142;
+    // Preserve the original successful 62-tick beam-to-reveal timing.
+    public static final int BEAM_TICKS = TITLE_TICKS + 80;
+    public static final int REVEAL_TICKS = BEAM_TICKS + 62;
     private static final int SCENE_GRACE_TICKS = 35;
     private static final int POPE_TIMEOUT_TICKS = 800;
 
@@ -79,7 +80,6 @@ public final class CyberIntroService {
         boolean queueScreenSent;
         boolean revealed;
         boolean effectsStarted;
-        boolean secondPulseStarted;
         boolean completionRequested;
         Session(UUID id, Stage stage) { this.id = id; this.stage = stage; }
     }
@@ -291,13 +291,15 @@ public final class CyberIntroService {
 
         if (session.stage == Stage.CINEMATIC) {
             long elapsed = now - session.stageTick;
-            if (elapsed >= TITLE_TICKS && !session.effectsStarted) {
+            // A low, non-beam particle buildup fills the extended opening.
+            // No second Photon playback: the reveal follows the sole beam.
+            if (elapsed >= TITLE_TICKS + 10 && elapsed < BEAM_TICKS
+                    && (elapsed - TITLE_TICKS) % 10 == 0) {
+                summoningBuildup(player, elapsed - TITLE_TICKS);
+            }
+            if (elapsed >= BEAM_TICKS && !session.effectsStarted) {
                 session.effectsStarted = true;
                 startSummoningEffects(player);
-            }
-            if (elapsed >= SECOND_PULSE_TICKS && !session.secondPulseStarted) {
-                session.secondPulseStarted = true;
-                secondSummoningPulse(player);
             }
             if (elapsed >= REVEAL_TICKS && !session.revealed) reveal(player, session);
             // The client's final frame can arrive slightly before the server
@@ -351,19 +353,17 @@ public final class CyberIntroService {
         session.stageTick = player.getServer().overworld().getGameTime();
         session.revealed = false;
         session.effectsStarted = false;
-        session.secondPulseStarted = false;
         session.completionRequested = false;
         CyberNpcNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new IntroScenePacket(true, arrival.pos(), arrival.yaw()));
-        // Summoning begins after the opening title. The original 64-tick
-        // Photon effect is played at the start and reprised later, so the
-        // longer cinematic has no several-second stretch with nothing happening.
+        // After the title, quiet floor particles lead into one original
+        // summoning effect, followed by the visible character and greeting.
         ensurePopeReady(player.getServer());
     }
 
     private static void startSummoningEffects(ServerPlayer player) {
         ServerLevel level = player.serverLevel();
-        // CyberServer owns the existing first golden Photon FX and its sounds.
+        // CyberServer owns the original golden Photon FX and its sounds.
         // Use reflection so CyberNpc also works if CyberServer isn't installed.
         if (ModList.get().isLoaded("cyberserver")) {
             try {
@@ -387,39 +387,17 @@ public final class CyberIntroService {
                 SoundEvents.BEACON_POWER_SELECT, SoundSource.PLAYERS, 0.75F, 1.25F);
     }
 
-    /**
-     * Second, quieter ritual wave. When Photon + CyberServer are present,
-     * replay the exact bundled effect by its existing ID WITHOUT starting
-     * another CyberServer arrival sequence or repeating all arrival sounds.
-     * Without Photon, a restrained vanilla burst keeps the beat visible.
-     */
-    private static void secondSummoningPulse(ServerPlayer player) {
+    /** Short, restrained ground-level buildup; never triggers a Photon beam. */
+    private static void summoningBuildup(ServerPlayer player, long age) {
         ServerLevel level = player.serverLevel();
-        boolean photonPlayed = false;
-        if (ModList.get().isLoaded("cyberserver")
-                && ModList.get().isLoaded("photon")) {
-            try {
-                Class<?> bridge = Class.forName(
-                        "com.cyberspectraa.cyberserver.PhotonBridge");
-                photonPlayed = Boolean.TRUE.equals(
-                        bridge.getMethod("play", ServerLevel.class,
-                                double.class, double.class, double.class)
-                                .invoke(null, level, player.getX(),
-                                        player.getY(), player.getZ()));
-            } catch (ReflectiveOperationException | RuntimeException ignored) {
-                // Missing optional effects must not interrupt the intro.
-            }
-        }
-        if (!photonPlayed) {
-            level.sendParticles(ParticleTypes.END_ROD,
-                    player.getX(), player.getY() + 1D, player.getZ(),
-                    38, 0.9D, 1.1D, 0.9D, 0.035D);
-            level.sendParticles(ParticleTypes.ENCHANT,
-                    player.getX(), player.getY() + 0.2D, player.getZ(),
-                    44, 1.2D, 0.5D, 1.2D, 0.09D);
-        }
-        level.playSound(null, player.blockPosition(),
-                SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.8F, 0.78F);
+        double progress = Math.min(1D, age / (double) (BEAM_TICKS - TITLE_TICKS));
+        double radius = 1.25D - progress * 0.65D;
+        level.sendParticles(ParticleTypes.ENCHANT,
+                player.getX(), player.getY() + 0.18D, player.getZ(),
+                8, radius, 0.12D, radius, 0.025D);
+        level.sendParticles(ParticleTypes.END_ROD,
+                player.getX(), player.getY() + 0.25D, player.getZ(),
+                3, radius, 0.18D, radius, 0.015D);
     }
 
     private static void reveal(ServerPlayer player, Session session) {
