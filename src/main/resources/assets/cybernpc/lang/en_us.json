@@ -66,5 +66,6 @@
   "item.cybernpc.yarn": "White Yarn",
   "subtitles.cybernpc.dialogue_voice": "NPC speaks",
   "block.cybernpc.island_rift": "Island Rift",
-  "subtitles.cybernpc.wild_voice": "Wild NPC vocalizes"
+  "subtitles.cybernpc.wild_voice": "Wild NPC vocalizes",
+  "item.cybernpc.rift_departure_ledger": "Rift Departure Ledger"
 }

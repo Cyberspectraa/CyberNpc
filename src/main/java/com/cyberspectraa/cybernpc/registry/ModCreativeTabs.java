@@ -52,6 +52,7 @@ public final class ModCreativeTabs {
                                 // Retired housing/work markers retain registry IDs for saved worlds.
 
                                 output.accept(ModItems.SPECIAL_NPC_REMOVAL_STICK.get());
+                                if (parameters.hasPermissions()) output.accept(ModItems.RIFT_DEPARTURE_LEDGER.get());
                             })
                             .build()
             );

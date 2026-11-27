@@ -1,6 +1,8 @@
 package com.cyberspectraa.cybernpc.block;
 
 import com.cyberspectraa.cybernpc.registry.ModBlockEntities;
+import com.cyberspectraa.cybernpc.entity.CyberNpcEntity;
+import com.cyberspectraa.cybernpc.rift.NpcRiftDeparture;
 import com.cyberspectraa.cybernpc.rift.RiftBlockEntity;
 import com.cyberspectraa.cybernpc.rift.RiftFinaleService;
 import net.minecraft.server.level.ServerPlayer;
@@ -119,6 +121,9 @@ public final class IslandRiftBlock extends Block implements EntityBlock {
             if (tear.bounds().move(pos).intersects(player.getBoundingBox())) {
                 RiftFinaleService.touch(player, pos);
             }
+        }
+        if (!level.isClientSide && entity instanceof CyberNpcEntity npc) {
+            NpcRiftDeparture.touch(npc, pos);
         }
         super.entityInside(state, level, pos, entity);
     }

@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current development version: 0.45.10** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current development version: 0.45.11** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 The living NPC, dialogue and first-arrival layer of **Fractured Island / CyberSpectra Season 2**. Install matching CyberNpc JARs on the client and server.
 
@@ -77,6 +77,10 @@ Operators can reset their own departure for testing or authorise offline UUID re
 ```
 
 See [Rift finale and recovery](docs/RIFT_FINALE.md).
+
+### NPC departures and developer ledger (0.45.11)
+
+Operators can arm a Main Seven NPC for a deliberate crossing. An authorised NPC must intersect an intact Rift; no automatic departures are linked to friendship quests. The world-wide Departure Ledger shows completed player and named NPC departures. Entity snapshots are saved on the server for testing recovery. Use `/give @s cybernpc:rift_departure_ledger` or `/cyber npc rift ledger`. See [NPC crossing and recovery instructions](docs/RIFT_DEPARTURE_LEDGER.md).
 
 ## Unified commands (0.45.9)
 

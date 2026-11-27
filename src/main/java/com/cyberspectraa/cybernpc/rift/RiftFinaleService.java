@@ -300,7 +300,9 @@ public final class RiftFinaleService {
                     tag.putBoolean("CreditsInProgress", false);
                     tag.putBoolean("Departed", true);
                     tag.putLong("CompletedAtGameTime", now);
+                    tag.putLong("CompletedAtMillis", System.currentTimeMillis());
                     player.getPersistentData().put(DATA, tag);
+                    RiftDepartureData.get(server).recordPlayer(player, tag);
                     release(player, credits);
                     player.connection.disconnect(Component.literal(
                             "Thank you for playing The Fractured Island. Your story continues beyond the Rift."));
@@ -328,6 +330,11 @@ public final class RiftFinaleService {
             return;
         }
         CompoundTag tag = state(player);
+        if (player.getServer() != null) {
+            RiftDepartureData ledger = RiftDepartureData.get(player.getServer());
+            if (tag.getBoolean("Departed")) ledger.recordPlayer(player, tag);
+            else ledger.removePlayer(id);
+        }
         if (tag.getBoolean("Departed")) {
             if (player.getServer() != null && player.getServer().isDedicatedServer()) {
                 player.connection.disconnect(Component.literal(
@@ -383,6 +390,7 @@ public final class RiftFinaleService {
                     new RiftAbortPacket());
         }
         player.getPersistentData().remove(DATA);
+        if (player.getServer() != null) RiftDepartureData.get(player.getServer()).removePlayer(id);
     }
 
     public static void permitRecovery(UUID id) {

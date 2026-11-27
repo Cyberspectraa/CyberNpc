@@ -82,6 +82,7 @@ public final class CyberNpcCommands {
                                                 EntityArgument.getEntity(context, "target")
                                         ))))
         );
+        RiftDepartureCommands.register(event);
     }
 
 
