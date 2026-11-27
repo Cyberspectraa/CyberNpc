@@ -22,7 +22,7 @@
           "when": "secret_active"
         },
         {
-          "text": "Is there something you haven't asked me yet?",
+          "text": "Have you noticed anything about the stars here?",
           "to": "secret_offer",
           "when": "secret_available"
         },
@@ -561,10 +561,10 @@
       ]
     },
     "secret_offer": {
-      "speech": "I've been wondering if the stars here resemble the ones I remember. Would you help me observe them, without pretending we know the answer?",
+      "speech": "I keep trying to recognise the stars here. Sometimes I'm not sure if I'm remembering them correctly, or remembering what I wanted to see. Would you help me start some notes?",
       "choices": [
         {
-          "text": "Yes. I want to help.",
+          "text": "I'd like to help.",
           "to": "secret_accepted",
           "action": "secret_start",
           "when": "secret_available"
@@ -576,25 +576,29 @@
       ]
     },
     "secret_accepted": {
-      "speech": "A spyglass would help. Then we can compare what we've noticed.",
+      "speech": "Craft a spyglass. Then let's talk about how to record an unfamiliar sky without forcing it to match a memory.",
       "choices": [
         {
           "text": "I'll check my journal.",
           "to": "root"
+        },
+        {
+          "text": "Can we talk about it now?",
+          "to": "secret_question",
+          "when": "secret_active"
         }
       ]
     },
     "secret_progress": {
-      "speech": "Did you make a spyglass? There are a few things I want to compare with you.",
+      "speech": "Did you make the spyglass? There's a question I've been avoiding.",
       "choices": [
         {
-          "text": "Let's talk through the important part.",
-          "to": "secret_reflected",
-          "action": "secret_research",
+          "text": "What makes the stars difficult to think about?",
+          "to": "secret_question",
           "when": "secret_active"
         },
         {
-          "text": "I think I've finished. Here you go.",
+          "text": "I've finished both parts of the request.",
           "to": "secret_done",
           "action": "secret_finish",
           "when": "secret_active"
@@ -610,7 +614,7 @@
       ]
     },
     "secret_hint": {
-      "speech": "Craft a spyglass, then tell me what you'd look for in an unfamiliar sky.",
+      "speech": "Craft a spyglass and discuss how to compare observations honestly. You don't need to visit a particular location or wait for night.",
       "choices": [
         {
           "text": "Right. I'll get back to it.",
@@ -619,14 +623,14 @@
       ]
     },
     "secret_reflected": {
-      "speech": "Yes. And if we find nothing unusual, that matters too. It's still a real observation.",
+      "speech": "Exactly. We can keep the memory and leave the question open. We don't need to invent a conclusion.",
       "choices": [
         {
           "text": "I'll finish the rest of the task.",
           "to": "root"
         },
         {
-          "text": "Is everything ready now?",
+          "text": "I've finished both parts.",
           "to": "secret_done",
           "action": "secret_finish",
           "when": "secret_active"
@@ -634,7 +638,7 @@
       ]
     },
     "secret_done": {
-      "speech": "We may not have an answer, but we've started asking a better question. I'd like to keep looking with you.",
+      "speech": "We have a way to start looking, and I have someone I can share the question with. I don't know the answer, but that feels less troubling now.",
       "choices": [
         {
           "text": "I'm glad I could help.",
@@ -643,10 +647,31 @@
       ]
     },
     "secret_after": {
-      "speech": "Sometimes I look up and remember that we're all under the same sky, even here.",
+      "speech": "If we ever see a different sky, I'd like to remember this one without pretending I understood all of it.",
       "choices": [
         {
-          "text": "That's good to hear.",
+          "text": "I'm glad we talked.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_question": {
+      "speech": "I want them to prove something about where we came from. But wanting proof isn't the same as having it. I'm afraid of turning a comforting thought into a false certainty.",
+      "choices": [
+        {
+          "text": "Write down what we see before interpreting it.",
+          "to": "secret_reflected",
+          "action": "secret_research",
+          "when": "secret_active"
+        },
+        {
+          "text": "Keep the memories separate from the observations.",
+          "to": "secret_reflected",
+          "action": "secret_research",
+          "when": "secret_active"
+        },
+        {
+          "text": "I'll think about that.",
           "to": "root"
         }
       ]
