@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current development version: 0.45.11** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current development version: 0.45.12** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 The living NPC, dialogue and first-arrival layer of **Fractured Island / CyberSpectra Season 2**. Install matching CyberNpc JARs on the client and server.
 
@@ -16,6 +16,10 @@ The living NPC, dialogue and first-arrival layer of **Fractured Island / CyberSp
 ## Main Seven personal quest finish (0.45.10)
 
 The seven friendship quests now have individual offers, more personal dialogue and completion follow-ups. Existing quest IDs and objectives remain unchanged. Katie's eligible request is directly accessible, and Kai's keepsake hand-in uses the scoped delivery API in CyberQuest **0.3.0-alpha.24**, preventing that dialogue action from completing or consuming the item for the older Mason quest. The five other quests each include a specific two-choice personal discussion, not a generic research button. Completion does not trigger departure. See [the final personal quest guide](docs/MAIN_SEVEN_PERSONAL_QUESTS.md).
+
+## Friendship testing (0.45.12)
+
+Operators can unlock personal quest offers for a test player with `/cyber npc friendship @s all` or `/cyber npc friendship @s kai`. The default raises Trust to at least 2 and Affection to at least 1 without lowering existing higher values. Supply both numbers for exact values, e.g. `/cyber npc friendship @s all 10 10` (range -10 to 10). This clears the dialogue cooldown for the targeted characters, without starting, completing, resetting or rewarding quests. Reopen dialogue after running it. CyberQuest must be installed to offer the quests. Original `/cybernpc friendship` prefix works too.
 
 ## First arrival and guild registration
 
@@ -116,7 +120,7 @@ See [complete command hub guide](docs/UNIFIED_COMMAND_HUB.md).
 | --- | --- | --- |
 | [CyberRaces](https://github.com/Cyberspectraa/CyberRaces/tree/development-no-actions) | 0.3.2-alpha.76 | Race creation, abilities, Cyber Level |
 | [CyberClasses](https://github.com/Cyberspectraa/CyberClasses/tree/development-no-actions) | 0.2.1-alpha.13 | Classes, equipment/magic, Class Books |
-| [CyberQuest](https://github.com/Cyberspectraa/CyberQuest/tree/development-no-actions) | 0.3.0-alpha.24 | Journal, quests, contracts and guild |
+| [CyberQuest](https://github.com/Cyberspectraa/CyberQuest/tree/development-no-actions) | 0.3.0-alpha.25 | Journal, quests, contracts and guild |
 | [CyberServer](https://github.com/Cyberspectraa/CyberServer/tree/development-no-actions) | 0.2.7 | Server world policy, arrival and Discord bot |
 
 Photon is required for the Rift. Other integrations include optional Pehkui, Better Combat, Iron's Spells 'n Spellbooks and supported equipment/cosmetic mods. Install according to the modpack's dependency requirements.
