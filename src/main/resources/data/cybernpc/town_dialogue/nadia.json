@@ -22,7 +22,7 @@
           "when": "secret_active"
         },
         {
-          "text": "Is there something you haven't asked me yet?",
+          "text": "Is there a design you'd like a second opinion on?",
           "to": "secret_offer",
           "when": "secret_available"
         },
@@ -566,10 +566,10 @@
       ]
     },
     "secret_offer": {
-      "speech": "I've designed a backup circuit for a town mechanism. I can build it, but I need someone willing to challenge my plan.",
+      "speech": "I've been working on a backup circuit, but there's a part of my plan I don't trust. I haven't admitted that to anyone. Would you help me review it?",
       "choices": [
         {
-          "text": "Yes. I want to help.",
+          "text": "I'd like to help.",
           "to": "secret_accepted",
           "action": "secret_start",
           "when": "secret_available"
@@ -581,25 +581,29 @@
       ]
     },
     "secret_accepted": {
-      "speech": "Good. Bring me two repeaters, then tell me exactly where the mechanism might fail.",
+      "speech": "Craft two repeaters. Then I need you to challenge the design, not just agree with me.",
       "choices": [
         {
           "text": "I'll check my journal.",
           "to": "root"
+        },
+        {
+          "text": "Can we talk about it now?",
+          "to": "secret_question",
+          "when": "secret_active"
         }
       ]
     },
     "secret_progress": {
-      "speech": "Have you made the repeaters? More importantly, have you thought about what happens when the circuit loses power?",
+      "speech": "Repeaters ready? I've worked out why I'm reluctant to let anyone see my plan.",
       "choices": [
         {
-          "text": "Let's talk through the important part.",
-          "to": "secret_reflected",
-          "action": "secret_research",
+          "text": "What worries you about letting someone review it?",
+          "to": "secret_question",
           "when": "secret_active"
         },
         {
-          "text": "I think I've finished. Here you go.",
+          "text": "I've finished both parts of the request.",
           "to": "secret_done",
           "action": "secret_finish",
           "when": "secret_active"
@@ -615,7 +619,7 @@
       ]
     },
     "secret_hint": {
-      "speech": "Craft two redstone repeaters, then talk through a failure test with me.",
+      "speech": "Craft two redstone repeaters and review a failure test with me. The journal tracks both; no actual town mechanism needs altering.",
       "choices": [
         {
           "text": "Right. I'll get back to it.",
@@ -624,14 +628,14 @@
       ]
     },
     "secret_reflected": {
-      "speech": "Right. You looked for the failure instead of telling me what I wanted to hear.",
+      "speech": "Good. A test isn't an insult to the person who built it. It's how we find the weak point before it matters.",
       "choices": [
         {
           "text": "I'll finish the rest of the task.",
           "to": "root"
         },
         {
-          "text": "Is everything ready now?",
+          "text": "I've finished both parts.",
           "to": "secret_done",
           "action": "secret_finish",
           "when": "secret_active"
@@ -639,7 +643,7 @@
       ]
     },
     "secret_done": {
-      "speech": "Two repeaters and a plan that can survive mistakes. Thanks. I work better when I don't have to do every part alone.",
+      "speech": "That's a better plan. I still have to build and test it, but I don't have to do every part alone. Thanks for taking it seriously.",
       "choices": [
         {
           "text": "I'm glad I could help.",
@@ -648,10 +652,31 @@
       ]
     },
     "secret_after": {
-      "speech": "You can help with the next build. Just don't touch any unlabelled levers.",
+      "speech": "You can review the next design too. Just ask before pulling any unlabelled levers.",
       "choices": [
         {
-          "text": "That's good to hear.",
+          "text": "I'm glad we talked.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_question": {
+      "speech": "If something fails, I tend to take it as proof I should have done everything myself. That's a terrible way to build anything reliable. How would you test a backup?",
+      "choices": [
+        {
+          "text": "Test what happens when the main signal disappears.",
+          "to": "secret_reflected",
+          "action": "secret_research",
+          "when": "secret_active"
+        },
+        {
+          "text": "Check the restart and test one failure at a time.",
+          "to": "secret_reflected",
+          "action": "secret_research",
+          "when": "secret_active"
+        },
+        {
+          "text": "I'll think about that.",
           "to": "root"
         }
       ]
