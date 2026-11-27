@@ -12,6 +12,21 @@
       "speech": "Oh, you're here. What are you doing?",
       "choices": [
         {
+          "text": "How did that yarn work out?",
+          "to": "yarn_done",
+          "when": "quest_completed"
+        },
+        {
+          "text": "About the yarn I'm crafting...",
+          "to": "yarn_status",
+          "when": "quest_active"
+        },
+        {
+          "text": "Need a hand with your crochet project?",
+          "to": "yarn_offer",
+          "when": "quest_available"
+        },
+        {
           "text": "What are you up to?",
           "to": "current"
         },
@@ -35,16 +50,6 @@
           "text": "How's that crochet project going?",
           "to": "project",
           "when": "flag:katie_project"
-        },
-        {
-          "text": "About the yarn I'm crafting...",
-          "to": "yarn_status",
-          "when": "quest_active"
-        },
-        {
-          "text": "How did that yarn work out?",
-          "to": "yarn_done",
-          "when": "quest_completed"
         }
       ]
     },
@@ -354,7 +359,7 @@
       ]
     },
     "yarn_offer": {
-      "speech": "A stack. Sixty-four white yarn should be enough. Could you craft it for me?",
+      "speech": "I want to finish something of my own here. Not just another thing I had to make to get by. I need sixty-four white yarn. Could you craft it?",
       "choices": [
         {
           "text": "Yeah, I'll craft the sixty-four.",
@@ -389,7 +394,7 @@
       ]
     },
     "yarn_accepted": {
-      "speech": "Great. I actually appreciate it. Don't lose count.",
+      "speech": "Great. Craft the full stack from string after accepting, then come back to me. I'll keep the project a surprise for now.",
       "choices": [
         {
           "text": "I'll check my quest journal.",
@@ -432,7 +437,7 @@
           "to": "yarn_wait"
         },
         {
-          "text": "I think I've made enough.",
+          "text": "The journal says I've crafted enough.",
           "to": "yarn_turnin",
           "action": "quest_finish"
         },
@@ -450,7 +455,7 @@
           "to": "root"
         },
         {
-          "text": "I've finished crafting. Here.",
+          "text": "I've finished crafting all sixty-four.",
           "to": "yarn_turnin",
           "action": "quest_finish"
         }
@@ -479,12 +484,15 @@
       ]
     },
     "yarn_done": {
-      "speech": "I can finally get on with the project without worrying about yarn. Thanks.",
+      "speech": "Thanks. I can finally get on with it. I wanted to make something because I chose to, not because this place needed it.",
       "choices": [
         {
-          "text": "I'd like to see it once it's done.",
-          "to": "project_private",
-          "effect": "warm"
+          "text": "What do you want the project to mean?",
+          "to": "yarn_secret"
+        },
+        {
+          "text": "I'll leave the surprise alone.",
+          "to": "project_private"
         },
         {
           "text": "What else have you been doing?",
@@ -664,6 +672,19 @@
         {
           "text": "So, where were we?",
           "to": "current"
+        }
+      ]
+    },
+    "yarn_secret": {
+      "speech": "Something that's mine. A little bit of normal life, even here. You'll see what it is when it's finished, not before.",
+      "choices": [
+        {
+          "text": "Fair enough. I won't spoil the surprise.",
+          "to": "root"
+        },
+        {
+          "text": "I'm glad you get to make something for yourself.",
+          "to": "root"
         }
       ]
     }
