@@ -22,7 +22,7 @@
           "when": "secret_active"
         },
         {
-          "text": "Is there something you haven't asked me yet?",
+          "text": "Is there a route you haven't told me about?",
           "to": "secret_offer",
           "when": "secret_available"
         },
@@ -437,10 +437,10 @@
       ]
     },
     "secret_offer": {
-      "speech": "There's a trail I haven't dared mark on my maps. If someone new wanders there, they might not come back. Could you help me chart it?",
+      "speech": "I've been leaving a trail off my maps. I marked it safe once, without checking it properly. I don't want someone else relying on that mistake. Will you help me start again?",
       "choices": [
         {
-          "text": "Yes. I want to help.",
+          "text": "I'd like to help.",
           "to": "secret_accepted",
           "action": "secret_start",
           "when": "secret_available"
@@ -452,25 +452,29 @@
       ]
     },
     "secret_accepted": {
-      "speech": "Good. Make a map, and we'll compare what we know before anyone follows it.",
+      "speech": "Craft an empty map. We can work out what a responsible route would show. No need to risk yourself on an unverified trail.",
       "choices": [
         {
           "text": "I'll check my journal.",
           "to": "root"
+        },
+        {
+          "text": "Can we talk about it now?",
+          "to": "secret_question",
+          "when": "secret_active"
         }
       ]
     },
     "secret_progress": {
-      "speech": "Have you made a map? I've been thinking about which paths are safest to mark.",
+      "speech": "How's the map coming? There's something about my old notes I need to admit.",
       "choices": [
         {
-          "text": "Let's talk through the important part.",
-          "to": "secret_reflected",
-          "action": "secret_research",
+          "text": "Why did you leave the trail off your maps?",
+          "to": "secret_question",
           "when": "secret_active"
         },
         {
-          "text": "I think I've finished. Here you go.",
+          "text": "I've finished both parts of the request.",
           "to": "secret_done",
           "action": "secret_finish",
           "when": "secret_active"
@@ -486,7 +490,7 @@
       ]
     },
     "secret_hint": {
-      "speech": "Craft a map, then let's agree on which route should be marked for newcomers.",
+      "speech": "Craft an empty map and discuss how to mark uncertain routes. Either can come first; then return here to finish.",
       "choices": [
         {
           "text": "Right. I'll get back to it.",
@@ -495,14 +499,14 @@
       ]
     },
     "secret_reflected": {
-      "speech": "Exactly. A dangerous path is useful to know about, but safer ways home matter more.",
+      "speech": "Exactly. A blank spot is better than a false promise. I can admit when I don't know the way.",
       "choices": [
         {
           "text": "I'll finish the rest of the task.",
           "to": "root"
         },
         {
-          "text": "Is everything ready now?",
+          "text": "I've finished both parts.",
           "to": "secret_done",
           "action": "secret_finish",
           "when": "secret_active"
@@ -510,7 +514,7 @@
       ]
     },
     "secret_done": {
-      "speech": "There. A route people can actually trust. I don't usually ask others to help with my maps. I'm glad I asked you.",
+      "speech": "Thank you. I don't have to pretend I know the whole island. I'll keep the unsafe trail marked as unverified, rather than send anyone into danger.",
       "choices": [
         {
           "text": "I'm glad I could help.",
@@ -519,10 +523,31 @@
       ]
     },
     "secret_after": {
-      "speech": "If I ever head into those ruins again, I'll take your notes along.",
+      "speech": "If we ever find a new way forward, I'd like to know it's real before we ask anyone to follow it.",
       "choices": [
         {
-          "text": "That's good to hear.",
+          "text": "I'm glad we talked.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_question": {
+      "speech": "I wanted to look as though I knew every path. I wrote down guesses as facts. Now I worry someone might trust them. What would you put on a new map?",
+      "choices": [
+        {
+          "text": "Mark hazards and uncertain paths clearly.",
+          "to": "secret_reflected",
+          "action": "secret_research",
+          "when": "secret_active"
+        },
+        {
+          "text": "Start with the routes we can actually verify.",
+          "to": "secret_reflected",
+          "action": "secret_research",
+          "when": "secret_active"
+        },
+        {
+          "text": "I'll think about that.",
           "to": "root"
         }
       ]
