@@ -22,7 +22,7 @@
           "when": "secret_active"
         },
         {
-          "text": "Is there something you haven't asked me yet?",
+          "text": "Is there something we could do for newcomers?",
           "to": "secret_offer",
           "when": "secret_available"
         },
@@ -406,10 +406,10 @@
       ]
     },
     "secret_offer": {
-      "speech": "Some people arrive here with nothing, and a hot meal helps more than questions. Could we put bread aside for the next newcomers?",
+      "speech": "I remember how unsettling it was to find myself here. Everyone wanted answers I didn't have. I want the next stranger to have a quieter welcome. Would you help me prepare?",
       "choices": [
         {
-          "text": "Yes. I want to help.",
+          "text": "I'd like to help.",
           "to": "secret_accepted",
           "action": "secret_start",
           "when": "secret_available"
@@ -421,25 +421,29 @@
       ]
     },
     "secret_accepted": {
-      "speech": "That's kind of you. Eight loaves should be enough to start with.",
+      "speech": "Make eight bread. And when you have a moment, I'd like to talk about what a frightened newcomer actually needs.",
       "choices": [
         {
           "text": "I'll check my journal.",
           "to": "root"
+        },
+        {
+          "text": "Can we talk about it now?",
+          "to": "secret_question",
+          "when": "secret_active"
         }
       ]
     },
     "secret_progress": {
-      "speech": "How's the bread coming along? I'd like to have something ready before anyone else arrives.",
+      "speech": "Have you had time to make the bread? I keep thinking about what I wish someone had said when I arrived.",
       "choices": [
         {
-          "text": "Let's talk through the important part.",
-          "to": "secret_reflected",
-          "action": "secret_research",
+          "text": "What made the first days here difficult for you?",
+          "to": "secret_question",
           "when": "secret_active"
         },
         {
-          "text": "I think I've finished. Here you go.",
+          "text": "I've finished both parts of the request.",
           "to": "secret_done",
           "action": "secret_finish",
           "when": "secret_active"
@@ -455,7 +459,7 @@
       ]
     },
     "secret_hint": {
-      "speech": "Craft eight bread and tell me what you think we should say to someone who's frightened and lost.",
+      "speech": "Craft eight bread and talk with me about welcoming strangers. Then come back to finish.",
       "choices": [
         {
           "text": "Right. I'll get back to it.",
@@ -464,14 +468,14 @@
       ]
     },
     "secret_reflected": {
-      "speech": "Yes. We don't need their whole story before giving them a place at the table.",
+      "speech": "Yes. Kindness doesn't need an explanation first. A meal and a little patience can be a beginning.",
       "choices": [
         {
           "text": "I'll finish the rest of the task.",
           "to": "root"
         },
         {
-          "text": "Is everything ready now?",
+          "text": "I've finished both parts.",
           "to": "secret_done",
           "action": "secret_finish",
           "when": "secret_active"
@@ -479,7 +483,7 @@
       ]
     },
     "secret_done": {
-      "speech": "Thank you. It means a lot knowing I'm not the only one looking out for strangers.",
+      "speech": "Thank you for helping. It means more than the bread itself. I know someone else will make room for a stranger even when I'm not there.",
       "choices": [
         {
           "text": "I'm glad I could help.",
@@ -488,10 +492,31 @@
       ]
     },
     "secret_after": {
-      "speech": "There's always room for another chair here. You know that, don't you?",
+      "speech": "If you ever need somewhere to sit, you don't have to bring an explanation. You're welcome.",
       "choices": [
         {
-          "text": "That's good to hear.",
+          "text": "I'm glad we talked.",
+          "to": "root"
+        }
+      ]
+    },
+    "secret_question": {
+      "speech": "It wasn't just the unfamiliar place. I felt I had to explain myself before I deserved a seat at the table. I don't want anyone else to feel that way.",
+      "choices": [
+        {
+          "text": "Offer food and company without questions.",
+          "to": "secret_reflected",
+          "action": "secret_research",
+          "when": "secret_active"
+        },
+        {
+          "text": "Give them space and let them speak when ready.",
+          "to": "secret_reflected",
+          "action": "secret_research",
+          "when": "secret_active"
+        },
+        {
+          "text": "I'll think about that.",
           "to": "root"
         }
       ]
