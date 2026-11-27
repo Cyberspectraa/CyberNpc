@@ -255,8 +255,8 @@ public final class TownCharacterDialogue {
             case "quest_locked" -> "town_npc_1".equals(storyId)
                     && !friendshipReady(state) && !questActive(player)
                     && !questCompleted(player);
-            case "quest_active" -> questActive(player);
-            case "quest_completed" -> questCompleted(player);
+            case "quest_active" -> "town_npc_1".equals(storyId) && questActive(player);
+            case "quest_completed" -> "town_npc_1".equals(storyId) && questCompleted(player);
             case "secret_available" -> personalQuest != null
                     && ModList.get().isLoaded("cyberquest")
                     && friendshipReady(state)
@@ -318,11 +318,12 @@ public final class TownCharacterDialogue {
         }
         if (!choice.action().isBlank()) {
             if ("quest_start".equals(choice.action())) {
-                if (!questOperation(player, "start")) {
+                if (!"town_npc_1".equals(script.id()) || !friendshipReady(state)
+                        || !questOperation(player, "start")) {
                     return new Transition(page, "I can't start that right now. Check your journal.");
                 }
             } else if ("quest_finish".equals(choice.action())) {
-                if (questOperation(player, "turnIn")) {
+                if ("town_npc_1".equals(script.id()) && questOperation(player, "turnIn")) {
                     change(state, "Trust", 1);
                     return enter(script, state, "yarn_done");
                 }
@@ -330,7 +331,7 @@ public final class TownCharacterDialogue {
                         "Not yet. You need to craft all sixty-four. Check your journal.");
             } else if ("secret_start".equals(choice.action())) {
                 ResourceLocation id = secretQuestId(script.id());
-                if (id == null || !questOperation(player, "start", id)) {
+                if (id == null || !friendshipReady(state) || !questOperation(player, "start", id)) {
                     return new Transition(page, "I can't put that in your journal right now.");
                 }
             } else if ("secret_research".equals(choice.action())) {
@@ -346,7 +347,7 @@ public final class TownCharacterDialogue {
                 }
                 // Kai's keepsake is an existing item. The item stays with the
                 // player; CyberQuest validates that it is actually held.
-                if ("mason".equals(script.id())) trySecretDelivery(player, script.id());
+                if ("mason".equals(script.id())) trySecretDelivery(player, script.id(), id);
                 if (questOperation(player, "turnIn", id)) {
                     change(state, "Trust", 1); // Exactly once per completed quest.
                     return enter(script, state, "secret_done");
@@ -530,12 +531,14 @@ public final class TownCharacterDialogue {
         }
     }
 
-    private static void trySecretDelivery(ServerPlayer player, String storyId) {
+    private static void trySecretDelivery(ServerPlayer player, String storyId, ResourceLocation id) {
         if (!ModList.get().isLoaded("cyberquest")) return;
         try {
             Class<?> type = Class.forName("com.cyberspectraa.cyberquest.quest.QuestManager");
-            type.getMethod("tryDeliverItems", ServerPlayer.class, String.class)
-                    .invoke(null, player, storyId);
+            // Do not fall back to the generic multi-quest delivery handler.
+            // The legacy CyberServer Mason quest consumes this same keepsake.
+            type.getMethod("tryDeliverItemsForQuest", ServerPlayer.class, String.class,
+                    ResourceLocation.class).invoke(null, player, storyId, id);
         } catch (ReflectiveOperationException | RuntimeException ex) {
             LOGGER.warn("Couldn't handle personal quest hand-in for {}", storyId, ex);
         }
