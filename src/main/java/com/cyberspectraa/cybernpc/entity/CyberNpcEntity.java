@@ -7932,7 +7932,8 @@ public class CyberNpcEntity extends PathfinderMob {
         // Keep creator/administration tools ahead of normal conversations.
         if (hand == InteractionHand.MAIN_HAND
                 && (held.is(ModItems.TOWN_REGISTER.get())
-                    || held.is(ModItems.SPECIAL_NPC_REMOVAL_STICK.get()))) {
+                    || held.is(ModItems.SPECIAL_NPC_REMOVAL_STICK.get())
+                    || held.is(ModItems.RIFT_DEPARTURE_LEDGER.get()))) {
             return held.interactLivingEntity(player, this, hand);
         }
 

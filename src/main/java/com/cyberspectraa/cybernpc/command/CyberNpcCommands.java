@@ -21,20 +21,9 @@ import net.minecraftforge.event.RegisterCommandsEvent;
 
 public final class CyberNpcCommands {
     public static void register(RegisterCommandsEvent event) {
-        event.getDispatcher().register(
-                Commands.literal("cybernpc")
-                        .requires(source -> source.hasPermission(2))
-                        .then(Commands.literal("mason")
-                                .then(Commands.literal("spawn")
-                                        .executes(context -> spawnMason(
-                                                context.getSource()
-                                        ))))
-                        .then(Commands.literal("spawn")
-                                .then(Commands.argument("name", StringArgumentType.greedyString())
-                                        .executes(context -> spawn(
-                                                context.getSource(),
-                                                StringArgumentType.getString(context, "name")
-                                        ))))
+        event.getDispatcher().register(Commands.literal("cadmin")
+                .requires(source -> source.hasPermission(2))
+                .then(Commands.literal("npc")
                         .then(Commands.literal("intro")
                                 .then(Commands.literal("setarrival")
                                         .executes(ctx -> CyberIntroService.setArrival(ctx.getSource())))
@@ -45,42 +34,12 @@ public final class CyberNpcCommands {
                                         .executes(ctx -> resetRift(ctx.getSource())))
                                 .then(Commands.literal("recover")
                                         .then(Commands.argument("uuid", StringArgumentType.word())
-                                                .executes(ctx -> recoverRift(
-                                                        ctx.getSource(),
+                                                .executes(ctx -> recoverRift(ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "uuid"))))))
-                        .then(Commands.literal("admin")
-                        .then(Commands.literal("role")
-                                .then(Commands.argument("target", EntityArgument.entity())
-                                        .then(Commands.argument("role", StringArgumentType.greedyString())
-                                                .executes(context -> setRole(
-                                                        context.getSource(),
-                                                        EntityArgument.getEntity(context, "target"),
-                                                        StringArgumentType.getString(context, "role")
-                                                )))))
-                        .then(Commands.literal("wander")
-                                .then(Commands.argument("target", EntityArgument.entity())
-                                        .then(Commands.argument("enabled", BoolArgumentType.bool())
-                                                .executes(context -> setWander(
-                                                        context.getSource(),
-                                                        EntityArgument.getEntity(context, "target"),
-                                                        BoolArgumentType.getBool(context, "enabled")
-                                                )))))
-                        .then(Commands.literal("hunger")
-                                .then(Commands.argument("target", EntityArgument.entity())
-                                        .then(Commands.argument("value", IntegerArgumentType.integer(0, 20))
-                                                .executes(context -> setHunger(
-                                                        context.getSource(),
-                                                        EntityArgument.getEntity(context, "target"),
-                                                        IntegerArgumentType.getInteger(context, "value")
-                                                )))))
-                        )
                         .then(Commands.literal("remove")
                                 .then(Commands.argument("target", EntityArgument.entity())
-                                        .executes(context -> remove(
-                                                context.getSource(),
-                                                EntityArgument.getEntity(context, "target")
-                                        ))))
-        );
+                                        .executes(ctx -> remove(ctx.getSource(),
+                                                EntityArgument.getEntity(ctx, "target")))))));
         RiftDepartureCommands.register(event);
         FriendshipCommands.register(event);
     }

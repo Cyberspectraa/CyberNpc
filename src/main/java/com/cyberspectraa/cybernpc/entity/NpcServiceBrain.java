@@ -1440,29 +1440,12 @@ final class NpcServiceBrain {
         pickedUp = false;
         pickupPos = null;
 
-        if (record.returningToWork()) {
-            if (record.work() != null
-                    && moveToAnchor(level, record.work(), 0.82D)) {
-                data.markReachedWork(record.specialId());
-            }
-            return;
-        }
-
+        // Postal routes use the registered physical boxes, not a manually
+        // assigned workplace. Keep the existing night rest behaviour.
+        SpecialNpcSavedData.Anchor work = firstNonNull(record.work(), record.home());
         if (level.isNight()) {
-            SpecialNpcSavedData.Anchor home =
-                    firstNonNull(record.home(), record.work());
-
-            if (home != null) {
-                moveToAnchor(level, home, 0.76D);
-            }
-            return;
-        }
-
-        SpecialNpcSavedData.Anchor work =
-                firstNonNull(record.work(), record.home());
-
-        if (work != null && !isAtAnchor(level, work)) {
-            moveToAnchor(level, work, 0.82D);
+            SpecialNpcSavedData.Anchor home = firstNonNull(record.home(), record.work());
+            if (home != null && home.dimension().equals(level.dimension())) moveToAnchor(level, home, 0.76D);
             return;
         }
 
@@ -1475,7 +1458,7 @@ final class NpcServiceBrain {
 
         MailSavedData mail = MailSavedData.get(level);
         MailRecord claimed = mail.claimNearestPending(
-                level.dimension(),
+                level,
                 npc.blockPosition(),
                 npc.getUUID(),
                 SEARCH_RADIUS_SQR
@@ -1487,11 +1470,7 @@ final class NpcServiceBrain {
         }
 
         BlockPos pickup = claimed.pickupPos();
-        if (pickup == null
-                || !mail.isDropBoxRegistered(
-                level.dimension(),
-                pickup
-        )) {
+        if (!mail.isLoadedDropBox(level, pickup)) {
             mail.returnToPending(claimed.id(), npc.getUUID());
             return;
         }
@@ -1510,11 +1489,7 @@ final class NpcServiceBrain {
         MailSavedData mail = MailSavedData.get(level);
 
         if (!pickedUp) {
-            if (pickupPos == null
-                    || !mail.isDropBoxRegistered(
-                    level.dimension(),
-                    pickupPos
-            )) {
+            if (!mail.isLoadedDropBox(level, pickupPos)) {
                 releaseSatchel(level);
                 return;
             }
@@ -1581,8 +1556,10 @@ final class NpcServiceBrain {
         SpecialNpcSavedData.Anchor work =
                 firstNonNull(record.work(), record.home());
 
-        if (work == null) {
+        if (work == null || !work.dimension().equals(level.dimension())) {
             npc.getNavigation().stop();
+            releaseSatchel(level);
+            searchCooldown = SEARCH_INTERVAL;
             return;
         }
 
@@ -1590,6 +1567,7 @@ final class NpcServiceBrain {
             // Keep unavailable mail safe, but release it back to the queue once
             // the Courier reaches the Post Office so another route can try later.
             releaseSatchel(level);
+            searchCooldown = SEARCH_INTERVAL;
             data.markReachedWork(record.specialId());
         }
     }
@@ -1615,7 +1593,7 @@ final class NpcServiceBrain {
                     && box.dimension().equals(level.dimension())
                     && mail.boxedCount(record.recipientId())
                     < LETTER_BOX_CAPACITY
-                    && level.hasChunkAt(box.pos())) {
+                    && mail.isLoadedLetterBox(level, record.recipientId(), box.pos())) {
                 double distance = npc.blockPosition().distSqr(box.pos());
                 if (distance < bestDistance) {
                     bestDistance = distance;
@@ -1653,6 +1631,8 @@ final class NpcServiceBrain {
             return;
         }
 
+        if (!mail.isLoadedLetterBox(level, record.recipientId(), target.boxPos)
+                || mail.boxedCount(record.recipientId()) >= LETTER_BOX_CAPACITY) return;
         mail.markBoxed(record.id());
         satchelIds.remove(record.id());
         npc.swing(InteractionHand.MAIN_HAND);

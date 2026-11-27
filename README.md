@@ -1,6 +1,6 @@
 # CyberNpc
 
-**Current development version: 0.45.12** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
+**Current development version: 0.45.13** · Minecraft **1.20.1** · Forge **47.4.10** · Java **17**
 
 The living NPC, dialogue and first-arrival layer of **Fractured Island / CyberSpectra Season 2**. Install matching CyberNpc JARs on the client and server.
 
@@ -19,7 +19,7 @@ The seven friendship quests now have individual offers, more personal dialogue a
 
 ## Friendship testing (0.45.12)
 
-Operators can unlock personal quest offers for a test player with `/cyber npc friendship @s all` or `/cyber npc friendship @s kai`. The default raises Trust to at least 2 and Affection to at least 1 without lowering existing higher values. Supply both numbers for exact values, e.g. `/cyber npc friendship @s all 10 10` (range -10 to 10). This clears the dialogue cooldown for the targeted characters, without starting, completing, resetting or rewarding quests. Reopen dialogue after running it. CyberQuest must be installed to offer the quests. Original `/cybernpc friendship` prefix works too.
+Operators can unlock personal quest offers for a test player with `/cadmin npc friendship @s all` or `/cadmin npc friendship @s kai`. The default raises Trust to at least 2 and Affection to at least 1 without lowering existing higher values. Supply both numbers for exact values, e.g. `/cadmin npc friendship @s all 10 10` (range -10 to 10). This clears the dialogue cooldown for the targeted characters, without starting, completing, resetting or rewarding quests. Reopen dialogue after running it. CyberQuest must be installed to offer the quests.
 
 ## First arrival and guild registration
 
@@ -36,38 +36,28 @@ The original Photon effect `cyberserver:summoning` is bundled in CyberNpc; the o
 Set the arrival and waiting positions as an operator:
 
 ```mcfunction
-/cyber npc intro setarrival
-/cyber npc intro setpopewait
-/cyber arrival test
+/cadmin npc intro setarrival
+/cadmin npc intro setpopewait
+/cadmin arrival test
 ```
 
 The last command requires CyberServer. See [intro timings](docs/EXTENDED_SUMMONING_INTRO.md) and [bundled effects](docs/INTRO_EFFECTS_BUNDLED.md).
 
-## Shops, banking and mail
+## Shops and automatic mail
 
-Shopkeepers have individual configurable Buy/Sell catalogues. Prices use physical copper-equivalent coins, with physical change and server-side inventory/range checks. New catalogues begin empty; entries are repeatable offers rather than finite warehouse stock.
+Existing shop catalogues and mail records remain saved. Shop configuration commands and the virtual bank balance command are retired; existing catalogues can still be used, but cannot be edited by command.
 
-```mcfunction
-/cyber balance
-/cyber npc shop list <target>
-/cyber npc shop addbuy <target> <priceInCopper> <bundleCount>
-/cyber npc shop addsell <target> <priceInCopper> <bundleCount>
-/cyber npc shop removebuy <target> <index>
-/cyber npc shop removesell <target> <index>
-```
+Place a Drop Box and a Courier NPC in a loaded, reachable part of the town. Players place their own Letter Box to register its ownership. Couriers automatically collect from nearby registered, loaded Drop Boxes and deliver to the owner's Letter Box or nearby player. No manual postal binding or workplace assignment is required; existing night rest behaviour remains.
 
-Hold the example item in your main hand when adding stock. See [shopkeeper configuration](docs/SHOPKEEPERS.md).
-
-Physical letters travel through Drop Boxes, courier NPCs and player letterboxes. The optional Discord Post Office runs **inside CyberServer 0.2.7+** on the dedicated server. Discord users write letters via a `/mailpanel` embed; the CyberNpc importer validates and deduplicates queued requests. Bind a loaded physical Drop Box while looking at it:
+Discord mail uses a suitable loaded Drop Box in the recipient's dimension where known. Legacy fixed bindings no longer block automatic routing. Messages wait in the spool if no suitable box has space. No chunks are force-loaded.
 
 ```mcfunction
-/cyber npc discordmail bind
-/cyber npc discordmail status
-/cyber npc discordmail unbind
-/cyber server discordmail setup
+/cadmin npc discordmail status
+/cadmin server discordmail setup
+/cadmin server discordmail status
 ```
 
-Discord credentials belong only in the server's private `config/cyberserver/discord-mail.properties` or environment. The retained standalone Node bot is a legacy alternative, not needed alongside the embedded bot. Follow [CyberServer's current setup guide](https://github.com/Cyberspectraa/CyberServer/blob/development-no-actions/docs/DISCORD_POST_OFFICE.md).
+CyberServer's private configuration is `config/cyberserver/discord-mail.properties`. Keep credentials server-only.
 
 ## Island Rift and series finale
 
@@ -76,52 +66,50 @@ The existing two-block Photon Rift is now an opt-in story ending. Walking throug
 Operators can reset their own departure for testing or authorise offline UUID recovery. Use a backed-up test world:
 
 ```mcfunction
-/cyber npc rift reset
-/cyber npc rift recover <uuid>
+/cadmin npc rift reset
+/cadmin npc rift recover <uuid>
 ```
 
 See [Rift finale and recovery](docs/RIFT_FINALE.md).
 
-### NPC departures and developer ledger (0.45.11)
+### NPC departures and developer ledger
 
-Operators can arm a Main Seven NPC for a deliberate crossing. An authorised NPC must intersect an intact Rift; no automatic departures are linked to friendship quests. The world-wide Departure Ledger shows completed player and named NPC departures. Entity snapshots are saved on the server for testing recovery. Use `/give @s cybernpc:rift_departure_ledger` or `/cyber npc rift ledger`. See [NPC crossing and recovery instructions](docs/RIFT_DEPARTURE_LEDGER.md).
+Use `/give @s cybernpc:rift_departure_ledger` or `/cadmin npc rift ledger`. Sneak-right-click a Main Seven NPC with the ledger to authorise its crossing for 60 seconds; repeat to cancel. An authorised NPC must physically touch an intact Rift. No automatic departure follows a friendship quest. Snapshots are preserved, but the command-based NPC restore tool is retired; use a backed-up test world.
 
-## Unified commands (0.45.9)
+## Current operator commands (0.45.13)
 
-CyberNpc provides the shared `/cyber` command hub. It links to the original Brigadier commands of installed mods, retaining their arguments and permissions. Original prefixes still work.
-
-| Section | Original command |
-| --- | --- |
-| `/cyber npc` | `/cybernpc` |
-| `/cyber quest` | `/cyberquest` |
-| `/cyber races` | `/cyberraces` |
-| `/cyber classes` | `/cyberclasses` |
-| `/cyber server` | `/cyberserver` |
-| `/cyber arrival` | `/arrival` |
-| `/cyber reset` | `/cyberresetall` (destructive test reset) |
-| `/cyber balance` | `/bal` (now registered) |
-
-`/cyber help <section>` lists available subcommands; `/cyber doctor` is an operator-only registration check, not a gameplay test. Other operator examples:
+All retained commands register natively under lowercase `/cadmin`; permission level 2 is required. Previous prefixes and removed commands are not registered by the updated companion mods.
 
 ```mcfunction
-/cyber npc spawn <name>
-/cyber npc mason spawn
-/cyber npc remove <target>
-/cyber npc admin role <target> <role>
-/cyber npc admin wander <target> <true|false>
-/cyber npc admin hunger <target> <0..20>
+/cadmin help [section]
+/cadmin doctor
+/cadmin reset [player]
+/cadmin npc remove <target>
+/cadmin npc friendship <player> <character|all> [trust affection]
+/cadmin npc intro setarrival
+/cadmin npc intro setpopewait
+/cadmin npc rift reset
+/cadmin npc rift recover <uuid>
+/cadmin npc rift ledger
+/cadmin npc discordmail status
+/cadmin races level addxp <player> <amount>
+/cadmin races level setlevel <player> <level>
+/cadmin server discordmail status
+/cadmin server discordmail setup
+/cadmin arrival setspawn
+/cadmin arrival test [player]
 ```
 
-See [complete command hub guide](docs/UNIFIED_COMMAND_HUB.md).
+Quest and class commands are retired; use their normal gameplay interfaces. `/cadmin doctor` checks registrations, not gameplay. Older docs contain historical command examples. See [current command and mail guide](docs/CADMIN_AND_AUTOMATIC_MAIL.md).
 
 ## Companion mods
 
 | Mod | Development version | Responsibility |
 | --- | --- | --- |
-| [CyberRaces](https://github.com/Cyberspectraa/CyberRaces/tree/development-no-actions) | 0.3.2-alpha.76 | Race creation, abilities, Cyber Level |
-| [CyberClasses](https://github.com/Cyberspectraa/CyberClasses/tree/development-no-actions) | 0.2.1-alpha.13 | Classes, equipment/magic, Class Books |
-| [CyberQuest](https://github.com/Cyberspectraa/CyberQuest/tree/development-no-actions) | 0.3.0-alpha.25 | Journal, quests, contracts and guild |
-| [CyberServer](https://github.com/Cyberspectraa/CyberServer/tree/development-no-actions) | 0.2.7 | Server world policy, arrival and Discord bot |
+| [CyberRaces](https://github.com/Cyberspectraa/CyberRaces/tree/development-no-actions) | 0.3.2-alpha.77 | Race creation, abilities, Cyber Level |
+| [CyberClasses](https://github.com/Cyberspectraa/CyberClasses/tree/development-no-actions) | 0.2.1-alpha.14 | Classes, equipment/magic, Class Books |
+| [CyberQuest](https://github.com/Cyberspectraa/CyberQuest/tree/development-no-actions) | 0.3.0-alpha.26 | Journal, quests, contracts and guild |
+| [CyberServer](https://github.com/Cyberspectraa/CyberServer/tree/development-no-actions) | 0.2.8 | Server world policy, arrival and Discord bot |
 
 Photon is required for the Rift. Other integrations include optional Pehkui, Better Combat, Iron's Spells 'n Spellbooks and supported equipment/cosmetic mods. Install according to the modpack's dependency requirements.
 

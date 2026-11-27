@@ -28,6 +28,16 @@ public final class DropBoxBlock extends PostalBlockBase {
         super(Kind.DROP_BOX, properties);
     }
 
+    /** Register real block placement, including /setblock and ordinary structures. */
+    @Override
+    public void onPlace(BlockState state, Level level, BlockPos pos,
+                        BlockState oldState, boolean moving) {
+        super.onPlace(state, level, pos, oldState, moving);
+        if (!oldState.is(this) && level instanceof ServerLevel serverLevel) {
+            MailSavedData.get(serverLevel).registerDropBox(serverLevel.dimension(), pos);
+        }
+    }
+
     @Override
     public void setPlacedBy(
             Level level,

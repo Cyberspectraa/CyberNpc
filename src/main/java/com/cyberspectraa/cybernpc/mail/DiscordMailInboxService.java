@@ -230,7 +230,7 @@ public final class DiscordMailInboxService {
             return new Receipt(false, -1L,
                     "That Minecraft player has not joined this server yet.");
         }
-        MailSavedData.PostalAddress dropBox = mail.availableDiscordDropBox(server);
+        MailSavedData.PostalAddress dropBox = mail.availableDiscordDropBox(server, to.getId());
         if (dropBox == null) return null;
 
         UUID senderId = UUID.nameUUIDFromBytes(

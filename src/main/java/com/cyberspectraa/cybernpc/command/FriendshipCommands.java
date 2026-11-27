@@ -19,8 +19,9 @@ public final class FriendshipCommands {
     private FriendshipCommands() {}
 
     public static void register(RegisterCommandsEvent event) {
-        event.getDispatcher().register(Commands.literal("cybernpc")
+        event.getDispatcher().register(Commands.literal("cadmin")
                 .requires(source -> source.hasPermission(2))
+                .then(Commands.literal("npc")
                 .then(Commands.literal("friendship")
                         .then(Commands.argument("player", EntityArgument.player())
                                 .then(Commands.argument("character", StringArgumentType.word())
@@ -39,7 +40,7 @@ public final class FriendshipCommands {
                                                         .executes(ctx -> apply(ctx,
                                                                 IntegerArgumentType.getInteger(ctx, "trust"),
                                                                 IntegerArgumentType.getInteger(ctx, "affection"),
-                                                                false))))))));
+                                                                false)))))))));
     }
 
     private static int apply(CommandContext<CommandSourceStack> ctx, int trust, int affection,

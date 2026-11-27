@@ -63,6 +63,17 @@ public final class NpcRiftDeparture {
         Arm arm = ARMED.get(npc.getStoryNpcId());
         if (arm != null && arm.entity().equals(npc.getUUID())) ARMED.remove(npc.getStoryNpcId());
     }
+    /** Developer ledger interaction replaces the removed arm/disarm commands. */
+    public static String toggleArm(CyberNpcEntity npc) {
+        if (!(npc.level() instanceof ServerLevel level)) return "Crossing requires a server world.";
+        if (armed(npc, level.getServer())) {
+            disarm(npc);
+            return "NPC crossing cancelled.";
+        }
+        String error = arm(npc);
+        return error == null ? "NPC authorised for 60 seconds. Guide them into an intact Rift." : error;
+    }
+
     private static boolean armed(CyberNpcEntity npc, MinecraftServer server) {
         Arm arm = ARMED.get(npc.getStoryNpcId());
         return arm != null && arm.entity().equals(npc.getUUID())

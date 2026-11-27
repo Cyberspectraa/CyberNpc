@@ -342,7 +342,7 @@ public final class RiftFinaleService {
             } else {
                 // Never permanently lock an owner out of an integrated test world.
                 player.sendSystemMessage(Component.literal(
-                        "Rift departure recorded. An operator can use /cybernpc rift reset to replay it."));
+                        "Rift departure recorded. An operator can use /cadmin npc rift reset to replay it."));
             }
         } else if (tag.getBoolean("CreditsInProgress") && player.getServer() != null) {
             // Delay the opening packet until the client has loaded the level.
