@@ -270,6 +270,20 @@ public final class TownCharacterDialogue {
         };
     }
 
+    /** Operator test helper. Never alters quest flags, visits or memories. */
+    public static boolean setTestFriendship(ServerPlayer player, String id,
+                                             int trust, int affection, boolean minimum) {
+        if (!KNOWN_IDS.contains(id)) return false;
+        CompoundTag saved = state(player, id);
+        int nextTrust = minimum ? Math.max(saved.getInt("Trust"), trust) : trust;
+        int nextAffection = minimum ? Math.max(saved.getInt("Affection"), affection) : affection;
+        saved.putInt("Trust", Math.max(-10, Math.min(10, nextTrust)));
+        saved.putInt("Affection", Math.max(-10, Math.min(10, nextAffection)));
+        // A recent walk-away should not obstruct an operator's dialogue test.
+        saved.remove("Cooldown");
+        return true;
+    }
+
     private static boolean friendshipReady(CompoundTag state) {
         return state.getInt("Trust") >= 2 && state.getInt("Affection") >= 1;
     }
