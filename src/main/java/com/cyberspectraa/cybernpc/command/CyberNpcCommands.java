@@ -9,7 +9,6 @@ import com.cyberspectraa.cybernpc.entity.NpcType;
 import com.cyberspectraa.cybernpc.registry.ModEntities;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -83,6 +82,7 @@ public final class CyberNpcCommands {
                                         ))))
         );
         RiftDepartureCommands.register(event);
+        FriendshipCommands.register(event);
     }
 
 
