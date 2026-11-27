@@ -763,7 +763,7 @@
       ]
     },
     "secret_offer": {
-      "speech": "I heard someone found a Choso plush out there. I know it sounds stupid, but... could you look for it? I miss having something from home.",
+      "speech": "I heard there's a Choso plush somewhere out there. I know, it's just a plush. But it's one of the few things that reminds me of home. Could you look for it?",
       "choices": [
         {
           "text": "Yes. I want to help.",
@@ -778,7 +778,7 @@
       ]
     },
     "secret_accepted": {
-      "speech": "Thanks. Just... don't make a huge deal out of it, alright?",
+      "speech": "Thanks. I don't know where it is. If you find it, hold it in your main hand and show me. You can keep it; I just want to see it.",
       "choices": [
         {
           "text": "I'll check my journal.",
@@ -790,7 +790,7 @@
       "speech": "Any luck with that plush? If you find it, hold it when you talk to me.",
       "choices": [
         {
-          "text": "I think I've finished. Here you go.",
+          "text": "I've found the plush. Look.",
           "to": "secret_done",
           "action": "secret_finish",
           "when": "secret_active"
@@ -806,7 +806,7 @@
       ]
     },
     "secret_hint": {
-      "speech": "A Choso plush. I don't know where it ended up. If you find it, show me.",
+      "speech": "The Choso plush. Somewhere on the island. Hold it in your main hand when you show me. You don't need to give it away.",
       "choices": [
         {
           "text": "Right. I'll get back to it.",
@@ -815,19 +815,40 @@
       ]
     },
     "secret_done": {
-      "speech": "You found it? ...Wow. I didn't think I'd see anything like this again. Thank you. Really.",
+      "speech": "Wait, that's actually it. I didn't think I'd see something like that here again. ...Thanks. Seriously.",
       "choices": [
         {
-          "text": "I'm glad I could help.",
+          "text": "What makes it mean so much to you?",
+          "to": "secret_memory"
+        },
+        {
+          "text": "I'm glad I found it.",
           "to": "root"
         }
       ]
     },
     "secret_after": {
-      "speech": "I'm keeping this memory. Doesn't mean I'm getting sentimental, okay?",
+      "speech": "Still can't believe you found it. Glad there's something here that reminds me of home. Don't make it a whole thing, though.",
       "choices": [
         {
-          "text": "That's good to hear.",
+          "text": "I won't. See you around.",
+          "to": "root"
+        },
+        {
+          "text": "Want to talk about Choso again?",
+          "to": "choso"
+        }
+      ]
+    },
+    "secret_memory": {
+      "speech": "It's not really about the plush. It's the stuff I used to enjoy, the things that felt ordinary back home. Nice to have a reminder that all of that mattered.",
+      "choices": [
+        {
+          "text": "You don't have to forget those things.",
+          "to": "secret_after"
+        },
+        {
+          "text": "I'll leave you with that memory.",
           "to": "root"
         }
       ]
